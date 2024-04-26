@@ -4,7 +4,7 @@ stages:
 
 rust-latest:       
   stage: build
-  image: rust-latest
+  image: rust:latest
   script:
     - cargo build --release
 
