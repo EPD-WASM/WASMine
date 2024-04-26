@@ -1,0 +1,31 @@
+stages:          
+  - build
+  - test
+
+rust-latest:       
+  stage: build
+  image: rust-latest
+  script:
+    - cargo build --release
+
+rust-msrv:       
+  stage: build
+  image: rust:1.75
+  script:
+    - cargo build --verbose
+
+cargo-test:   
+  stage: test
+  image: rust:latest  
+  script:
+    - cargo test --verbose
+
+cargo-clippy:   
+  stage: test  
+  image: rust:latest
+  variables:
+    RUSTFLAGS: "-Dwarnings"  
+  script:
+    - rustup component add clippy
+    - cargo clippy --all-targets --all-features
+
