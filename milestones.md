@@ -13,6 +13,7 @@
 > goal for end of lecture period (~mid of July)
 
  - Translator to LLVM + LLVM code generation backend
+    - or something like Cranelift if it turns out LLVM Rust bindings are too incomplete
  - Support for the following extensions:
     - Memory64
     - Fixed-width SIMD
