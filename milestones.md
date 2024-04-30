@@ -17,7 +17,7 @@
  - Support for the following extensions:
     - Memory64
     - Fixed-width SIMD
- - WASI Support
+ - Limited WASI Support
  - Limited set of benchmarks
 
 ## MS3
@@ -31,3 +31,4 @@
     - Threads and Atomics
     - Relaxed SIMD
     - Sign-extension Operations
+ - Full WASI Support
