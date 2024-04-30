@@ -13,7 +13,9 @@
 > goal for end of lecture period (~mid of July)
 
  - Translator to LLVM + LLVM code generation backend
- - Support for the following extensions: (todo)
+ - Support for the following extensions:
+    - Memory64
+    - Fixed-width SIMD
  - WASI Support
  - Limited set of benchmarks
 
@@ -23,4 +25,8 @@
 
  - x86_64 direct emit code generation backend
  - JIT compilation
- - Support for the following extensions: (todo)
+ - Support for the following extensions:
+    - Multible Memories
+    - Threads and Atomics
+    - Relaxed SIMD
+    - Sign-extension Operations
