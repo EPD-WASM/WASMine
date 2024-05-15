@@ -4,8 +4,8 @@ stages:
 
 rust-latest:       
   stage: build
-  image: wasm-rt/rust:1.78
   script:
+    - curl https://sh.rustup.rs -sSf | sh -s -- -y
     - cargo build --release
 
 rust-msrv:       
