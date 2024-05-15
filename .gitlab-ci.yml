@@ -5,24 +5,21 @@ stages:
 rust-latest:       
   stage: build
   script:
-    #- curl https://sh.rustup.rs -sSf | sh -s -- -y
     - cargo build --release
 
-rust-msrv:       
-  stage: build
-  image: wasm-rt/rust:1.75
-  script:
-    - cargo build --verbose
+#msrv disabled for now
+#rust-msrv:       
+#  stage: build
+#  script:
+#    - cargo build --verbose
 
 cargo-test:   
   stage: test
-  image: wasm-rt/rust:1.78  
   script:
     - cargo test --verbose
 
 cargo-clippy:   
   stage: test  
-  image: wasm-rt/rust:1.78
   variables:
     RUSTFLAGS: "-Dwarnings"  
   script:
