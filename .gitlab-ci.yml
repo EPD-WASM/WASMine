@@ -4,7 +4,7 @@ stages:
 
 rust-latest:       
   stage: build
-  image: rust:latest
+  image: rust:1.78
   script:
     - cargo build --release
 
@@ -16,13 +16,13 @@ rust-msrv:
 
 cargo-test:   
   stage: test
-  image: rust:latest  
+  image: rust:1.78  
   script:
     - cargo test --verbose
 
 cargo-clippy:   
   stage: test  
-  image: rust:latest
+  image: rust:1.78
   variables:
     RUSTFLAGS: "-Dwarnings"  
   script:
