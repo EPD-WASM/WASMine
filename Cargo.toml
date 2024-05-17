@@ -1,8 +1,16 @@
+workspace = { members = [ "fuzz","tests/gen_util"] }
+
 [package]
-name = "wasm-rt"
+name = "wasm_rt"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+lazy_static = "1.4.0"
+thiserror = "1.0.60"
+
+[dev-dependencies]
+wast = "206.0.0"
+gen_util = { path = "./tests/gen_util" }

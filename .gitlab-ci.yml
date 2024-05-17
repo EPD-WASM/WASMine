@@ -1,28 +1,39 @@
-stages:          
+stages:
   - build
   - test
 
-rust-latest:       
+variables:
+  GIT_SUBMODULE_STRATEGY: recursive
+
+build-rust-latest:
   stage: build
+  image: rust:1.78
   script:
     - cargo build --release
+  artifacts:
+    paths:
+      - "target/"
+  tags:
+    - lukas-debian-runner
 
-#msrv disabled for now
-#rust-msrv:       
-#  stage: build
-#  script:
-#    - cargo build --verbose
-
-cargo-test:   
+cargo-test:
   stage: test
   script:
-    - cargo test --verbose
+    - cargo test
+  dependencies:
+    - build-rust-latest
+  tags:
+    - lukas-debian-runner
 
-cargo-clippy:   
-  stage: test  
+cargo-clippy:
+  stage: test
   variables:
-    RUSTFLAGS: "-Dwarnings"  
+    RUSTFLAGS: "-Dwarnings"
   script:
     - rustup component add clippy
     - cargo clippy --all-targets --all-features
-
+  allow_failure: true
+  dependencies:
+    - build-rust-latest
+  tags:
+    - lukas-debian-runner

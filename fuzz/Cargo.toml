@@ -1,0 +1,19 @@
+[package]
+name = "fuzz"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+libfuzzer-sys = "0.4.7"
+wasm-smith = "0.207.0"
+wasm_rt = { path = ".." }
+
+[package.metadata]
+cargo-fuzz = true
+
+[[bin]]
+name = "parser_fuzzing"
+path = "fuzz_targets/parser_fuzzing.rs"
+test = false
+doc = false
+bench = false
