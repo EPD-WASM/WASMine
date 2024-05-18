@@ -5,7 +5,7 @@ use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 
 #[proc_macro]
-pub fn generate_test_cases(input: TokenStream) -> TokenStream {
+pub fn generate_spec_test_cases(input: TokenStream) -> TokenStream {
     let test_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap())
         .join("thirdparty/spec/test/core");
     if !test_dir.is_dir() {

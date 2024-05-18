@@ -1,4 +1,4 @@
-use gen_util::generate_test_cases;
+use gen_util::generate_spec_test_cases;
 use wasm_rt::parser::parser::Parser;
 use wast::Wast;
 
@@ -52,4 +52,4 @@ pub fn test_parser(file_path: &str) {
     }
 }
 
-generate_test_cases!(test_parser);
+generate_spec_test_cases!(test_parser);

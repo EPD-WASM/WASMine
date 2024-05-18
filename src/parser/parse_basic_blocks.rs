@@ -1,7 +1,7 @@
 use crate::{
     instructions::{
         storage::{InstructionEncoder, InstructionStorage},
-        VariableID,
+        Variable, VariableID,
     },
     parser::{error::ParserError, wasm_stream_reader::WasmStreamReader},
     structs::{
@@ -18,12 +18,22 @@ fn setup_block_stack(
     block_type: BlockType,
     ctxt: &mut Context,
 ) -> Result<ParserStack, ParserError> {
-    let mut block_stack = ParserStack::new();
-    for param in get_block_input_signature(ctxt, block_type) {
-        block_stack.push_var(ctxt.pop_var_with_type(&param));
+    let input_signature = get_block_input_signature(ctxt, block_type);
+    let input_length = input_signature.len();
+    // divide stack into block stack (input params) and remaining stack (output params)
+    let mut block_stack = ctxt
+        .stack
+        .stack
+        .split_off(ctxt.stack.stack.len() - input_length);
+    for (i, input_var) in input_signature.iter().enumerate() {
+        if block_stack[i].type_ != *input_var {
+            ctxt.poison(ValidationError::Msg(
+                "mismatched input signature in target label".to_string(),
+            ))
+        }
     }
-    std::mem::swap(&mut block_stack, &mut ctxt.stack);
-    Ok(block_stack)
+    std::mem::swap(&mut block_stack, &mut ctxt.stack.stack);
+    Ok(ParserStack { stack: block_stack })
 }
 
 // validation of existence of these variables is done in the leaving / branch instructions

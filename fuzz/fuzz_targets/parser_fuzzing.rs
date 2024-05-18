@@ -7,5 +7,8 @@ use wasm_smith::Module;
 fuzz_target!(|module: Module| {
     let wasm_bytes = module.to_bytes();
     let parser = Parser::default();
-    parser.parse(wasm_bytes.as_slice()).unwrap();
+    if parser.parse(wasm_bytes.as_slice()).is_err() {
+        std::fs::write("fuzz.wasm", wasm_bytes.as_slice()).unwrap();
+        panic!("Failed to parse the generated module")
+    }
 });
