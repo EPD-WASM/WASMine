@@ -5,5 +5,5 @@ fn main() {
     let parser = parser::parser::Parser::default();
     let input = std::fs::File::open(args().nth(1).unwrap()).unwrap();
     let module = parser.parse(input).unwrap();
-    println!("{:?}", module);
+    log::info!("{:?}", module);
 }

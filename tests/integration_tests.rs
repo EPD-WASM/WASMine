@@ -8,9 +8,10 @@ pub fn test_parser(file_path: &str) {
     let wast_repr: Wast = match wast::parser::parse(&parse_buf) {
         Ok(wast) => wast,
         Err(e) => {
-            println!(
+            log::error!(
                 "Warning: Third-party wast parser failed to parse spec test file: {:?}\n{:?}",
-                file_path, e
+                file_path,
+                e
             );
             return;
         }
@@ -24,7 +25,7 @@ pub fn test_parser(file_path: &str) {
                 let res = parser.parse(binary_mod.as_slice());
                 if res.is_err() {
                     std::fs::write("test_module_dump.wasm", binary_mod).unwrap();
-                    println!(
+                    log::error!(
                         "Parsing failed of spec test file: {:?}:{}:{}\nWriting binary module to ./test_module_dump.wasm",
                         file_path, line, col
                     );

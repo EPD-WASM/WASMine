@@ -126,7 +126,7 @@ impl Parser {
         let name = Name::parse(i)?;
         let name_byte_len = i.pos - reader_pos_safe;
 
-        println!("Skipping parsing of custom section {}", name);
+        log::warn!("Skipping parsing of custom section {}", name);
         for _ in name_byte_len..section_size {
             let _ = i.read_byte()?;
         }

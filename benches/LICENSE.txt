@@ -1,0 +1,5 @@
+fibonacci.wasm:
+    From https://github.com/ifyouseewendy/wasm-runtime-benchmark/blob/master/wasm-sample/fibonacci.wasm
+
+all others:
+    From https://github.com/bytecodealliance/wasm-score (Apache 2.0)

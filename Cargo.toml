@@ -9,8 +9,15 @@ edition = "2021"
 
 [dependencies]
 lazy_static = "1.4.0"
+log = "0.4.21"
 thiserror = "1.0.60"
 
 [dev-dependencies]
 wast = "206.0.0"
 gen_util = { path = "./tests/gen_util" }
+criterion = "0.3"
+wasmparser = "0.207.0"
+
+[[bench]]
+name = "parser_bench"
+harness = false
