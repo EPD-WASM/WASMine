@@ -1,39 +1,82 @@
 stages:
+  - check
   - build
   - test
 
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
 
-build-rust-latest:
-  stage: build
-  image: rust:1.78
-  script:
-    - cargo build --release
-  artifacts:
-    paths:
-      - "target/"
+.rust-default:
+  image: lukasdoe123/wasm-rt-rust-img:1.78
   tags:
     - lukas-debian-runner
+  interruptible: true
+  timeout: 5m
 
-cargo-test:
-  stage: test
-  script:
-    - cargo test
-  dependencies:
-    - build-rust-latest
-  tags:
-    - lukas-debian-runner
-
-cargo-clippy:
-  stage: test
+check:
+  extends: .rust-default
+  stage: check
   variables:
     RUSTFLAGS: "-Dwarnings"
   script:
-    - rustup component add clippy
-    - cargo clippy --all-targets --all-features
+    - 'cargo clippy
+        --color always
+        --verbose
+        --all-targets
+        --all-features
+        --message-format=json
+        | gitlab-report -p clippy > code-quality-report.json'
   allow_failure: true
-  dependencies:
-    - build-rust-latest
-  tags:
-    - lukas-debian-runner
+  artifacts:
+    when: always
+    reports:
+      codequality: code-quality-report.json
+
+build:
+  extends: .rust-default
+  stage: build
+  script:
+    - 'cargo build
+        --release
+        --verbose
+        --color always'
+  artifacts:
+    paths:
+      - "target/*"
+
+test:
+  extends: .rust-default
+  stage: test
+  needs: [ build ]
+  variables:
+    LLVM_PROFILE_FILE: "coverage-%p-%m.profraw"
+    RUSTFLAGS: "-Cinstrument-coverage"
+  script:
+    - 'cargo +nightly test
+        --verbose
+        --color always
+        --all-features
+        --no-fail-fast
+        --
+        -Z unstable-options
+        --format json
+        | gitlab-report -p test > results.xml'
+  after_script:
+    - 'grcov .
+        --binary-path ./target/debug/
+        --source-dir .
+        --output-type cobertura
+        --output-path coverage.xml
+        --branch
+        --ignore-not-existing
+        --ignore "/*"'
+    - |-
+        xmllint --xpath "concat('Coverage: ', 100 * string(//coverage/@line-rate), '%')" coverage.xml
+  coverage: '/Coverage: \d+(?:\.\d+)?/'
+  artifacts:
+    when: always
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+      junit: results.xml
