@@ -22,3 +22,18 @@ fn test_fuzzer_samples() {
         }
     });
 }
+
+#[test]
+#[ignore]
+fn parse_spidermonkey() {
+    let wasm_bytes = std::fs::read(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("benches/fixtures/spidermonkey.wasm"),
+    )
+    .unwrap();
+    for _ in 0..1 {
+        let parser = wasm_rt::parser::parser::Parser::default();
+        if let Err(e) = parser.parse(wasm_bytes.as_slice()) {
+            panic!("Failed to parse wasm file");
+        }
+    }
+}

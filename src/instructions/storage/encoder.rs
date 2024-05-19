@@ -2,7 +2,7 @@ use super::InstructionStorage;
 use crate::{
     instructions::{Instruction, VariableID},
     structs::instruction::ControlInstruction,
-    util::integer_traits::{Integer},
+    util::integer_traits::Integer,
     wasm_types::{InstructionType, ValType},
 };
 use std::collections::VecDeque;
@@ -43,15 +43,7 @@ impl InstructionEncoder {
 
     pub(crate) fn write_immediate<T: Integer>(&mut self, imm: T) {
         // TODO: align storage for better performance
-        self.storage.immediate_storage.extend(&imm.to_le_bytes());
-    }
-
-    pub(crate) fn write_immediate_float32(&mut self, imm: f32) {
-        self.storage.immediate_storage.extend(imm.to_le_bytes());
-    }
-
-    pub(crate) fn write_immediate_float64(&mut self, imm: f64) {
-        self.storage.immediate_storage.extend(imm.to_le_bytes());
+        self.storage.immediate_storage.extend(&imm.to_bytes());
     }
 
     pub(crate) fn write_variable(&mut self, var: VariableID) {

@@ -14,33 +14,17 @@ use crate::{
 
 use super::{opcode_tbl::LVL1_JMP_TABLE, Context, ParseResult, ParserStack, ValidationError};
 
-fn setup_block_stack(
-    block_type: BlockType,
-    ctxt: &mut Context,
-) -> Result<ParserStack, ParserError> {
+fn setup_block_stack(block_type: BlockType, ctxt: &mut Context) {
     let input_signature = get_block_input_signature(ctxt, block_type);
     let input_length = input_signature.len();
     // divide stack into block stack (input params) and remaining stack (output params)
-    let mut block_stack = ctxt
-        .stack
-        .stack
-        .split_off(ctxt.stack.stack.len() - input_length);
+    ctxt.stack.stash_with_keep(input_length);
     for (i, input_var) in input_signature.iter().enumerate() {
-        if block_stack[i].type_ != *input_var {
+        if ctxt.stack[i].type_ != *input_var {
             ctxt.poison(ValidationError::Msg(
                 "mismatched input signature in target label".to_string(),
             ))
         }
-    }
-    std::mem::swap(&mut block_stack, &mut ctxt.stack.stack);
-    Ok(ParserStack { stack: block_stack })
-}
-
-// validation of existence of these variables is done in the leaving / branch instructions
-fn teardown_block_stack(block_type: BlockType, ctxt: &mut Context, saved_stack: ParserStack) {
-    ctxt.stack = saved_stack;
-    for return_value in get_block_return_signature(ctxt, block_type) {
-        ctxt.push_var(ctxt.create_var(return_value));
     }
 }
 
@@ -64,7 +48,7 @@ fn validate_and_extract_result_from_stack(
     out_params: &ResType,
 ) -> Vec<VariableID> {
     let mut return_vars = Vec::new();
-    let stack_depth = ctxt.stack.stack.len();
+    let stack_depth = ctxt.stack.len();
     if stack_depth < out_params.len() {
         return ctxt.poison(ValidationError::Msg(
             "stack underflow in target label".to_string(),
@@ -72,7 +56,7 @@ fn validate_and_extract_result_from_stack(
     }
     for (i, return_value) in out_params.iter().rev().enumerate() {
         let idx = stack_depth - i - 1;
-        let stack_var = &ctxt.stack.stack[idx];
+        let stack_var = &ctxt.stack[idx];
         if stack_var.type_ != *return_value {
             return ctxt.poison(ValidationError::Msg(
                 "mismatched return type in target label".to_string(),
@@ -81,10 +65,6 @@ fn validate_and_extract_result_from_stack(
         return_vars.push(stack_var.id);
     }
     return_vars
-}
-
-fn validate_target_label(ctxt: &mut Context, target_label: &Label) -> Vec<VariableID> {
-    validate_and_extract_result_from_stack(ctxt, &target_label.result_type)
 }
 
 fn parse_until_next_end(
@@ -127,7 +107,7 @@ fn parse_terminator(
     match instruction_storage.terminator.clone() {
         ControlInstruction::Block(block_type) | ControlInstruction::Loop(block_type) => {
             let is_loop = matches!(instruction_storage.terminator, ControlInstruction::Loop(_));
-            let saved_stack = setup_block_stack(block_type.clone(), ctxt)?;
+            setup_block_stack(block_type.clone(), ctxt);
 
             let after_block_instr_bb_id = BasicBlock::next_id();
             let first_nested_block_id = BasicBlock::next_id();
@@ -158,7 +138,7 @@ fn parse_terminator(
                     Vec::new()
                 },
             };
-            labels.push(block_label);
+            labels.push(block_label.clone());
 
             // parse block instructions until the block's "end"
             // TODO: stack should be copied here, so that the block can't alter the stack for the outer block
@@ -167,7 +147,11 @@ fn parse_terminator(
 
             // restore outer scope
             labels.truncate(label_depth);
-            teardown_block_stack(block_type, ctxt, saved_stack);
+            ctxt.stack.unstash();
+            // TODO: this has to be phi nodes combining then and else variants
+            for val in get_block_return_signature(ctxt, block_type.clone()) {
+                ctxt.push_var(ctxt.create_var(val));
+            }
 
             // collect all other blocks until the next outside "end"
             let mut after_blocks = parse_basic_blocks(i, ctxt, labels, after_block_instr_bb_id)?;
@@ -192,8 +176,23 @@ fn parse_terminator(
             };
             labels.push(block_label.clone());
 
-            let original_stack = ctxt.stack.clone();
-            let stack_after_ifelse = setup_block_stack(block_type.clone(), ctxt)?;
+            let input_signature = get_block_input_signature(ctxt, block_type.clone());
+            let input_length = input_signature.len();
+            let mut input_vars = Vec::new();
+            for (idx, val) in input_signature.into_iter().enumerate() {
+                let opt = ctxt.stack.get(ctxt.stack.len() - 1 - idx).cloned();
+                match opt {
+                    None => ctxt.poison(ValidationError::Msg(
+                        "stack underflow in target label".to_string(),
+                    )),
+                    Some(var) if var.type_ != val => ctxt.poison(ValidationError::Msg(
+                        "mismatched input signature in target label".to_string(),
+                    )),
+                    Some(var) => input_vars.push(var),
+                }
+            }
+            ctxt.stack.stash_with_keep(input_length);
+
             let target_if_true = BasicBlock::next_id();
             let mut blocks_for_true_path = parse_basic_blocks(i, ctxt, labels, target_if_true)?;
             if let BasicBlockGlue::ElseMarker {
@@ -206,8 +205,11 @@ fn parse_terminator(
                     output_vars: end_of_then_out_vars.clone(),
                 };
                 // restore state from if-statement
-                ctxt.stack = original_stack;
-                setup_block_stack(block_type.clone(), ctxt)?;
+                ctxt.stack.unstash();
+                ctxt.stack.stash();
+                for var in input_vars.into_iter().rev() {
+                    ctxt.push_var(var);
+                }
 
                 labels.truncate(label_depth);
                 labels.push(block_label.clone());
@@ -249,9 +251,14 @@ fn parse_terminator(
                 bbs.push(pred_bb);
                 bbs.append(&mut blocks_for_true_path);
             }
+
             // restore outer scope
-            teardown_block_stack(block_type, ctxt, stack_after_ifelse);
+            ctxt.stack.unstash();
             labels.truncate(label_depth);
+            // TODO: this has to be phi nodes combining then and else variants
+            for val in block_label.result_type.iter() {
+                ctxt.push_var(ctxt.create_var(*val));
+            }
 
             let mut blocks_after_ifelse = parse_basic_blocks(i, ctxt, labels, bb_after_ifelse)?;
             bbs.append(&mut blocks_after_ifelse);
@@ -266,7 +273,8 @@ fn parse_terminator(
             let mut bb: BasicBlock = BasicBlock::new(start_id);
             bb.instructions = instruction_storage;
             let target_label = labels[labels.len() - label_idx as usize - 1].clone();
-            let output_vars = validate_target_label(ctxt, &target_label);
+            let output_vars =
+                validate_and_extract_result_from_stack(ctxt, &target_label.result_type);
 
             bb.terminator = BasicBlockGlue::Jmp {
                 target: target_label.bb_id,
@@ -286,7 +294,8 @@ fn parse_terminator(
             let cond_var = ctxt.pop_var_with_type(&ValType::Number(NumType::I32)).id;
             let cont_bb_id = BasicBlock::next_id();
             let target_if_true = labels[labels.len() - label_idx as usize - 1].clone();
-            let output_vars = validate_target_label(ctxt, &target_if_true);
+            let output_vars =
+                validate_and_extract_result_from_stack(ctxt, &target_if_true.result_type);
 
             bb.terminator = BasicBlockGlue::JmpCond {
                 cond_var,
@@ -311,7 +320,8 @@ fn parse_terminator(
             } else {
                 labels[labels.len() - default_label as usize - 1].clone()
             };
-            let default_output_vars = validate_target_label(ctxt, &default_bb);
+            let default_output_vars =
+                validate_and_extract_result_from_stack(ctxt, &default_bb.result_type);
 
             let (target_bbs, target_bbs_out_vars): (Vec<BasicBlockID>, Vec<Vec<VariableID>>) =
                 label_table
@@ -319,7 +329,7 @@ fn parse_terminator(
                     .map(|label_idx| &labels[labels.len() - label_idx as usize - 1])
                     .map(|target_label| {
                         let output_vars: Vec<VariableID> =
-                            validate_target_label(ctxt, target_label);
+                            validate_and_extract_result_from_stack(ctxt, &target_label.result_type);
                         (target_label.bb_id, output_vars)
                     })
                     .unzip();
@@ -357,7 +367,8 @@ fn parse_terminator(
                 1 => {
                     // return from function
                     let func_scope_label = labels.last().unwrap();
-                    let return_vars = validate_target_label(ctxt, func_scope_label);
+                    let return_vars =
+                        validate_and_extract_result_from_stack(ctxt, &func_scope_label.result_type);
                     bb.terminator = BasicBlockGlue::Return { return_vars };
                 }
                 0 => {
@@ -367,7 +378,8 @@ fn parse_terminator(
                 _ => {
                     // return from block, jump to last label
                     let last_label = labels.last().unwrap();
-                    let output_vars = validate_target_label(ctxt, last_label);
+                    let output_vars =
+                        validate_and_extract_result_from_stack(ctxt, &last_label.result_type);
                     bb.terminator = BasicBlockGlue::Jmp {
                         target: last_label.bb_id,
                         output_vars,
@@ -383,7 +395,8 @@ fn parse_terminator(
             let func_scope_label = labels.first().ok_or(ParserError::Msg(
                 "return instruction outside of function scope".to_string(),
             ))?;
-            let return_vars = validate_target_label(ctxt, func_scope_label);
+            let return_vars =
+                validate_and_extract_result_from_stack(ctxt, &func_scope_label.result_type);
 
             let mut bb: BasicBlock = BasicBlock::new(start_id);
             bb.instructions = instruction_storage;
@@ -500,7 +513,8 @@ fn parse_terminator(
             bb.instructions = instruction_storage;
 
             let ifscopelabel = labels.last().unwrap();
-            let output_vars = validate_target_label(ctxt, ifscopelabel);
+            let output_vars =
+                validate_and_extract_result_from_stack(ctxt, &ifscopelabel.result_type);
             bb.terminator = BasicBlockGlue::ElseMarker { output_vars };
             bbs.push(bb);
 

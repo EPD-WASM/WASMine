@@ -13,13 +13,17 @@ use crate::{
     structs::{function::Function, module::Module},
     wasm_types::ValType,
 };
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::{
+    ops::Index,
+    sync::atomic::{AtomicU32, Ordering},
+};
 
 pub(crate) type ParseResult = Result<(), ParserError>;
 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(crate) struct ParserStack {
-    pub(crate) stack: Vec<Variable>,
+    stack: Vec<Variable>,
+    stash: Vec<usize>,
 }
 
 pub(crate) struct Context<'a> {
@@ -82,7 +86,26 @@ impl<'a> Context<'a> {
 
 impl ParserStack {
     pub(crate) fn new() -> Self {
-        Self { stack: Vec::new() }
+        Self {
+            stack: Vec::new(),
+            stash: vec![0],
+        }
+    }
+
+    pub(crate) fn stash(&mut self) {
+        self.stash.push(self.stack.len());
+    }
+
+    pub(crate) fn stash_with_keep(&mut self, keep: usize) {
+        self.stash.push(self.stack.len() - keep);
+    }
+
+    pub(crate) fn unstash(&mut self) {
+        self.stack.truncate(self.stash.pop().unwrap());
+    }
+
+    pub(crate) fn unstash_with_keep(&mut self, keep: usize) {
+        self.stack.truncate(self.stash.pop().unwrap() + keep);
     }
 
     fn push_var(&mut self, var: Variable) {
@@ -90,6 +113,14 @@ impl ParserStack {
     }
 
     fn pop_var_with_type(&mut self, type_: &ValType) -> Result<Variable, ValidationError> {
+        if self
+            .stash
+            .last()
+            .map_or(false, |&stash| stash >= self.stack.len())
+        {
+            return Err(ValidationError::Msg("stack underflow".into()));
+        }
+
         let var = match self.stack.pop() {
             Some(var) => var,
             None => return Err(ValidationError::Msg("stack underflow".into())),
@@ -101,8 +132,32 @@ impl ParserStack {
     }
 
     fn pop_var(&mut self) -> Result<Variable, ValidationError> {
+        if *self.stash.last().unwrap() >= self.stack.len() {
+            return Err(ValidationError::Msg("stack underflow".into()));
+        }
+
         self.stack
             .pop()
             .ok_or(ValidationError::Msg("stack underflow".into()))
+    }
+
+    pub(crate) fn len(&self) -> usize {
+        self.stack.len() - self.stash.last().unwrap()
+    }
+
+    pub(crate) fn get(&self, index: usize) -> Option<&Variable> {
+        if index + self.stash.last().unwrap() >= self.stack.len() {
+            None
+        } else {
+            Some(&self[index])
+        }
+    }
+}
+
+impl Index<usize> for ParserStack {
+    type Output = Variable;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.stack[self.stash.last().unwrap() + index]
     }
 }

@@ -12,29 +12,29 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     ];
     let mut group = c.benchmark_group("parser-throughput");
     for file_name in wasm_files {
-        let wast_bytes = std::fs::read(
+        let wasm_bytes = std::fs::read(
             PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                 .join("benches/fixtures")
                 .join(file_name),
         )
         .unwrap();
-        group.throughput(Throughput::Bytes(wast_bytes.len() as u64));
+        group.throughput(Throughput::Bytes(wasm_bytes.len() as u64));
         group.bench_with_input(
             BenchmarkId::new("WASM_RT: parsing", file_name),
-            &wast_bytes,
-            |b, wast_bytes| {
+            &wasm_bytes,
+            |b, wasm_bytes| {
                 b.iter(|| {
                     black_box(
-                        parser::parser::Parser::default().parse(black_box(wast_bytes.as_slice())),
+                        parser::parser::Parser::default().parse(black_box(wasm_bytes.as_slice())),
                     )
                 })
             },
         );
         group.bench_with_input(
             BenchmarkId::new("WASMTIME: parsing", file_name),
-            &wast_bytes,
-            |b, wast_bytes| {
-                b.iter(|| black_box(wasmparser::validate(black_box(wast_bytes))).unwrap())
+            &wasm_bytes,
+            |b, wasm_bytes| {
+                b.iter(|| wasmparser::Validator::new().validate_all(black_box(wasm_bytes)))
             },
         );
     }

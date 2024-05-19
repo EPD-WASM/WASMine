@@ -43,37 +43,7 @@ impl InstructionDecoder {
             .storage
             .immediate_storage
             .drain(..std::mem::size_of::<T>());
-        Ok(T::from_le_bytes(
-            drained_bytes.collect::<Vec<u8>>().as_slice(),
-        ))
-    }
-
-    pub(crate) fn read_immediate_float32(&mut self) -> Result<f32, DecodingError> {
-        self.storage.immediate_storage.make_contiguous();
-        let drained_bytes = self
-            .storage
-            .immediate_storage
-            .drain(..std::mem::size_of::<f64>());
-        let byte_arr =
-            <[u8; 4]>::try_from(drained_bytes.collect::<Vec<u8>>().as_slice()).map_err(|_| {
-                DecodingError::DecodingError("Failed to find all bytes for float parsing".into())
-            })?;
-        let imm = f32::from_le_bytes(byte_arr);
-        Ok(imm)
-    }
-
-    pub(crate) fn read_immediate_float64(&mut self) -> Result<f64, DecodingError> {
-        self.storage.immediate_storage.make_contiguous();
-        let drained_bytes = self
-            .storage
-            .immediate_storage
-            .drain(..std::mem::size_of::<f64>());
-        let byte_arr =
-            <[u8; 8]>::try_from(drained_bytes.collect::<Vec<u8>>().as_slice()).map_err(|_| {
-                DecodingError::DecodingError("Failed to find all bytes for float parsing".into())
-            })?;
-        let imm = f64::from_le_bytes(byte_arr);
-        Ok(imm)
+        Ok(T::from_bytes(drained_bytes.collect::<Vec<u8>>().as_slice()))
     }
 
     pub(crate) fn read_terminator(&self) -> ControlInstruction {
