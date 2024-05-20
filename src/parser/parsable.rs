@@ -341,7 +341,7 @@ impl ParseWithContext for Expression {
         };
         let mut ctxt = Context::new(module, &fake_func);
         let mut labels = Vec::new();
-        let bbs = parse_basic_blocks(i, &mut ctxt, &mut labels, 0)?;
+        let bbs = parse_basic_blocks(i, &mut ctxt, &mut labels, 0, None)?;
         Ok(Expression { instrs: bbs })
     }
 }

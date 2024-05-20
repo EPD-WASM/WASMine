@@ -1,5 +1,6 @@
 mod control;
 mod memory;
+pub(crate) mod meta;
 mod numeric;
 mod parametric;
 mod reference;

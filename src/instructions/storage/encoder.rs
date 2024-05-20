@@ -14,16 +14,7 @@ pub(crate) struct InstructionEncoder {
 
 impl InstructionEncoder {
     pub(crate) fn new() -> InstructionEncoder {
-        InstructionEncoder {
-            storage: InstructionStorage {
-                immediate_storage: VecDeque::new(),
-                variable_storage: VecDeque::new(),
-                type_storage: VecDeque::new(),
-                instruction_storage: VecDeque::new(),
-                terminator: ControlInstruction::Unreachable,
-            },
-            finished: false,
-        }
+        Self::default()
     }
 
     pub(crate) fn is_finished(&self) -> bool {
@@ -61,5 +52,20 @@ impl InstructionEncoder {
 
     pub(crate) fn extract_data(self) -> InstructionStorage {
         self.storage
+    }
+}
+
+impl Default for InstructionEncoder {
+    fn default() -> Self {
+        InstructionEncoder {
+            storage: InstructionStorage {
+                immediate_storage: VecDeque::new(),
+                variable_storage: VecDeque::new(),
+                type_storage: VecDeque::new(),
+                instruction_storage: VecDeque::new(),
+                terminator: ControlInstruction::Unreachable,
+            },
+            finished: false,
+        }
     }
 }

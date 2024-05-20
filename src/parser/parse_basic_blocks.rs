@@ -1,7 +1,8 @@
 use crate::{
     instructions::{
+        meta::PhiNode,
         storage::{InstructionEncoder, InstructionStorage},
-        Variable, VariableID,
+        Instruction, Variable, VariableID,
     },
     parser::{error::ParserError, wasm_stream_reader::WasmStreamReader},
     structs::{
@@ -75,7 +76,7 @@ fn parse_until_next_end(
 ) -> ParseResult {
     let mut saved_stack = ParserStack::new();
     std::mem::swap(&mut saved_stack, &mut ctxt.stack);
-    let parsed_blocks = parse_basic_blocks(i, ctxt, labels, BasicBlock::next_id())?;
+    let parsed_blocks = parse_basic_blocks(i, ctxt, labels, BasicBlock::next_id(), None)?;
     ctxt.poison = None;
     ctxt.stack = saved_stack;
 
@@ -142,19 +143,46 @@ fn parse_terminator(
 
             // parse block instructions until the block's "end"
             // TODO: stack should be copied here, so that the block can't alter the stack for the outer block
-            let mut nested_blocks = parse_basic_blocks(i, ctxt, labels, first_nested_block_id)?;
+            let mut nested_blocks =
+                parse_basic_blocks(i, ctxt, labels, first_nested_block_id, None)?;
             bbs.append(&mut nested_blocks);
 
             // restore outer scope
             labels.truncate(label_depth);
             ctxt.stack.unstash();
-            // TODO: this has to be phi nodes combining then and else variants
-            for val in get_block_return_signature(ctxt, block_type.clone()) {
-                ctxt.push_var(ctxt.create_var(val));
+
+            // parse all jumps outside of the block to the block lable as phis (TODO: optimize this linear search through a predecessor list)
+            let mut phis = get_block_return_signature(ctxt, block_type.clone())
+                .into_iter()
+                .map(|val| PhiNode::new(Vec::new(), val, ctxt))
+                .collect::<Vec<_>>();
+            for parsed_block in nested_blocks.iter() {
+                if parsed_block
+                    .successors()
+                    .any(|s| s == after_block_instr_bb_id)
+                {
+                    for (phi, bb_out_var) in phis
+                        .iter_mut()
+                        .zip(parsed_block.target_out_vars(after_block_instr_bb_id))
+                    {
+                        phi.inputs.push((parsed_block.id, bb_out_var));
+                    }
+                }
+            }
+
+            let mut after_block_instrs = InstructionEncoder::new();
+            for phi in phis.into_iter() {
+                phi.serialize(&mut after_block_instrs);
             }
 
             // collect all other blocks until the next outside "end"
-            let mut after_blocks = parse_basic_blocks(i, ctxt, labels, after_block_instr_bb_id)?;
+            let mut after_blocks = parse_basic_blocks(
+                i,
+                ctxt,
+                labels,
+                after_block_instr_bb_id,
+                Some(after_block_instrs),
+            )?;
             bbs.append(&mut after_blocks);
             Ok(bbs)
         }
@@ -194,7 +222,8 @@ fn parse_terminator(
             ctxt.stack.stash_with_keep(input_length);
 
             let target_if_true = BasicBlock::next_id();
-            let mut blocks_for_true_path = parse_basic_blocks(i, ctxt, labels, target_if_true)?;
+            let mut blocks_for_true_path =
+                parse_basic_blocks(i, ctxt, labels, target_if_true, None)?;
             if let BasicBlockGlue::ElseMarker {
                 output_vars: ref end_of_then_out_vars,
             } = blocks_for_true_path.last().unwrap().terminator
@@ -217,7 +246,7 @@ fn parse_terminator(
                 // parse "else" branch
                 let target_if_false = BasicBlock::next_id();
                 let mut blocks_for_false_path =
-                    parse_basic_blocks(i, ctxt, labels, target_if_false)?;
+                    parse_basic_blocks(i, ctxt, labels, target_if_false, None)?;
 
                 pred_bb.terminator = BasicBlockGlue::JmpCond {
                     cond_var,
@@ -255,12 +284,25 @@ fn parse_terminator(
             // restore outer scope
             ctxt.stack.unstash();
             labels.truncate(label_depth);
-            // TODO: this has to be phi nodes combining then and else variants
-            for val in block_label.result_type.iter() {
-                ctxt.push_var(ctxt.create_var(*val));
+
+            // parse all jumps outside of the block to the block lable as phis (TODO: optimize this linear search through a predecessor list)
+            let mut phis = get_block_return_signature(ctxt, block_type.clone())
+                .into_iter()
+                .map(|val| PhiNode::new(Vec::new(), val, ctxt))
+                .collect::<Vec<_>>();
+            for parsed_block in bbs.iter() {
+                if parsed_block.successors().any(|s| s == bb_after_ifelse) {
+                    for (phi, bb_out_var) in phis
+                        .iter_mut()
+                        .zip(parsed_block.target_out_vars(bb_after_ifelse))
+                    {
+                        phi.inputs.push((parsed_block.id, bb_out_var));
+                    }
+                }
             }
 
-            let mut blocks_after_ifelse = parse_basic_blocks(i, ctxt, labels, bb_after_ifelse)?;
+            let mut blocks_after_ifelse =
+                parse_basic_blocks(i, ctxt, labels, bb_after_ifelse, None)?;
             bbs.append(&mut blocks_after_ifelse);
             Ok(bbs)
         }
@@ -305,7 +347,7 @@ fn parse_terminator(
             };
             bbs.push(bb);
 
-            let mut cont_bbs = parse_basic_blocks(i, ctxt, labels, cont_bb_id)?;
+            let mut cont_bbs = parse_basic_blocks(i, ctxt, labels, cont_bb_id, None)?;
             bbs.append(&mut cont_bbs);
             Ok(bbs)
         }
@@ -447,7 +489,7 @@ fn parse_terminator(
                 ctxt.push_var(var);
             }
 
-            let mut cont_bbs = parse_basic_blocks(i, ctxt, labels, cont_bb_id)?;
+            let mut cont_bbs = parse_basic_blocks(i, ctxt, labels, cont_bb_id, None)?;
             bbs.append(&mut cont_bbs);
             Ok(bbs)
         }
@@ -503,7 +545,7 @@ fn parse_terminator(
                 ctxt.push_var(var);
             }
 
-            let mut cont_bbs = parse_basic_blocks(i, ctxt, labels, cont_bb_id)?;
+            let mut cont_bbs = parse_basic_blocks(i, ctxt, labels, cont_bb_id, None)?;
             bbs.append(&mut cont_bbs);
             Ok(bbs)
         }
@@ -534,8 +576,9 @@ pub(crate) fn parse_basic_blocks(
     ctxt: &mut Context,
     labels: &mut Vec<Label>,
     start_id: u32,
+    instruction_writer: Option<InstructionEncoder>,
 ) -> Result<Vec<BasicBlock>, ParserError> {
-    let mut instruction_writer = InstructionEncoder::new();
+    let mut instruction_writer = instruction_writer.unwrap_or_default();
     while !instruction_writer.is_finished() {
         let opcode: u8 = i.read_byte()?;
         LVL1_JMP_TABLE[opcode as usize](ctxt, i, &mut instruction_writer)?;

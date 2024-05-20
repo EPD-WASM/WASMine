@@ -335,7 +335,8 @@ impl Parser {
                 .clone(),
         };
         let mut labels = vec![function_outer_scope_label];
-        let parsed_basic_blocks = parse_basic_blocks(i, &mut ctxt, &mut labels, entry_basic_block)?;
+        let parsed_basic_blocks =
+            parse_basic_blocks(i, &mut ctxt, &mut labels, entry_basic_block, None)?;
         if let Some(poison) = ctxt.poison {
             return Err(poison.into());
         }

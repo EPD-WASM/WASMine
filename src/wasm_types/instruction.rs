@@ -8,6 +8,7 @@ pub(crate) enum InstructionType {
     Table(TableInstructionCategory),
     Memory(MemoryInstructionCategory),
     Control(ControlInstructionType),
+    Meta(MetaInstructionType),
 }
 
 #[derive(Debug, Clone)]
@@ -221,4 +222,9 @@ pub(crate) enum ReferenceInstructionType {
     RefNull,
     RefIsNull,
     RefFunc,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum MetaInstructionType {
+    PhiNode,
 }

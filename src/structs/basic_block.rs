@@ -30,6 +30,64 @@ impl BasicBlock {
     pub(crate) fn next_id() -> u32 {
         BASIC_BLOCK_ID.fetch_add(1, Ordering::SeqCst)
     }
+
+    pub(crate) fn successors(&self) -> impl Iterator<Item = BasicBlockID> {
+        match &self.terminator {
+            BasicBlockGlue::Jmp { target, .. } => vec![*target].into_iter(),
+            BasicBlockGlue::JmpCond {
+                target_if_true,
+                target_if_false,
+                ..
+            } => vec![*target_if_true, *target_if_false].into_iter(),
+            BasicBlockGlue::JmpTable {
+                targets,
+                default_target,
+                ..
+            } => {
+                let mut res = targets.clone();
+                res.push(*default_target);
+                res.into_iter()
+            }
+            _ => vec![].into_iter(),
+        }
+    }
+
+    pub(crate) fn target_out_vars(&self, target: BasicBlockID) -> impl Iterator<Item = VariableID> {
+        match &self.terminator {
+            BasicBlockGlue::Jmp {
+                output_vars,
+                target: jmp_target,
+            } => {
+                debug_assert_eq!(target, *jmp_target);
+                output_vars.clone().into_iter()
+            }
+            BasicBlockGlue::JmpCond {
+                output_vars,
+                target_if_true,
+                target_if_false,
+                ..
+            } => {
+                debug_assert!(target == *target_if_true || target == *target_if_false);
+                output_vars.clone().into_iter()
+            }
+            BasicBlockGlue::JmpTable {
+                default_output_vars,
+                targets_output_vars,
+                targets,
+                default_target,
+                ..
+            } => {
+                debug_assert!(target == *default_target || targets.contains(&target));
+                if target == *default_target {
+                    default_output_vars.clone().into_iter()
+                } else {
+                    let idx = targets.iter().position(|&x| x == target).unwrap();
+                    targets_output_vars[idx].clone().into_iter()
+                }
+            }
+            _ => vec![].into_iter(),
+        }
+    }
 }
 
 impl Debug for BasicBlock {
