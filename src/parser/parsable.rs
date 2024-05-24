@@ -2,16 +2,18 @@ use super::{
     error::ParserError, parse_basic_blocks::parse_basic_blocks,
     wasm_stream_reader::WasmStreamReader, Context,
 };
-use crate::structs::{
-    element::{ElemMode, Element, ElementInit},
-    export::{Export, ExportDesc},
-    expression::Expression,
-    function::Function,
-    global::Global,
-    import::{Import, ImportDesc},
-    memory::{MemArg, Memory},
-    module::Module,
-    table::Table,
+use crate::{
+    ir::function::Function,
+    structs::{
+        element::{ElemMode, Element, ElementInit},
+        export::{Export, ExportDesc},
+        expression::Expression,
+        global::Global,
+        import::{Import, ImportDesc},
+        memory::{MemArg, Memory},
+        module::Module,
+        table::Table,
+    },
 };
 use wasm_types::instruction::BlockType;
 use wasm_types::module::{GlobalType, MemType, Name, Section, TableType};

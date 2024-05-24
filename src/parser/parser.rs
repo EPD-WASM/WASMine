@@ -3,13 +3,14 @@ use super::parse_basic_blocks::{parse_basic_blocks, Label};
 use super::{error::ParserError, wasm_stream_reader::WasmStreamReader};
 use super::{Context, ParseResult, ParserStack};
 use crate::instructions::Variable;
-use crate::structs::basic_block::BasicBlock;
+use crate::ir::basic_block::BasicBlock;
+use crate::ir::function::Function;
 use crate::structs::data::{Data, DataMode};
 use crate::structs::expression::Expression;
 use crate::structs::import::ImportDesc;
 use crate::structs::{
-    element::Element, export::Export, function::Function, global::Global, import::Import,
-    memory::Memory, module::Module, table::Table,
+    element::Element, export::Export, global::Global, import::Import, memory::Memory,
+    module::Module, table::Table,
 };
 use std::io::{BufReader, Read};
 use std::sync::atomic::{AtomicU32, Ordering};

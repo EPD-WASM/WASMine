@@ -1,8 +1,8 @@
-use super::{
-    storage::{DecodingError, InstructionDecoder, InstructionEncoder},
-    Instruction, VariableID,
+use super::{Instruction, VariableID};
+use crate::{
+    ir::{basic_block::BasicBlockID, DecodingError, InstructionDecoder, InstructionEncoder},
+    parser::Context,
 };
-use crate::{parser::Context, structs::basic_block::BasicBlockID};
 use wasm_types::{InstructionType, MetaInstructionType, ValType};
 
 #[derive(Debug, Clone)]

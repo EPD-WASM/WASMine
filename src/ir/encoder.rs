@@ -1,4 +1,4 @@
-use super::InstructionStorage;
+use super::basic_block::BasicBlockStorage;
 use crate::{
     instructions::{Instruction, VariableID},
     structs::instruction::ControlInstruction,
@@ -8,7 +8,7 @@ use std::collections::VecDeque;
 use wasm_types::{InstructionType, ValType};
 
 pub(crate) struct InstructionEncoder {
-    storage: InstructionStorage,
+    storage: BasicBlockStorage,
     finished: bool,
 }
 
@@ -50,7 +50,7 @@ impl InstructionEncoder {
         self.finished = true;
     }
 
-    pub(crate) fn extract_data(self) -> InstructionStorage {
+    pub(crate) fn extract_data(self) -> BasicBlockStorage {
         self.storage
     }
 }
@@ -58,7 +58,7 @@ impl InstructionEncoder {
 impl Default for InstructionEncoder {
     fn default() -> Self {
         InstructionEncoder {
-            storage: InstructionStorage {
+            storage: BasicBlockStorage {
                 immediate_storage: VecDeque::new(),
                 variable_storage: VecDeque::new(),
                 type_storage: VecDeque::new(),

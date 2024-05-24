@@ -1,8 +1,9 @@
-use super::InstructionStorage;
+use super::basic_block::BasicBlockStorage;
 use crate::{
     instructions::*, structs::instruction::ControlInstruction, util::integer_traits::Integer,
 };
 use thiserror::Error;
+use wasm_types::{InstructionType, ValType};
 
 #[derive(Debug, Error)]
 pub(crate) enum DecodingError {
@@ -13,11 +14,11 @@ pub(crate) enum DecodingError {
 }
 
 pub(crate) struct InstructionDecoder {
-    storage: InstructionStorage,
+    storage: BasicBlockStorage,
 }
 
 impl InstructionDecoder {
-    pub(crate) fn new(storage: InstructionStorage) -> InstructionDecoder {
+    pub(crate) fn new(storage: BasicBlockStorage) -> InstructionDecoder {
         InstructionDecoder { storage }
     }
 

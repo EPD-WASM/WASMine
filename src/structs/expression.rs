@@ -1,4 +1,4 @@
-use super::basic_block::BasicBlock;
+use crate::ir::basic_block::BasicBlock;
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Expression {

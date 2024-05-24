@@ -1,10 +1,8 @@
 pub(crate) mod address;
-pub(crate) mod basic_block;
 pub(crate) mod data;
 pub(crate) mod element;
 pub(crate) mod export;
 pub(crate) mod expression;
-pub(crate) mod function;
 pub(crate) mod global;
 pub(crate) mod import;
 pub(crate) mod instruction;

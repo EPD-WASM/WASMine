@@ -1,15 +1,11 @@
 use crate::{
-    instructions::{
-        meta::PhiNode,
-        storage::{InstructionEncoder, InstructionStorage},
-        Instruction, Variable, VariableID,
+    instructions::{meta::PhiNode, Instruction, VariableID},
+    ir::{
+        basic_block::{BasicBlock, BasicBlockGlue, BasicBlockID, BasicBlockStorage},
+        InstructionEncoder,
     },
     parser::{error::ParserError, wasm_stream_reader::WasmStreamReader},
-    structs::{
-        basic_block::{BasicBlock, BasicBlockGlue, BasicBlockID},
-        instruction::ControlInstruction,
-        table::Table,
-    },
+    structs::{instruction::ControlInstruction, table::Table},
 };
 use wasm_types::instruction::BlockType;
 use wasm_types::module::TableType;
@@ -101,7 +97,7 @@ pub(crate) struct Label {
 
 fn parse_terminator(
     i: &mut WasmStreamReader,
-    instruction_storage: InstructionStorage,
+    instruction_storage: BasicBlockStorage,
     ctxt: &mut Context,
     labels: &mut Vec<Label>,
     start_id: u32,

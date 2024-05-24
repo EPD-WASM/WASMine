@@ -1,9 +1,9 @@
-use wasm_types::{FuncIdx, FuncType};
-
 use super::{
-    data::Data, element::Element, export::Export, function::Function, global::Global,
-    import::Import, memory::Memory, table::Table,
+    data::Data, element::Element, export::Export, global::Global, import::Import, memory::Memory,
+    table::Table,
 };
+use crate::ir::function::Function;
+use wasm_types::{FuncIdx, FuncType};
 
 /// A WebAssembly module
 #[derive(Debug, Clone, Default)]

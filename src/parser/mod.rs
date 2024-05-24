@@ -6,18 +6,14 @@ mod parse_basic_blocks;
 pub mod parser;
 pub(crate) mod wasm_stream_reader;
 
-use wasm_types::ValType;
-
 pub(crate) use self::error::{ParserError, ValidationError};
 
-use crate::{
-    instructions::Variable,
-    structs::{function::Function, module::Module},
-};
+use crate::{instructions::Variable, ir::function::Function, structs::module::Module};
 use std::{
     ops::Index,
     sync::atomic::{AtomicU32, Ordering},
 };
+use wasm_types::ValType;
 
 pub(crate) type ParseResult = Result<(), ParserError>;
 

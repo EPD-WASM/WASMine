@@ -4,7 +4,6 @@ pub(crate) mod meta;
 mod numeric;
 mod parametric;
 mod reference;
-pub(crate) mod storage;
 mod table;
 mod variable;
 
@@ -16,7 +15,7 @@ pub(crate) use reference::*;
 pub(crate) use table::*;
 pub(crate) use variable::*;
 
-use self::storage::{DecodingError, InstructionDecoder, InstructionEncoder};
+use crate::ir::{DecodingError, InstructionDecoder, InstructionEncoder};
 use crate::parser::{
     wasm_stream_reader::WasmStreamReader, Context, ParseResult, ParserError, ValidationError,
 };

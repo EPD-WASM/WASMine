@@ -1,7 +1,7 @@
-use self::storage::InstructionEncoder;
 use self::wasm_stream_reader::WasmStreamReader;
 use super::*;
 use crate::instructions::*;
+use crate::ir::InstructionEncoder;
 use crate::parser::error::ParserError;
 
 /// Reference: https://webassembly.github.io/spec/core/bikeshed/#a7-index-of-instructions

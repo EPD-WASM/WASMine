@@ -1,9 +1,11 @@
-use crate::instructions::{storage::InstructionStorage, VariableID};
+use crate::{instructions::VariableID, structs::instruction::ControlInstruction};
 use lazy_static::lazy_static;
 use std::{
+    collections::VecDeque,
     fmt::{Debug, Formatter},
     sync::atomic::{AtomicU32, Ordering},
 };
+use wasm_types::*;
 
 lazy_static! {
     pub(crate) static ref BASIC_BLOCK_ID: AtomicU32 = AtomicU32::new(0);
@@ -11,12 +13,21 @@ lazy_static! {
 
 pub(crate) type BasicBlockID = u32;
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub(crate) struct BasicBlock {
     // instructions encoded
-    pub(crate) instructions: InstructionStorage,
+    pub(crate) instructions: BasicBlockStorage,
     pub(crate) terminator: BasicBlockGlue,
     pub(crate) id: BasicBlockID,
+}
+
+#[derive(Debug, Default, Clone)]
+pub(crate) struct BasicBlockStorage {
+    pub(crate) immediate_storage: VecDeque<u8>,
+    pub(crate) variable_storage: VecDeque<VariableID>,
+    pub(crate) type_storage: VecDeque<ValType>,
+    pub(crate) instruction_storage: VecDeque<InstructionType>,
+    pub(crate) terminator: ControlInstruction,
 }
 
 impl BasicBlock {
@@ -87,16 +98,6 @@ impl BasicBlock {
             }
             _ => vec![].into_iter(),
         }
-    }
-}
-
-impl Debug for BasicBlock {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "BasicBlock {{ id: {}, terminator: {:?}, instructions: {} }}",
-            self.id, self.terminator, self.instructions
-        )
     }
 }
 
