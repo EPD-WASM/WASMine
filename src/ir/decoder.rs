@@ -1,7 +1,5 @@
 use super::basic_block::BasicBlockStorage;
-use crate::{
-    instructions::*, structs::instruction::ControlInstruction, util::integer_traits::Integer,
-};
+use crate::{instructions::*, util::integer_traits::Integer};
 use thiserror::Error;
 use wasm_types::{InstructionType, ValType};
 
@@ -39,16 +37,12 @@ impl InstructionDecoder {
     }
 
     pub(crate) fn read_immediate<T: Integer>(&mut self) -> Result<T, DecodingError> {
-        // TODO: test if it is sufficient to only call this once on construction or whether a pop_front might make the content non-contiguous
+        debug_assert!(self.storage.immediate_storage.len() >= std::mem::size_of::<T>());
         let drained_bytes = self
             .storage
             .immediate_storage
             .drain(..std::mem::size_of::<T>());
         Ok(T::from_bytes(drained_bytes.collect::<Vec<u8>>().as_slice()))
-    }
-
-    pub(crate) fn read_terminator(&self) -> ControlInstruction {
-        self.storage.terminator.clone()
     }
 
     pub(crate) fn read_value_type(&mut self) -> Result<ValType, DecodingError> {

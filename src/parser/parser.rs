@@ -109,6 +109,7 @@ impl Parser {
         }
         if self
             .module
+            .ir
             .functions
             .iter()
             .any(|f| f.basic_blocks.is_empty() && !f.import)
@@ -151,7 +152,7 @@ impl Parser {
         for _ in 0..num_imports {
             let import = Import::parse(i)?;
             match import.desc.clone() {
-                ImportDesc::Func(idx) => self.module.functions.push(Function {
+                ImportDesc::Func(idx) => self.module.ir.functions.push(Function {
                     type_idx: idx,
                     import: true,
                     ..Default::default()
@@ -189,7 +190,7 @@ impl Parser {
         if max_func_type as usize >= self.module.function_types.len() {
             return Err(ParserError::Msg("function type index out of bounds".into()));
         }
-        self.module.functions.append(&mut parsed_functions);
+        self.module.ir.functions.append(&mut parsed_functions);
         Ok(())
     }
 
@@ -294,7 +295,7 @@ impl Parser {
             return Err(ParserError::Msg("too many locals".into()));
         }
 
-        let function_type_idx = self.module.functions[function_idx].type_idx;
+        let function_type_idx = self.module.ir.functions[function_idx].type_idx;
         let input_param_types = self.module.function_types[function_type_idx as usize]
             .0
             .clone();
@@ -316,12 +317,12 @@ impl Parser {
             })
             .collect();
         locals.append(&mut expaneded_locals);
-        self.module.functions[function_idx].locals = locals;
+        self.module.ir.functions[function_idx].locals = locals;
 
         let mut ctxt = Context {
             module: &self.module,
             stack,
-            func: &self.module.functions[function_idx],
+            func: &self.module.ir.functions[function_idx],
             var_count,
             poison: None,
         };
@@ -339,46 +340,33 @@ impl Parser {
         if let Some(poison) = ctxt.poison {
             return Err(poison.into());
         }
-        self.module.functions[function_idx].basic_blocks = parsed_basic_blocks;
+        self.module.ir.functions[function_idx].basic_blocks = parsed_basic_blocks;
         Ok(())
-    }
-
-    fn get_function_name(&self, function_idx: usize) -> String {
-        self.module
-            .exports
-            .iter()
-            .find_map(|export| match export {
-                Export {
-                    name,
-                    desc: crate::structs::export::ExportDesc::Func(idx),
-                } if *idx == function_idx as u32 => Some(name),
-                _ => None,
-            })
-            .cloned()
-            .unwrap_or("<anonymous>".to_owned())
     }
 
     fn parse_code_section(&mut self, i: &mut WasmStreamReader) -> ParseResult {
         let _ = i.read_leb128::<u32>()?;
         let mut num_remaining_function_defs = i.read_leb128::<u32>()?;
-        if num_remaining_function_defs > self.module.functions.len() as u32 {
+        if num_remaining_function_defs > self.module.ir.functions.len() as u32 {
             return Err(ParserError::Msg(format!(
                 "code section size {} larger than function count {}",
                 num_remaining_function_defs,
-                self.module.functions.len()
+                self.module.ir.functions.len()
             )));
         }
 
         let mut function_idx = self
             .module
+            .ir
             .functions
             .iter()
             .position(|f| f.basic_blocks.is_empty())
-            .unwrap_or(self.module.functions.len());
+            .unwrap_or(self.module.ir.functions.len());
 
         while num_remaining_function_defs > 0 {
             let next_free_function_idx = self
                 .module
+                .ir
                 .functions
                 .iter()
                 .enumerate()
@@ -398,7 +386,7 @@ impl Parser {
             let mut function_parse_result = self.parse_function(i, function_idx);
             #[cfg(debug_assertions)]
             {
-                let function_name = self.get_function_name(function_idx);
+                let function_name = Function::query_function_name(function_idx, &self.module);
                 function_parse_result = function_parse_result.map_err(|e| {
                     ParserError::Msg(format!(
                         "Error during parsing of function `{}`: {}",

@@ -449,7 +449,7 @@ fn parse_terminator(
         }
 
         ControlInstruction::Call(func_idx) => {
-            if func_idx > ctxt.module.functions.len() as u32 {
+            if func_idx > ctxt.module.ir.functions.len() as u32 {
                 ctxt.poison(ValidationError::Msg(
                     "call function index out of bounds".to_string(),
                 ))
@@ -461,6 +461,7 @@ fn parse_terminator(
             let cont_bb_id = BasicBlock::next_id();
             let func = ctxt
                 .module
+                .ir
                 .functions
                 .get(func_idx as usize)
                 .and_then(|func| {

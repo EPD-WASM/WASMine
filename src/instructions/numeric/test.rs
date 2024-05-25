@@ -19,8 +19,11 @@ impl Instruction for ITestInstruction {
         o.write_variable(self.out1);
     }
 
-    fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
-        let op = match i.read_instruction_type()? {
+    fn deserialize(
+        i: &mut InstructionDecoder,
+        r#type: InstructionType,
+    ) -> Result<Self, DecodingError> {
+        let op = match r#type {
             InstructionType::Numeric(NumericInstructionCategory::ITest(op)) => op,
             _ => return Err(DecodingError::TypeMismatch),
         };
@@ -30,6 +33,16 @@ impl Instruction for ITestInstruction {
             in1: i.read_variable()?,
             out1: i.read_variable()?,
         })
+    }
+}
+
+impl Display for ITestInstruction {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "%{}: {} = {} {} %{}",
+            self.out1, self.input_type, self.op, self.input_type, self.in1
+        )
     }
 }
 

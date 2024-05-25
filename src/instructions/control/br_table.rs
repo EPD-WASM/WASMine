@@ -15,16 +15,10 @@ impl Instruction for BrTable {
         ));
     }
 
-    fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
-        let control_instruction = i.read_terminator();
-        if let ControlInstruction::BrTable(default_label_idx, label_indices) = control_instruction {
-            Ok(BrTable {
-                default_label_idx,
-                label_indices,
-            })
-        } else {
-            Err(DecodingError::TypeMismatch)
-        }
+    fn deserialize(_: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
+        unimplemented!(
+            "Control instructions are not serialized and can therefore not be deserialized."
+        )
     }
 }
 

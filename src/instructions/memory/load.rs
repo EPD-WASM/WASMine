@@ -84,8 +84,12 @@ mod load_specializations {
 }
 pub(crate) use load_specializations::*;
 
-use crate::structs::memory::MemArg;
-use wasm_types::instruction::{InstructionType, LoadOp, MemoryInstructionCategory};
-use wasm_types::NumType;
-
-use super::VariableID;
+impl Display for LoadInstruction {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "%{} = load {} %{} (align: {}, offset: {})",
+            self.out1, self.out1_type, self.addr, self.memarg.align, self.memarg.offset
+        )
+    }
+}

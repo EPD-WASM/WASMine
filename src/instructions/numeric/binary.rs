@@ -36,6 +36,16 @@ impl Instruction for IBinaryInstruction {
     }
 }
 
+impl Display for IBinaryInstruction {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "%{}: {} = {} {} %{} %{}",
+            self.out1, self.types, self.op, self.types, self.in1, self.in2
+        )
+    }
+}
+
 fn i_arith(ctxt: &mut C, o: &mut O, op: IBinaryOp, type_: NumType) -> PR {
     let in1 = ctxt.pop_var_with_type(&ValType::Number(type_));
     let in2 = ctxt.pop_var_with_type(&ValType::Number(type_));
@@ -98,6 +108,16 @@ impl Instruction for FBinaryInstruction {
             in2: i.read_variable()?,
             out1: i.read_variable()?,
         })
+    }
+}
+
+impl Display for FBinaryInstruction {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "%{}: {} = {} {} %{} %{}",
+            self.out1, self.types, self.op, self.types, self.in1, self.in2
+        )
     }
 }
 

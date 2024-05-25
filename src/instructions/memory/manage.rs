@@ -19,6 +19,12 @@ impl Instruction for MemorySizeInstruction {
     }
 }
 
+impl Display for MemorySizeInstruction {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "%{}: i32 = memory.size", self.out1)
+    }
+}
+
 pub(crate) fn memory_size(
     ctxt: &mut Context,
     i: &mut WasmStreamReader,
@@ -40,6 +46,12 @@ pub(crate) fn memory_size(
 pub(crate) struct MemoryGrowInstruction {
     in1: VariableID,
     out1: VariableID,
+}
+
+impl Display for MemoryGrowInstruction {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "%{}: i32 = memory.grow i32 %{}", self.out1, self.in1)
+    }
 }
 
 impl Instruction for MemoryGrowInstruction {
@@ -104,6 +116,16 @@ impl Instruction for MemoryCopyInstruction {
     }
 }
 
+impl Display for MemoryCopyInstruction {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "memory.copy i32 %{} i32 %{} i32 %{}",
+            self.n, self.s, self.d
+        )
+    }
+}
+
 pub(crate) fn memory_copy(
     ctxt: &mut Context,
     i: &mut WasmStreamReader,
@@ -131,6 +153,16 @@ pub(crate) struct MemoryFillInstruction {
     n: VariableID,
     val: VariableID,
     d: VariableID,
+}
+
+impl Display for MemoryFillInstruction {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "memory.fill i32 %{} i32 %{} i32 %{}",
+            self.n, self.val, self.d
+        )
+    }
 }
 
 impl Instruction for MemoryFillInstruction {
@@ -201,6 +233,16 @@ impl Instruction for MemoryInitInstruction {
     }
 }
 
+impl Display for MemoryInitInstruction {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "memory.init(i32 {}) i32 %{} i32 %{} i32 %{}",
+            self.data_idx, self.n, self.s, self.d
+        )
+    }
+}
+
 pub(crate) fn memory_init(
     ctxt: &mut Context,
     i: &mut WasmStreamReader,
@@ -254,6 +296,12 @@ impl Instruction for DataDropInstruction {
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         let data_idx = i.read_immediate()?;
         Ok(DataDropInstruction { data_idx })
+    }
+}
+
+impl Display for DataDropInstruction {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "memory.drop(i32 {})", self.data_idx)
     }
 }
 

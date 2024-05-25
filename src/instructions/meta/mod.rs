@@ -1,4 +1,4 @@
-use super::{Instruction, VariableID};
+use super::*;
 use crate::{
     ir::{basic_block::BasicBlockID, DecodingError, InstructionDecoder, InstructionEncoder},
     parser::Context,
@@ -50,5 +50,18 @@ impl Instruction for PhiNode {
             inputs,
             out: i.read_variable()?,
         })
+    }
+}
+
+impl Display for PhiNode {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "%{} = phi ", self.out)?;
+        let inputs = self
+            .inputs
+            .iter()
+            .map(|(bb, var)| format!("[ %{}, bb{} ]", var, bb))
+            .collect::<Vec<_>>()
+            .join(", ");
+        write!(f, "{}", inputs)
     }
 }

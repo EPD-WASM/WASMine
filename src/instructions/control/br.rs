@@ -11,13 +11,10 @@ impl Instruction for Br {
         o.finish(ControlInstruction::Br(self.label_idx));
     }
 
-    fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
-        let control_instruction = i.read_terminator();
-        if let ControlInstruction::Br(label_idx) = control_instruction {
-            Ok(Br { label_idx })
-        } else {
-            Err(DecodingError::TypeMismatch)
-        }
+    fn deserialize(_: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
+        unimplemented!(
+            "Control instructions are not serialized and can therefore not be deserialized."
+        )
     }
 }
 

@@ -19,6 +19,7 @@ use crate::ir::{DecodingError, InstructionDecoder, InstructionEncoder};
 use crate::parser::{
     wasm_stream_reader::WasmStreamReader, Context, ParseResult, ParserError, ValidationError,
 };
+use std::fmt::{self, Display, Formatter};
 use wasm_types::*;
 
 type C<'a> = Context<'a>;

@@ -101,10 +101,6 @@ impl ParserStack {
         self.stack.truncate(self.stash.pop().unwrap());
     }
 
-    pub(crate) fn unstash_with_keep(&mut self, keep: usize) {
-        self.stack.truncate(self.stash.pop().unwrap() + keep);
-    }
-
     fn push_var(&mut self, var: Variable) {
         self.stack.push(var)
     }

@@ -15,6 +15,12 @@ impl Instruction for DropInstruction {
     }
 }
 
+impl Display for DropInstruction {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "nop (orig: drop)")
+    }
+}
+
 pub(crate) fn drop(
     ctxt: &mut Context,
     _: &mut WasmStreamReader,
@@ -27,7 +33,7 @@ pub(crate) fn drop(
 
 #[derive(Debug, Clone)]
 pub(crate) struct SelectInstruction {
-    input_vals: Vec<VariableID>,
+    input_vals: [VariableID; 2],
     select_val: VariableID,
     out1: VariableID,
 }
@@ -37,20 +43,14 @@ impl Instruction for SelectInstruction {
         o.write_instruction_type(InstructionType::Parametric(
             ParametricInstructionType::Select,
         ));
-        o.write_immediate(self.input_vals.len() as u32);
-        for val in self.input_vals {
-            o.write_variable(val);
-        }
+        o.write_variable(self.input_vals[0]);
+        o.write_variable(self.input_vals[1]);
         o.write_variable(self.select_val);
         o.write_variable(self.out1);
     }
 
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
-        let num_vals: u32 = i.read_immediate()?;
-        let mut input_vals = Vec::with_capacity(num_vals as usize);
-        for _ in 0..num_vals {
-            input_vals.push(i.read_variable()?);
-        }
+        let input_vals = [i.read_variable()?, i.read_variable()?];
         let select_val = i.read_variable()?;
         let out1 = i.read_variable()?;
         Ok(SelectInstruction {
@@ -58,6 +58,16 @@ impl Instruction for SelectInstruction {
             select_val,
             out1,
         })
+    }
+}
+
+impl Display for SelectInstruction {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "%{} = select %{} %{} %{}",
+            self.out1, self.input_vals[0], self.input_vals[1], self.select_val
+        )
     }
 }
 
@@ -86,7 +96,7 @@ pub(crate) fn select_numeric(
 
     let out = ctxt.create_var(val1.type_);
     o.write(SelectInstruction {
-        input_vals: vec![val1.id, val2.id],
+        input_vals: [val1.id, val2.id],
         select_val: select_val.id,
         out1: out.id,
     });
@@ -113,7 +123,7 @@ pub(crate) fn select_generic(
     let val2 = ctxt.pop_var_with_type(&val_type);
     let out = ctxt.create_var(val_type);
     o.write(SelectInstruction {
-        input_vals: vec![val1.id, val2.id],
+        input_vals: [val1.id, val2.id],
         select_val: select_val.id,
         out1: out.id,
     });

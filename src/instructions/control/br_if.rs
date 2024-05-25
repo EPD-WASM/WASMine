@@ -11,10 +11,10 @@ impl Instruction for BrIf {
         o.finish(ControlInstruction::BrIf(self.label_idx));
     }
 
-    fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
-        Ok(BrIf {
-            label_idx: i.read_immediate()?,
-        })
+    fn deserialize(_: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
+        unimplemented!(
+            "Control instructions are not serialized and can therefore not be deserialized."
+        )
     }
 }
 

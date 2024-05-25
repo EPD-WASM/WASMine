@@ -31,6 +31,16 @@ impl Instruction for TableSetInstruction {
     }
 }
 
+impl Display for TableSetInstruction {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "table.set(i32 {}, i32 {}) %{}",
+            self.table_idx, self.input_type, self.in1
+        )
+    }
+}
+
 pub(crate) fn table_set(
     ctxt: &mut Context,
     i: &mut WasmStreamReader,
@@ -69,6 +79,12 @@ impl Instruction for TableGetInstruction {
         let table_idx = i.read_immediate()?;
         let out1 = i.read_variable()?;
         Ok(TableGetInstruction { table_idx, out1 })
+    }
+}
+
+impl Display for TableGetInstruction {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "%{} = table.get(i32 {})", self.table_idx, self.out1)
     }
 }
 
@@ -126,6 +142,16 @@ impl Instruction for TableGrowInstruction {
             value_to_fill,
             out1,
         })
+    }
+}
+
+impl Display for TableGrowInstruction {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "%{} = table.grow(i32 {}) %{}, %{}",
+            self.out1, self.table_idx, self.size, self.value_to_fill
+        )
     }
 }
 
@@ -187,6 +213,16 @@ impl Instruction for TableSizeInstruction {
     }
 }
 
+impl Display for TableSizeInstruction {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "%{}: i32 = table.size(i32 {})",
+            self.out1, self.table_idx
+        )
+    }
+}
+
 pub(crate) fn table_size(
     ctxt: &mut Context,
     i: &mut WasmStreamReader,
@@ -239,6 +275,16 @@ impl Instruction for TableFillInstruction {
             n,
             ref_value,
         })
+    }
+}
+
+impl Display for TableFillInstruction {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "table.fill(i32 {}) %{}, %{}, %{}",
+            self.table_idx, self.i, self.n, self.ref_value
+        )
     }
 }
 
@@ -322,6 +368,16 @@ impl Instruction for TableCopyInstruction {
             s,
             d,
         })
+    }
+}
+
+impl Display for TableCopyInstruction {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "table.copy(i32 {}, i32 {}) %{}, %{}, %{}",
+            self.table_idx_x, self.table_idx_y, self.n, self.s, self.d
+        )
     }
 }
 
@@ -417,6 +473,16 @@ impl Instruction for TableInitInstruction {
     }
 }
 
+impl Display for TableInitInstruction {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "table.init(i32 {}, i32 {}) %{}, %{}, %{}",
+            self.table_idx, self.elem_idx, self.n, self.s, self.d
+        )
+    }
+}
+
 pub(crate) fn table_init(
     ctxt: &mut Context,
     i: &mut WasmStreamReader,
@@ -482,6 +548,12 @@ impl Instruction for ElemDropInstruction {
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         let elem_idx = i.read_immediate()?;
         Ok(ElemDropInstruction { elem_idx })
+    }
+}
+
+impl Display for ElemDropInstruction {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "elem.drop(i32 {})", self.elem_idx)
     }
 }
 

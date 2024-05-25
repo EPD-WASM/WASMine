@@ -7,13 +7,10 @@ impl Instruction for Block {
         o.finish(ControlInstruction::Block(self.block_type));
     }
 
-    fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
-        let control_instruction = i.read_terminator();
-        if let ControlInstruction::Block(block_type) = control_instruction {
-            Ok(Block { block_type })
-        } else {
-            Err(DecodingError::TypeMismatch)
-        }
+    fn deserialize(_: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
+        unimplemented!(
+            "Control instructions are not serialized and can therefore not be deserialized."
+        )
     }
 }
 

@@ -22,8 +22,11 @@ impl Instruction for IRelationalInstruction {
         o.write_variable(self.out1);
     }
 
-    fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
-        let op = match i.read_instruction_type()? {
+    fn deserialize(
+        i: &mut InstructionDecoder,
+        type_: InstructionType,
+    ) -> Result<Self, DecodingError> {
+        let op = match type_ {
             InstructionType::Numeric(NumericInstructionCategory::IRelational(op)) => op,
             _ => return Err(DecodingError::TypeMismatch),
         };
@@ -34,6 +37,16 @@ impl Instruction for IRelationalInstruction {
             in2: i.read_variable()?,
             out1: i.read_variable()?,
         })
+    }
+}
+
+impl Display for IRelationalInstruction {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "%{}: {} = {} {} %{} %{}",
+            self.out1, self.input_types, self.op, self.input_types, self.in1, self.in2
+        )
     }
 }
 
@@ -58,8 +71,11 @@ impl Instruction for FRelationalInstruction {
         o.write_variable(self.out1);
     }
 
-    fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
-        let op = match i.read_instruction_type()? {
+    fn deserialize(
+        i: &mut InstructionDecoder,
+        r#type: InstructionType,
+    ) -> Result<Self, DecodingError> {
+        let op = match r#type {
             InstructionType::Numeric(NumericInstructionCategory::FRelational(op)) => op,
             _ => return Err(DecodingError::TypeMismatch),
         };
@@ -70,6 +86,16 @@ impl Instruction for FRelationalInstruction {
             in2: i.read_variable()?,
             out1: i.read_variable()?,
         })
+    }
+}
+
+impl Display for FRelationalInstruction {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "%{}: {} = {} {} %{} %{}",
+            self.out1, self.input_types, self.op, self.input_types, self.in1, self.in2
+        )
     }
 }
 

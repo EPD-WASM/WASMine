@@ -1,15 +1,17 @@
+use std::fmt::Debug;
+
 use super::{
     data::Data, element::Element, export::Export, global::Global, import::Import, memory::Memory,
     table::Table,
 };
-use crate::ir::function::Function;
+use crate::ir::IR;
 use wasm_types::{FuncIdx, FuncType};
 
 /// A WebAssembly module
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct Module {
     /// Wasm functions (code)
-    pub(crate) functions: Vec<Function>,
+    pub(crate) ir: IR,
 
     /// Wasm function tables (icall lookup)
     pub(crate) tables: Vec<Table>,

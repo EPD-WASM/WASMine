@@ -11,13 +11,10 @@ impl Instruction for Call {
         o.finish(ControlInstruction::Call(self.func_idx));
     }
 
-    fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
-        let control_instruction = i.read_terminator();
-        if let ControlInstruction::Call(func_idx) = control_instruction {
-            Ok(Call { func_idx })
-        } else {
-            Err(DecodingError::TypeMismatch)
-        }
+    fn deserialize(_: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
+        unimplemented!(
+            "Control instructions are not serialized and can therefore not be deserialized."
+        )
     }
 }
 

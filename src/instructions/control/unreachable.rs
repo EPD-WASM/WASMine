@@ -9,7 +9,9 @@ impl Instruction for Unreachable {
     }
 
     fn deserialize(_: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
-        Ok(Unreachable {})
+        unimplemented!(
+            "Control instructions are not serialized and can therefore not be deserialized."
+        )
     }
 }
 

@@ -11,7 +11,9 @@ impl Instruction for Else {
     }
 
     fn deserialize(_: &mut InstructionDecoder, _t: InstructionType) -> Result<Self, DecodingError> {
-        Ok(Else {})
+        unimplemented!(
+            "Control instructions are not serialized and can therefore not be deserialized."
+        )
     }
 }
 

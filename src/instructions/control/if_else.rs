@@ -12,13 +12,10 @@ impl Instruction for IfElse {
         o.finish(ControlInstruction::IfElse(self.block_type));
     }
 
-    fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
-        let control_instruction = i.read_terminator();
-        if let ControlInstruction::IfElse(block_type) = control_instruction {
-            Ok(IfElse { block_type })
-        } else {
-            Err(DecodingError::TypeMismatch)
-        }
+    fn deserialize(_: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
+        unimplemented!(
+            "Control instructions are not serialized and can therefore not be deserialized."
+        )
     }
 }
 

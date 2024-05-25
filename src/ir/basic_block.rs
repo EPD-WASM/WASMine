@@ -2,7 +2,7 @@ use crate::{instructions::VariableID, structs::instruction::ControlInstruction};
 use lazy_static::lazy_static;
 use std::{
     collections::VecDeque,
-    fmt::{Debug, Formatter},
+    fmt::Debug,
     sync::atomic::{AtomicU32, Ordering},
 };
 use wasm_types::*;

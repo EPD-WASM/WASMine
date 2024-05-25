@@ -70,3 +70,13 @@ mod store_specializations {
     pub(crate) fn i64_store32(c: &mut C, i: &mut I, o: &mut O) -> PR {parse_store(c, i, o, NumType::I64, StoreOp::INNStore32)}
 }
 pub(crate) use store_specializations::*;
+
+impl Display for StoreInstruction {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "store %{} %{} (align: {}, offset: {})",
+            self.addr_in, self.value_in, self.memarg.align, self.memarg.offset
+        )
+    }
+}

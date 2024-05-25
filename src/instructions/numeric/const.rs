@@ -19,13 +19,20 @@ impl Instruction for Constant {
     }
 
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
-        let num_type = extract_numtype!(i.read_value_type()?);
         let imm = i.read_immediate()?;
+        let out1 = i.read_variable()?;
+        let num_type = extract_numtype!(i.read_value_type().unwrap());
         Ok(Constant {
             imm,
-            out1: i.read_variable()?,
+            out1,
             out1_type: num_type,
         })
+    }
+}
+
+impl Display for Constant {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "%{}: {} = const {}", self.out1, self.out1_type, self.imm)
     }
 }
 

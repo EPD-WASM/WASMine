@@ -15,16 +15,10 @@ impl Instruction for CallIndirect {
         ));
     }
 
-    fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
-        let control_instruction = i.read_terminator();
-        if let ControlInstruction::CallIndirect(type_idx, table_idx) = control_instruction {
-            Ok(CallIndirect {
-                type_idx,
-                table_idx,
-            })
-        } else {
-            Err(DecodingError::TypeMismatch)
-        }
+    fn deserialize(_: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
+        unimplemented!(
+            "Control instructions are not serialized and can therefore not be deserialized."
+        )
     }
 }
 

@@ -239,3 +239,137 @@ pub enum BlockType {
     #[default]
     Empty,
 }
+
+impl Display for IUnaryOp {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            IUnaryOp::Clz => write!(f, "clz"),
+            IUnaryOp::Ctz => write!(f, "ctz"),
+            IUnaryOp::Popcnt => write!(f, "popcnt"),
+        }
+    }
+}
+
+impl Display for IBinaryOp {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                IBinaryOp::Add => "add",
+                IBinaryOp::Sub => "sub",
+                IBinaryOp::Mul => "mul",
+                IBinaryOp::DivS => "div_s",
+                IBinaryOp::DivU => "div_u",
+                IBinaryOp::RemS => "rem_s",
+                IBinaryOp::RemU => "rem_u",
+                IBinaryOp::And => "and",
+                IBinaryOp::Or => "or",
+                IBinaryOp::Xor => "xor",
+                IBinaryOp::Shl => "shl",
+                IBinaryOp::ShrS => "shr_s",
+                IBinaryOp::ShrU => "shr_u",
+                IBinaryOp::Rotl => "rotl",
+                IBinaryOp::Rotr => "rotr",
+            }
+        )
+    }
+}
+
+impl Display for FUnaryOp {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                FUnaryOp::Abs => "abs",
+                FUnaryOp::Neg => "neg",
+                FUnaryOp::Sqrt => "sqrt",
+                FUnaryOp::Ceil => "ceil",
+                FUnaryOp::Floor => "floor",
+                FUnaryOp::Trunc => "trunc",
+                FUnaryOp::Nearest => "nearest",
+            }
+        )
+    }
+}
+
+impl Display for FBinaryOp {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                FBinaryOp::Add => "add",
+                FBinaryOp::Sub => "sub",
+                FBinaryOp::Mul => "mul",
+                FBinaryOp::Div => "div",
+                FBinaryOp::Min => "min",
+                FBinaryOp::Max => "max",
+                FBinaryOp::Copysign => "copysign",
+            }
+        )
+    }
+}
+
+impl Display for ITestOp {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "eqz")
+    }
+}
+
+impl Display for IRelationalOp {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                IRelationalOp::Eq => "eq",
+                IRelationalOp::Ne => "ne",
+                IRelationalOp::LtS => "lt_s",
+                IRelationalOp::LtU => "lt_u",
+                IRelationalOp::GtS => "gt_s",
+                IRelationalOp::GtU => "gt_u",
+                IRelationalOp::LeS => "le_s",
+                IRelationalOp::LeU => "le_u",
+                IRelationalOp::GeS => "ge_s",
+                IRelationalOp::GeU => "ge_u",
+            }
+        )
+    }
+}
+
+impl Display for FRelationalOp {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                FRelationalOp::Eq => "eq",
+                FRelationalOp::Ne => "ne",
+                FRelationalOp::Lt => "lt",
+                FRelationalOp::Gt => "gt",
+                FRelationalOp::Le => "le",
+                FRelationalOp::Ge => "ge",
+            }
+        )
+    }
+}
+
+impl Display for ConversionOp {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                ConversionOp::Wrap => "wrap",
+                ConversionOp::Extend => "extend",
+                ConversionOp::Trunc => "trunc",
+                ConversionOp::Demote => "demote",
+                ConversionOp::Promote => "promote",
+                ConversionOp::Convert => "convert",
+                ConversionOp::Reinterpret => "reinterpret",
+            }
+        )
+    }
+}

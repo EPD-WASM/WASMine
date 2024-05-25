@@ -30,6 +30,16 @@ impl Instruction for ReferenceIsNullInstruction {
     }
 }
 
+impl Display for ReferenceIsNullInstruction {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "%{} = ref.is_null {} %{}",
+            self.out1, self.in1_type, self.in1
+        )
+    }
+}
+
 pub(crate) fn ref_is_null(
     ctxt: &mut Context,
     _: &mut WasmStreamReader,
@@ -74,6 +84,12 @@ impl Instruction for ReferenceNullInstruction {
     }
 }
 
+impl Display for ReferenceNullInstruction {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "%{}: {} = ref.null", self.out1, self.out1_type)
+    }
+}
+
 pub(crate) fn ref_null(
     ctxt: &mut Context,
     i: &mut WasmStreamReader,
@@ -108,6 +124,12 @@ impl Instruction for ReferenceFunctionInstruction {
         let out1 = i.read_variable()?;
         let func_idx = i.read_immediate()?;
         Ok(ReferenceFunctionInstruction { out1, func_idx })
+    }
+}
+
+impl Display for ReferenceFunctionInstruction {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "%{} = ref.func {}", self.out1, self.func_idx)
     }
 }
 

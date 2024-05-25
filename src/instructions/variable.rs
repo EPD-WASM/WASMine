@@ -22,6 +22,12 @@ impl Instruction for LocalGetInstruction {
     }
 }
 
+impl Display for LocalGetInstruction {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "%{} = local.get(i32 {})", self.out1, self.local_idx)
+    }
+}
+
 pub(crate) fn local_get(
     ctxt: &mut Context,
     i: &mut WasmStreamReader,
@@ -67,6 +73,12 @@ impl Instruction for GlobalGetInstruction {
         let global_idx = i.read_immediate()?;
         let out1 = i.read_variable()?;
         Ok(GlobalGetInstruction { global_idx, out1 })
+    }
+}
+
+impl Display for GlobalGetInstruction {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "%{} = global.get(i32 {})", self.out1, self.global_idx)
     }
 }
 
@@ -117,6 +129,12 @@ impl Instruction for LocalSetInstruction {
         let local_idx = i.read_immediate()?;
         let in1 = i.read_variable()?;
         Ok(LocalSetInstruction { local_idx, in1 })
+    }
+}
+
+impl Display for LocalSetInstruction {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "local.set(i32 {}) %{}", self.local_idx, self.in1)
     }
 }
 
@@ -171,6 +189,12 @@ impl Instruction for GlobalSetInstruction {
         let global_idx = i.read_immediate()?;
         let in1 = i.read_variable()?;
         Ok(GlobalSetInstruction { global_idx, in1 })
+    }
+}
+
+impl Display for GlobalSetInstruction {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "global.set(i32 {}) %{}", self.global_idx, self.in1)
     }
 }
 
@@ -241,6 +265,16 @@ impl Instruction for TeeLocalInstruction {
             in1,
             out1,
         })
+    }
+}
+
+impl Display for TeeLocalInstruction {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "%{} = local.tee(i32 {}) %{}",
+            self.out1, self.local_idx, self.in1
+        )
     }
 }
 
