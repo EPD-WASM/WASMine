@@ -1,5 +1,5 @@
 use super::expression::Expression;
-use crate::wasm_types::wasm_type::{FuncIdx, RefType, TableIdx};
+use wasm_types::{FuncIdx, RefType, TableIdx};
 
 #[derive(Debug, Clone)]
 pub(crate) enum ElementInit {

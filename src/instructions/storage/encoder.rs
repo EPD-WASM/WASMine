@@ -3,9 +3,9 @@ use crate::{
     instructions::{Instruction, VariableID},
     structs::instruction::ControlInstruction,
     util::integer_traits::Integer,
-    wasm_types::{InstructionType, ValType},
 };
 use std::collections::VecDeque;
+use wasm_types::{InstructionType, ValType};
 
 pub(crate) struct InstructionEncoder {
     storage: InstructionStorage,

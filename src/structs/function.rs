@@ -1,7 +1,7 @@
-use crate::{instructions::Variable, wasm_types::wasm_type::TypeIdx};
-
 use super::basic_block::BasicBlock;
+use crate::instructions::Variable;
 use std::vec::Vec;
+use wasm_types::TypeIdx;
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Function {

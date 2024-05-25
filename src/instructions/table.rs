@@ -2,7 +2,7 @@ use super::*;
 use crate::parser::parsable::Parse;
 use crate::structs::element::Element;
 use crate::structs::table::Table;
-use crate::wasm_types::*;
+use wasm_types::*;
 
 #[derive(Debug, Clone)]
 pub(crate) struct TableSetInstruction {

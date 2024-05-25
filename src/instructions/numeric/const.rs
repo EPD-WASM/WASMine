@@ -1,5 +1,5 @@
 use super::*;
-use crate::wasm_types::*;
+use wasm_types::*;
 
 #[derive(Debug, Clone)]
 pub(crate) struct Constant {

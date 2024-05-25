@@ -1,4 +1,4 @@
-use crate::wasm_types::wasm_type::{FuncIdx, GlobalIdx, MemIdx, Name, TableIdx};
+use wasm_types::{module::Name, FuncIdx, GlobalIdx, MemIdx, TableIdx};
 
 #[derive(Debug, Clone)]
 pub(crate) struct Export {

@@ -1,8 +1,5 @@
 use super::*;
-use crate::{
-    parser::parsable::Parse,
-    wasm_types::{FuncIdx, InstructionType, NumType, RefType, ReferenceInstructionType},
-};
+use crate::parser::parsable::Parse;
 
 #[derive(Debug, Clone)]
 pub struct ReferenceIsNullInstruction {

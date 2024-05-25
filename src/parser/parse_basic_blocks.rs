@@ -10,8 +10,10 @@ use crate::{
         instruction::ControlInstruction,
         table::Table,
     },
-    wasm_types::{BlockType, NumType, RefType, ResType, TableType, ValType},
 };
+use wasm_types::instruction::BlockType;
+use wasm_types::module::TableType;
+use wasm_types::{NumType, RefType, ResType, ValType};
 
 use super::{opcode_tbl::LVL1_JMP_TABLE, Context, ParseResult, ParserStack, ValidationError};
 

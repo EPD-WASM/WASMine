@@ -6,18 +6,12 @@ pub(crate) use encoder::InstructionEncoder;
 
 use super::VariableID;
 use crate::instructions::*;
-use crate::wasm_types::MemoryOp;
-use crate::{
-    structs::instruction::ControlInstruction,
-    wasm_types::{
-        ControlInstructionType, InstructionType, MemoryInstructionCategory,
-        NumericInstructionCategory, ParametricInstructionType, ValType, VariableInstructionType,
-    },
-};
+use crate::structs::instruction::ControlInstruction;
 use std::{
     collections::VecDeque,
     fmt::{Display, Formatter},
 };
+use wasm_types::MemoryOp;
 
 #[derive(Debug, Default, Clone)]
 pub(crate) struct InstructionStorage {

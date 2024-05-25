@@ -2,25 +2,22 @@ use super::{
     error::ParserError, parse_basic_blocks::parse_basic_blocks,
     wasm_stream_reader::WasmStreamReader, Context,
 };
-use crate::{
-    structs::{
-        element::{ElemMode, Element, ElementInit},
-        export::{Export, ExportDesc},
-        expression::Expression,
-        function::Function,
-        global::Global,
-        import::{Import, ImportDesc},
-        memory::{MemArg, Memory},
-        module::Module,
-        table::Table,
-    },
-    wasm_types::{
-        wasm_type::{
-            FuncIdx, FuncType, GlobalIdx, GlobalType, LimType, MemIdx, MemType, Name, NumType,
-            RefType, ResType, TableIdx, TableType, TypeIdx, ValType,
-        },
-        BlockType, Section,
-    },
+use crate::structs::{
+    element::{ElemMode, Element, ElementInit},
+    export::{Export, ExportDesc},
+    expression::Expression,
+    function::Function,
+    global::Global,
+    import::{Import, ImportDesc},
+    memory::{MemArg, Memory},
+    module::Module,
+    table::Table,
+};
+use wasm_types::instruction::BlockType;
+use wasm_types::module::{GlobalType, MemType, Name, Section, TableType};
+use wasm_types::{
+    FuncIdx, FuncType, GlobalIdx, LimType, MemIdx, NumType, RefType, ResType, TableIdx, TypeIdx,
+    ValType,
 };
 
 pub(crate) trait Parse {
@@ -67,12 +64,6 @@ impl Parse for ValType {
 
             _ => Err(ParserError::Msg(format!("invalid value type prefix. Expected 0x7F, 0x7E, 0x7D, 0x7C, 0x7B, 0x70, or 0x6F, got 0x{} at position {:x}", prefix, i.pos))),
         }
-    }
-}
-
-impl ValType {
-    fn is_valtype_byte(byte: u8) -> bool {
-        matches!(byte, 0x7F | 0x7E | 0x7D | 0x7C | 0x7B | 0x70 | 0x6F)
     }
 }
 

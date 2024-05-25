@@ -27,7 +27,7 @@ pub(crate) use unreachable::*;
 use super::*;
 use crate::parser::parsable::Parse;
 use crate::structs::instruction::ControlInstruction;
-use crate::wasm_types::BlockType;
+use wasm_types::instruction::BlockType;
 
 #[derive(Debug, Clone)]
 pub(crate) struct Block {

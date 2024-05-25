@@ -1,4 +1,4 @@
-use crate::wasm_types::wasm_type::MemType;
+use wasm_types::module::MemType;
 
 #[derive(Debug, Clone)]
 pub(crate) struct Memory {

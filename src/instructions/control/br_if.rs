@@ -1,5 +1,5 @@
 use super::*;
-use crate::wasm_types::LabelIdx;
+use wasm_types::LabelIdx;
 
 #[derive(Debug, Clone)]
 pub(crate) struct BrIf {

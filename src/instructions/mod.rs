@@ -17,12 +17,10 @@ pub(crate) use table::*;
 pub(crate) use variable::*;
 
 use self::storage::{DecodingError, InstructionDecoder, InstructionEncoder};
-use crate::{
-    parser::{
-        wasm_stream_reader::WasmStreamReader, Context, ParseResult, ParserError, ValidationError,
-    },
-    wasm_types::{InstructionType, ValType},
+use crate::parser::{
+    wasm_stream_reader::WasmStreamReader, Context, ParseResult, ParserError, ValidationError,
 };
+use wasm_types::*;
 
 type C<'a> = Context<'a>;
 type I<'a> = WasmStreamReader<'a>;

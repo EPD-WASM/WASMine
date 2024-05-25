@@ -1,5 +1,5 @@
 use super::*;
-use crate::wasm_types::{TableIdx, TypeIdx};
+use wasm_types::{TableIdx, TypeIdx};
 
 #[derive(Debug, Clone)]
 pub(crate) struct CallIndirect {

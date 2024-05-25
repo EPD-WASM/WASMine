@@ -7,18 +7,16 @@ use crate::structs::basic_block::BasicBlock;
 use crate::structs::data::{Data, DataMode};
 use crate::structs::expression::Expression;
 use crate::structs::import::ImportDesc;
-use crate::wasm_types::wasm_type::{MemIdx, ValType};
-use crate::wasm_types::Name;
-use crate::{
-    structs::{
-        element::Element, export::Export, function::Function, global::Global, import::Import,
-        memory::Memory, module::Module, table::Table,
-    },
-    wasm_types::wasm_type::{FuncIdx, FuncType, Section, TypeIdx},
+use crate::structs::{
+    element::Element, export::Export, function::Function, global::Global, import::Import,
+    memory::Memory, module::Module, table::Table,
 };
 use std::io::{BufReader, Read};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::vec;
+use wasm_types::module::Name;
+use wasm_types::{module::Section, FuncIdx, FuncType, TypeIdx};
+use wasm_types::{MemIdx, ValType};
 
 const WASM_MODULE_PREAMBLE: &[u8] = &[b'\0', b'a', b's', b'm'];
 const WASM_MODULE_VERSION: u32 = 1;

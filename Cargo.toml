@@ -1,4 +1,4 @@
-workspace = { members = [ "fuzz","tests/gen_util"] }
+workspace = { members = [ "fuzz", "tests/gen_util", "wasm-types"] }
 
 [package]
 name = "wasm_rt"
@@ -12,6 +12,7 @@ lazy_static = "1.4.0"
 log = "0.4.21"
 simplelog = "0.12.2"
 thiserror = "1.0.60"
+wasm-types = { path = "./wasm-types" }
 
 [dev-dependencies]
 wast = "206.0.0"

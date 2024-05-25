@@ -1,13 +1,9 @@
-use crate::{
-    parser::Context,
-    structs::basic_block::BasicBlockID,
-    wasm_types::{InstructionType, MetaInstructionType, ValType},
-};
-
 use super::{
     storage::{DecodingError, InstructionDecoder, InstructionEncoder},
     Instruction, VariableID,
 };
+use crate::{parser::Context, structs::basic_block::BasicBlockID};
+use wasm_types::{InstructionType, MetaInstructionType, ValType};
 
 #[derive(Debug, Clone)]
 pub(crate) struct PhiNode {

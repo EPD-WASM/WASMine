@@ -1,5 +1,5 @@
 use super::*;
-use crate::wasm_types::FuncIdx;
+use wasm_types::FuncIdx;
 
 #[derive(Debug, Clone)]
 pub(crate) struct Call {

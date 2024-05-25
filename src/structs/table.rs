@@ -1,4 +1,4 @@
-use crate::wasm_types::wasm_type::TableType;
+use wasm_types::module::TableType;
 
 #[derive(Debug, Clone)]
 pub(crate) struct Table {

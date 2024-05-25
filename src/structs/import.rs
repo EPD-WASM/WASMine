@@ -1,4 +1,7 @@
-use crate::wasm_types::wasm_type::{GlobalType, MemType, Name, TableType, TypeIdx};
+use wasm_types::{
+    module::{GlobalType, MemType, Name, TableType},
+    TypeIdx,
+};
 
 #[derive(Debug, Clone)]
 pub(crate) struct Import {

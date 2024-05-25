@@ -84,9 +84,8 @@ mod load_specializations {
 }
 pub(crate) use load_specializations::*;
 
-use crate::{
-    structs::memory::MemArg,
-    wasm_types::{InstructionType, LoadOp, MemoryInstructionCategory, NumType},
-};
+use crate::structs::memory::MemArg;
+use wasm_types::instruction::{InstructionType, LoadOp, MemoryInstructionCategory};
+use wasm_types::NumType;
 
 use super::VariableID;

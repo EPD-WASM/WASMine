@@ -1,5 +1,5 @@
 use super::expression::Expression;
-use crate::wasm_types::wasm_type::GlobalType;
+use wasm_types::module::GlobalType;
 
 #[derive(Debug, Clone)]
 pub(crate) struct Global {

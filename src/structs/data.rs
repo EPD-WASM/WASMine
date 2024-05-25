@@ -1,5 +1,5 @@
 use super::expression::Expression;
-use crate::wasm_types::wasm_type::MemIdx;
+use wasm_types::MemIdx;
 
 #[derive(Debug, Clone)]
 pub(crate) enum DataMode {

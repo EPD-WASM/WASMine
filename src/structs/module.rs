@@ -1,4 +1,4 @@
-use crate::wasm_types::wasm_type::{FuncIdx, FuncType};
+use wasm_types::{FuncIdx, FuncType};
 
 use super::{
     data::Data, element::Element, export::Export, function::Function, global::Global,

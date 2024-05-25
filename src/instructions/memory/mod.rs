@@ -9,4 +9,4 @@ pub(crate) use store::*;
 use super::*;
 use crate::parser::parsable::Parse;
 use crate::structs::memory::*;
-use crate::wasm_types::*;
+use wasm_types::*;

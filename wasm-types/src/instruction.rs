@@ -1,5 +1,7 @@
+use crate::*;
+
 #[derive(Debug, Clone)]
-pub(crate) enum InstructionType {
+pub enum InstructionType {
     Numeric(NumericInstructionCategory),
     Reference(ReferenceInstructionType),
     Vector(VectorInstructionCategory),
@@ -12,7 +14,7 @@ pub(crate) enum InstructionType {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum NumericInstructionCategory {
+pub enum NumericInstructionCategory {
     /// Constants: return a static constant.
     Constant,
     /// Unary Operators: consume one operand and produce one result of the respective type.
@@ -32,14 +34,14 @@ pub(crate) enum NumericInstructionCategory {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum IUnaryOp {
+pub enum IUnaryOp {
     Clz,
     Ctz,
     Popcnt,
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum FUnaryOp {
+pub enum FUnaryOp {
     Abs,
     Neg,
     Sqrt,
@@ -50,7 +52,7 @@ pub(crate) enum FUnaryOp {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum IBinaryOp {
+pub enum IBinaryOp {
     Add,
     Sub,
     Mul,
@@ -69,7 +71,7 @@ pub(crate) enum IBinaryOp {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum FBinaryOp {
+pub enum FBinaryOp {
     Add,
     Sub,
     Mul,
@@ -80,12 +82,12 @@ pub(crate) enum FBinaryOp {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum ITestOp {
+pub enum ITestOp {
     Eqz,
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum IRelationalOp {
+pub enum IRelationalOp {
     Eq,
     Ne,
     LtS,
@@ -99,7 +101,7 @@ pub(crate) enum IRelationalOp {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum FRelationalOp {
+pub enum FRelationalOp {
     Eq,
     Ne,
     Lt,
@@ -109,7 +111,7 @@ pub(crate) enum FRelationalOp {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum ConversionOp {
+pub enum ConversionOp {
     Wrap,
     Extend,
     Trunc,
@@ -120,25 +122,25 @@ pub(crate) enum ConversionOp {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum VectorInstructionCategory {
+pub enum VectorInstructionCategory {
     // TODO: add vector instructions
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum ReferenceInstruction {
+pub enum ReferenceInstruction {
     RefNull,
     RefIsNull,
     RefFunc,
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum ParametricInstructionType {
+pub enum ParametricInstructionType {
     Drop,
     Select,
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum VariableInstructionType {
+pub enum VariableInstructionType {
     LocalGet,
     LocalSet,
     LocalTee,
@@ -147,7 +149,7 @@ pub(crate) enum VariableInstructionType {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum TableInstructionCategory {
+pub enum TableInstructionCategory {
     Get,
     Set,
     Size,
@@ -159,14 +161,14 @@ pub(crate) enum TableInstructionCategory {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum MemoryInstructionCategory {
+pub enum MemoryInstructionCategory {
     Load(LoadOp),
     Store(StoreOp),
     Memory(MemoryOp),
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum LoadOp {
+pub enum LoadOp {
     INNLoad,
     FNNLoad,
     INNLoad8S,
@@ -179,7 +181,7 @@ pub(crate) enum LoadOp {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum StoreOp {
+pub enum StoreOp {
     INNStore,
     FNNStore,
     INNStore8,
@@ -189,7 +191,7 @@ pub(crate) enum StoreOp {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum MemoryOp {
+pub enum MemoryOp {
     Size,
     Grow,
     Fill,
@@ -199,7 +201,7 @@ pub(crate) enum MemoryOp {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum ControlInstructionType {
+pub enum ControlInstructionType {
     Nop,
     Unreachable,
     Block,
@@ -218,13 +220,22 @@ pub(crate) enum ControlInstructionType {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum ReferenceInstructionType {
+pub enum ReferenceInstructionType {
     RefNull,
     RefIsNull,
     RefFunc,
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum MetaInstructionType {
+pub enum MetaInstructionType {
     PhiNode,
+}
+
+// https://webassembly.github.io/spec/core/bikeshed/#syntax-blocktype
+#[derive(Debug, Clone, PartialEq, Default)]
+pub enum BlockType {
+    FunctionSig(TypeIdx),
+    ShorthandFunc(ValType),
+    #[default]
+    Empty,
 }
