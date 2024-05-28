@@ -6,8 +6,9 @@ use crate::instructions::Variable;
 use crate::ir::basic_block::BasicBlock;
 use crate::ir::function::Function;
 use crate::structs::data::{Data, DataMode};
-use crate::structs::expression::Expression;
+use crate::structs::expression::ConstantExpression;
 use crate::structs::import::ImportDesc;
+use crate::structs::value::{Number, Reference, Value};
 use crate::structs::{
     element::Element, export::Export, global::Global, import::Import, memory::Memory,
     module::Module, table::Table,
@@ -149,7 +150,7 @@ impl Parser {
     fn parse_import_section(&mut self, i: &mut WasmStreamReader) -> ParseResult {
         let _ = i.read_leb128::<u32>()?;
         let num_imports = i.read_leb128::<u32>()?;
-        for _ in 0..num_imports {
+        for import_idx in 0..num_imports {
             let import = Import::parse(i)?;
             match import.desc.clone() {
                 ImportDesc::Func(idx) => self.module.ir.functions.push(Function {
@@ -162,7 +163,7 @@ impl Parser {
                 ImportDesc::Global(r#type) => self.module.globals.push(Global {
                     r#type,
                     import: true,
-                    value: Expression::default(),
+                    init: Value::Reference(Reference::Extern(import_idx)),
                 }),
             }
             self.module.imports.push(import);
@@ -424,7 +425,8 @@ impl Parser {
                 0 => {
                     data.mode = DataMode::Active {
                         memory: 0,
-                        offset: Expression::parse_with_context(i, &self.module)?,
+                        offset: ConstantExpression::parse_with_context(i, &self.module)?
+                            .eval(&self.module)?,
                     };
                     data.init = Vec::parse(i)?;
                 }
@@ -435,7 +437,8 @@ impl Parser {
                 2 => {
                     data.mode = DataMode::Active {
                         memory: MemIdx::parse(i)?,
-                        offset: Expression::parse_with_context(i, &self.module)?,
+                        offset: ConstantExpression::parse_with_context(i, &self.module)?
+                            .eval(&self.module)?,
                     };
                     data.init = Vec::parse(i)?;
                 }

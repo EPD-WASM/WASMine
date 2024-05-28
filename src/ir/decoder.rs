@@ -4,7 +4,7 @@ use thiserror::Error;
 use wasm_types::{InstructionType, ValType};
 
 #[derive(Debug, Error)]
-pub(crate) enum DecodingError {
+pub enum DecodingError {
     #[error("Decoding error: {0}")]
     DecodingError(String),
     #[error("Type mismatch")]

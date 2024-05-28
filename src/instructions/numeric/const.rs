@@ -3,9 +3,9 @@ use wasm_types::*;
 
 #[derive(Debug, Clone)]
 pub(crate) struct Constant {
-    imm: u64,
-    out1: VariableID,
-    out1_type: NumType,
+    pub(crate) imm: u64,
+    pub(crate) out1: VariableID,
+    pub(crate) out1_type: NumType,
 }
 
 impl Instruction for Constant {

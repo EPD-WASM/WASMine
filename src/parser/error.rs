@@ -1,3 +1,4 @@
+use crate::ir::DecodingError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -16,6 +17,10 @@ pub enum ParserError {
     IoError(#[from] std::io::Error),
     #[error("Validation error: {0}")]
     ValidationError(#[from] ValidationError),
+    #[error("Constant expression error: {0}")]
+    ConstantExpressionError(String),
+    #[error("Decoding error: {0}")]
+    DecodingError(#[from] DecodingError),
 }
 
 #[derive(Debug, Error)]

@@ -64,8 +64,8 @@ pub(crate) fn ref_is_null(
 
 #[derive(Debug, Clone)]
 pub struct ReferenceNullInstruction {
-    out1: VariableID,
-    out1_type: ValType,
+    pub(crate) out1: VariableID,
+    pub(crate) out1_type: RefType,
 }
 
 impl Instruction for ReferenceNullInstruction {
@@ -74,12 +74,15 @@ impl Instruction for ReferenceNullInstruction {
             ReferenceInstructionType::RefNull,
         ));
         o.write_variable(self.out1);
-        o.write_value_type(self.out1_type);
+        o.write_value_type(ValType::Reference(self.out1_type));
     }
 
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         let out1 = i.read_variable()?;
-        let out1_type = i.read_value_type()?;
+        let out1_type = match i.read_value_type()? {
+            ValType::Reference(rt) => rt,
+            _ => return Err(DecodingError::TypeMismatch),
+        };
         Ok(ReferenceNullInstruction { out1, out1_type })
     }
 }
@@ -99,7 +102,7 @@ pub(crate) fn ref_null(
     let out = ctxt.create_var(ValType::Reference(ref_type));
     o.write(ReferenceNullInstruction {
         out1: out.id,
-        out1_type: ValType::Reference(ref_type),
+        out1_type: ref_type,
     });
     ctxt.push_var(out);
     Ok(())
@@ -107,8 +110,8 @@ pub(crate) fn ref_null(
 
 #[derive(Debug, Clone)]
 pub struct ReferenceFunctionInstruction {
-    out1: VariableID,
-    func_idx: FuncIdx,
+    pub(crate) out1: VariableID,
+    pub(crate) func_idx: FuncIdx,
 }
 
 impl Instruction for ReferenceFunctionInstruction {

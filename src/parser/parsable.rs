@@ -7,12 +7,13 @@ use crate::{
     structs::{
         element::{ElemMode, Element, ElementInit},
         export::{Export, ExportDesc},
-        expression::Expression,
+        expression::ConstantExpression,
         global::Global,
         import::{Import, ImportDesc},
         memory::{MemArg, Memory},
         module::Module,
         table::Table,
+        value::{Reference, Value},
     },
 };
 use wasm_types::instruction::BlockType;
@@ -210,9 +211,10 @@ impl ParseWithContext for Element {
                 ElemMode::Passive
             }
         } else {
+            let constant_expr = ConstantExpression::parse_with_context(i, m)?;
             ElemMode::Active {
                 table: table_idx,
-                offset: Expression::parse_with_context(i, m)?,
+                offset: constant_expr.eval(m)?,
             }
         };
 
@@ -224,8 +226,12 @@ impl ParseWithContext for Element {
             };
             let num_elems = i.read_leb128::<u32>()?;
             let elems = (0..num_elems)
-                .map(|_| Expression::parse_with_context(i, m))
-                .collect::<Result<Vec<Expression>, ParserError>>()?;
+                .map(|_| ConstantExpression::parse_with_context(i, m))
+                .flat_map(|r| {
+                    r.map(|e| e.eval(m))
+                        .map_err(|_| ParserError::InvalidEncoding)
+                })
+                .collect::<Result<Vec<Value>, ParserError>>()?;
             Ok(Element {
                 mode,
                 type_,
@@ -320,11 +326,12 @@ pub(crate) trait ParseWithContext {
         Self: std::marker::Sized;
 }
 
-impl ParseWithContext for Expression {
+impl ParseWithContext for ConstantExpression {
+    // only used for parsing constant expressions
     fn parse_with_context(
         i: &mut WasmStreamReader,
         module: &Module,
-    ) -> Result<Expression, ParserError> {
+    ) -> Result<ConstantExpression, ParserError> {
         let locals = Vec::new();
         let fake_func = Function {
             type_idx: 0,
@@ -334,18 +341,28 @@ impl ParseWithContext for Expression {
         };
         let mut ctxt = Context::new(module, &fake_func);
         let mut labels = Vec::new();
-        let bbs = parse_basic_blocks(i, &mut ctxt, &mut labels, 0, None)?;
-        Ok(Expression { instrs: bbs })
+        let mut parsed_init_blocks = parse_basic_blocks(i, &mut ctxt, &mut labels, 0, None)?;
+        if parsed_init_blocks.len() != 1
+            || parsed_init_blocks[0].instructions.instruction_storage.len() != 1
+        {
+            return Err(ParserError::ConstantExpressionError(
+                "invalid constant expression. Expected a single constant initializer instruction."
+                    .into(),
+            ));
+        }
+        Ok(ConstantExpression {
+            expression: parsed_init_blocks.remove(0).instructions,
+        })
     }
 }
 
 impl ParseWithContext for Global {
     fn parse_with_context(i: &mut WasmStreamReader, m: &Module) -> Result<Self, ParserError> {
         let r#type = GlobalType::parse(i)?;
-        let value = Expression::parse_with_context(i, m)?;
+        let const_expr = ConstantExpression::parse_with_context(i, m)?;
         Ok(Global {
             r#type,
-            value,
+            init: const_expr.eval(m)?,
             import: false,
         })
     }

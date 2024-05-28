@@ -247,15 +247,7 @@ impl Display for BasicBlockGlueDisplayContext<'_> {
 impl Display for Module {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (idx, global) in self.globals.iter().enumerate() {
-            writeln!(
-                f,
-                "{}",
-                GlobalDisplayContext {
-                    global,
-                    idx,
-                    module: self
-                }
-            )?;
+            writeln!(f, "{}", GlobalDisplayContext { global, idx })?;
         }
         write!(
             f,
@@ -272,7 +264,6 @@ impl Display for Module {
 struct GlobalDisplayContext<'a> {
     global: &'a Global,
     idx: usize,
-    module: &'a Module,
 }
 
 impl Display for GlobalDisplayContext<'_> {
@@ -282,20 +273,9 @@ impl Display for GlobalDisplayContext<'_> {
             GlobalType::Const(t) => format!("const {}", t),
         };
         if self.global.import {
-            write!(f, "@global_{}: {} = imported", self.idx, gt)
+            writeln!(f, "@global_{}: {} = imported", self.idx, gt)
         } else {
-            writeln!(f, "@global_{}: {} = res{{", self.idx, gt)?;
-            for bb in self.global.value.instrs.iter() {
-                write!(
-                    f,
-                    "{}",
-                    BasicBlockDisplayContext {
-                        bb,
-                        module: self.module
-                    }
-                )?;
-            }
-            writeln!(f, "}}")
+            writeln!(f, "@global_{}: {} = {:?};", self.idx, gt, self.global.init)
         }
     }
 }

@@ -1,5 +1,7 @@
 // https://webassembly.github.io/spec/core/exec/runtime.html
 
+use wasm_types::FuncIdx;
+
 #[derive(Debug, Clone)]
 pub(crate) enum Number {
     I32(u32),
@@ -12,13 +14,19 @@ pub(crate) enum Number {
     F64(f64),
 }
 
+impl Default for Number {
+    fn default() -> Self {
+        Number::I32(0)
+    }
+}
+
 pub(crate) type Vector = u128;
 
 #[derive(Debug, Clone)]
 pub(crate) enum Reference {
     Null,
-    Function,
-    Extern,
+    Function(FuncIdx),
+    Extern(u32),
 }
 
 #[derive(Debug, Clone)]

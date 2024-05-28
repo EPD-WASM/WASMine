@@ -1,10 +1,13 @@
-use super::expression::Expression;
+use super::{
+    expression::ConstantExpression,
+    value::{Reference, Value},
+};
 use wasm_types::{FuncIdx, RefType, TableIdx};
 
 #[derive(Debug, Clone)]
 pub(crate) enum ElementInit {
     Unresolved(Vec<FuncIdx>),
-    Final(Vec<Expression>),
+    Final(Vec<Value>),
 }
 
 #[derive(Debug, Clone)]
@@ -17,6 +20,6 @@ pub(crate) struct Element {
 #[derive(Debug, Clone)]
 pub(crate) enum ElemMode {
     Passive,
-    Active { table: TableIdx, offset: Expression },
+    Active { table: TableIdx, offset: Value },
     Declarative,
 }

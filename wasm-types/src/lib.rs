@@ -7,8 +7,9 @@ pub use instruction::*;
 pub use module::*;
 
 /// https://webassembly.github.io/spec/core/syntax/types.html#number-types
-#[derive(Debug, Clone, PartialEq, Copy)]
+#[derive(Debug, Clone, PartialEq, Copy, Default)]
 pub enum NumType {
+    #[default]
     I32,
     I64,
     F32,

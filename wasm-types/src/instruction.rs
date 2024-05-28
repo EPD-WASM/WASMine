@@ -1,6 +1,6 @@
 use crate::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum InstructionType {
     Numeric(NumericInstructionCategory),
     Reference(ReferenceInstructionType),
@@ -13,7 +13,7 @@ pub enum InstructionType {
     Meta(MetaInstructionType),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum NumericInstructionCategory {
     /// Constants: return a static constant.
     Constant,
@@ -33,14 +33,14 @@ pub enum NumericInstructionCategory {
     FRelational(FRelationalOp),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum IUnaryOp {
     Clz,
     Ctz,
     Popcnt,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum FUnaryOp {
     Abs,
     Neg,
@@ -51,7 +51,7 @@ pub enum FUnaryOp {
     Nearest,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum IBinaryOp {
     Add,
     Sub,
@@ -70,7 +70,7 @@ pub enum IBinaryOp {
     Rotr,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum FBinaryOp {
     Add,
     Sub,
@@ -81,12 +81,12 @@ pub enum FBinaryOp {
     Copysign,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ITestOp {
     Eqz,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum IRelationalOp {
     Eq,
     Ne,
@@ -100,7 +100,7 @@ pub enum IRelationalOp {
     GeU,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum FRelationalOp {
     Eq,
     Ne,
@@ -110,7 +110,7 @@ pub enum FRelationalOp {
     Ge,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ConversionOp {
     Wrap,
     Extend,
@@ -121,25 +121,25 @@ pub enum ConversionOp {
     Reinterpret,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum VectorInstructionCategory {
     // TODO: add vector instructions
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ReferenceInstruction {
     RefNull,
     RefIsNull,
     RefFunc,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ParametricInstructionType {
     Drop,
     Select,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum VariableInstructionType {
     LocalGet,
     LocalSet,
@@ -148,7 +148,7 @@ pub enum VariableInstructionType {
     GlobalSet,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TableInstructionCategory {
     Get,
     Set,
@@ -160,14 +160,14 @@ pub enum TableInstructionCategory {
     Drop,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum MemoryInstructionCategory {
     Load(LoadOp),
     Store(StoreOp),
     Memory(MemoryOp),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum LoadOp {
     INNLoad,
     FNNLoad,
@@ -180,7 +180,7 @@ pub enum LoadOp {
     // TODO: add vector instructions
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum StoreOp {
     INNStore,
     FNNStore,
@@ -190,7 +190,7 @@ pub enum StoreOp {
     // TODO: add vector instructions
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum MemoryOp {
     Size,
     Grow,
@@ -200,7 +200,7 @@ pub enum MemoryOp {
     Drop,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ControlInstructionType {
     Nop,
     Unreachable,
@@ -219,14 +219,14 @@ pub enum ControlInstructionType {
     Else,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ReferenceInstructionType {
     RefNull,
     RefIsNull,
     RefFunc,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum MetaInstructionType {
     PhiNode,
 }

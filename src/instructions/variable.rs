@@ -56,8 +56,8 @@ pub(crate) fn local_get(
 
 #[derive(Debug, Clone)]
 pub(crate) struct GlobalGetInstruction {
-    global_idx: GlobalIdx,
-    out1: VariableID,
+    pub(crate) global_idx: GlobalIdx,
+    pub(crate) out1: VariableID,
 }
 
 impl Instruction for GlobalGetInstruction {

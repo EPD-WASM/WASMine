@@ -1,9 +1,10 @@
-use super::expression::Expression;
-use wasm_types::module::GlobalType;
+use super::{expression::ConstantExpression, value::Value};
+use wasm_types::{module::GlobalType, NumType};
 
 #[derive(Debug, Clone)]
 pub(crate) struct Global {
     pub(crate) r#type: GlobalType,
-    pub(crate) value: Expression,
+    // the appropriate type transmutet to a u64
+    pub(crate) init: Value,
     pub(crate) import: bool,
 }
