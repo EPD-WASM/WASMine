@@ -1,7 +1,7 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use wasm_rt::parser::parser::Parser;
+use parser::parser::Parser;
 use wasm_smith::Module;
 
 fuzz_target!(|module: Module| {

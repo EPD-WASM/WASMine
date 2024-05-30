@@ -1,0 +1,11 @@
+[package]
+name = "parser"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+log = "0.4.21"
+simplelog = "0.12.2"
+thiserror = "1.0.60"
+wasm-types = { path = "../wasm-types" }
+ir = { path = "../ir" }

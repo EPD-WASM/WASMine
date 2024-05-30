@@ -2,7 +2,6 @@ use log::LevelFilter;
 use simplelog::{ColorChoice, CombinedLogger, Config, TermLogger, TerminalMode};
 use std::env::args;
 use std::io::Write;
-use wasm_rt::parser;
 
 fn main() {
     CombinedLogger::init(vec![TermLogger::new(

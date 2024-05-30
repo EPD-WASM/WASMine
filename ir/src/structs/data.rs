@@ -1,0 +1,14 @@
+use super::{expression::ConstantExpression, value::Value};
+use wasm_types::MemIdx;
+
+#[derive(Debug, Clone)]
+pub enum DataMode {
+    Active { memory: MemIdx, offset: Value },
+    Passive,
+}
+
+#[derive(Debug, Clone)]
+pub struct Data {
+    pub init: Vec<u8>,
+    pub mode: DataMode,
+}

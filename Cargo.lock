@@ -232,8 +232,8 @@ name = "fuzz"
 version = "0.1.0"
 dependencies = [
  "libfuzzer-sys",
+ "parser",
  "wasm-smith",
- "wasm_rt",
 ]
 
 [[package]]
@@ -276,6 +276,25 @@ checksum = "168fb715dda47215e360912c096649d23d58bf392ac62f73919e831745e40f26"
 dependencies = [
  "equivalent",
  "hashbrown",
+]
+
+[[package]]
+name = "interpreter"
+version = "0.1.0"
+dependencies = [
+ "ir",
+ "parser",
+ "thiserror",
+ "wasm-types",
+]
+
+[[package]]
+name = "ir"
+version = "0.1.0"
+dependencies = [
+ "lazy_static",
+ "thiserror",
+ "wasm-types",
 ]
 
 [[package]]
@@ -387,6 +406,17 @@ name = "oorandom"
 version = "11.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
+
+[[package]]
+name = "parser"
+version = "0.1.0"
+dependencies = [
+ "ir",
+ "log",
+ "simplelog",
+ "thiserror",
+ "wasm-types",
+]
 
 [[package]]
 name = "plotters"
@@ -780,6 +810,7 @@ dependencies = [
  "gen_util",
  "lazy_static",
  "log",
+ "parser",
  "simplelog",
  "thiserror",
  "wasm-types",

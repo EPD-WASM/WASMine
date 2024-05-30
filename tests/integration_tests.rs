@@ -1,5 +1,5 @@
 use gen_util::generate_spec_test_cases;
-use wasm_rt::parser::parser::Parser;
+use parser::parser::Parser;
 use wast::Wast;
 
 pub fn test_parser(file_path: &str) {

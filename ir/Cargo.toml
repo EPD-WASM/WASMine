@@ -1,0 +1,9 @@
+[package]
+name = "ir"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+thiserror = "1.0.60"
+wasm-types = { path = "../wasm-types" }
+lazy_static = "1.4.0"
