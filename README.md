@@ -2,7 +2,7 @@
 
 [![CI Status](https://gitlab.db.in.tum.de/epd24s/wasm-rt/badges/master/pipeline.svg)](https://gitlab.db.in.tum.de/epd24s/wasm-rt/-/commits/master)
 [![Coverage](https://gitlab.db.in.tum.de/epd24s/wasm-rt/badges/master/coverage.svg)](https://gitlab.db.in.tum.de/epd24s/wasm-rt/-/commits/master)
-[![Latest Release](https://gitlab.db.in.tum.de/epd24s/wasm-rt/-/badges/release.svg)](https://gitlab.db.in.tum.de/epd24s/wasm-rt/-/releases) 
+[![Latest Release](https://gitlab.db.in.tum.de/epd24s/wasm-rt/-/badges/release.svg)](https://gitlab.db.in.tum.de/epd24s/wasm-rt/-/releases)
 
 ## Building
 
@@ -51,4 +51,38 @@ There is also an experimental, special cargo subcommand for criterion, which can
 ```sh
 cargo install cargo-criterion
 cargo criterion
+```
+
+## Structure
+
+(if this not rendered automatically for you, consider installing a plantuml diagram renderer extension)
+```plantuml
+@startuml
+package shared-definitions {
+    component "wasm-types"
+    component ir
+}
+
+package code-handling {
+    component parser
+    parser -up-> ir : use
+    parser -up-> "wasm-types" : use
+
+    component interpreter
+    interpreter -up-> ir : use
+    interpreter -up-> "wasm-types" : use
+}
+
+package runtime-system {
+    component "WASI-runtime"
+
+    component runtime
+    runtime -up-> parser : use
+    runtime -up-> interpreter : use
+    runtime -left-> "WASI-runtime"
+}
+
+"CLI-entry" -up-> runtime
+"ELF-Interp-entry" -up-> runtime
+@enduml
 ```
