@@ -11,6 +11,7 @@ pub enum DecodingError {
     TypeMismatch,
 }
 
+#[derive(Debug)]
 pub(crate) struct InstructionDecoder {
     storage: BasicBlockStorage,
 }

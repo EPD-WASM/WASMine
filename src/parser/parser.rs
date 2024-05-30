@@ -158,8 +158,8 @@ impl Parser {
                     import: true,
                     ..Default::default()
                 }),
-                ImportDesc::Table(r#type) => self.module.tables.push(Table { r#type }),
-                ImportDesc::Mem(r#type) => self.module.memories.push(Memory { r#type }),
+                ImportDesc::Table(r#type) => self.module.tables.push(Table::new(r#type)),
+                ImportDesc::Mem(limits) => self.module.memories.push(Memory::new(limits)),
                 ImportDesc::Global(r#type) => self.module.globals.push(Global {
                     r#type,
                     import: true,

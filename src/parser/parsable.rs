@@ -19,7 +19,7 @@ use crate::{
 use wasm_types::instruction::BlockType;
 use wasm_types::module::{GlobalType, MemType, Name, Section, TableType};
 use wasm_types::{
-    FuncIdx, FuncType, GlobalIdx, LimType, MemIdx, NumType, RefType, ResType, TableIdx, TypeIdx,
+    FuncIdx, FuncType, GlobalIdx, Limits, MemIdx, NumType, RefType, ResType, TableIdx, TypeIdx,
     ValType,
 };
 
@@ -89,14 +89,14 @@ impl Parse for u32 {
     }
 }
 
-impl Parse for LimType {
-    fn parse(i: &mut WasmStreamReader) -> Result<LimType, ParserError> {
+impl Parse for Limits {
+    fn parse(i: &mut WasmStreamReader) -> Result<Limits, ParserError> {
         match i.read_byte()? {
-            0x00 => Ok(LimType {
+            0x00 => Ok(Limits {
                 min: i.read_leb128()?,
                 max: None,
             }),
-            0x01 => Ok(LimType {
+            0x01 => Ok(Limits {
                 min: i.read_leb128()?,
                 max: Some(i.read_leb128()?),
             }),
@@ -118,7 +118,7 @@ impl Parse for RefType {
 impl Parse for TableType {
     fn parse(i: &mut WasmStreamReader) -> Result<TableType, ParserError> {
         let ref_type = RefType::parse(i)?;
-        let lim = LimType::parse(i)?;
+        let lim = Limits::parse(i)?;
         Ok(TableType { ref_type, lim })
     }
 }
@@ -157,17 +157,13 @@ impl Parse for Import {
 
 impl Parse for Table {
     fn parse(i: &mut WasmStreamReader) -> Result<Table, ParserError> {
-        Ok(Table {
-            r#type: TableType::parse(i)?,
-        })
+        Ok(Table::new(TableType::parse(i)?))
     }
 }
 
 impl Parse for Memory {
     fn parse(i: &mut WasmStreamReader) -> Result<Memory, ParserError> {
-        Ok(Memory {
-            r#type: MemType::parse(i)?,
-        })
+        Ok(Memory::new(Limits::parse(i)?))
     }
 }
 

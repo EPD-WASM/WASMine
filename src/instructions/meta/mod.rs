@@ -5,6 +5,8 @@ use crate::{
 };
 use wasm_types::{InstructionType, MetaInstructionType, ValType};
 
+use super::{Instruction, VariableID};
+
 #[derive(Debug, Clone)]
 pub(crate) struct PhiNode {
     pub(crate) inputs: Vec<(BasicBlockID, VariableID)>,

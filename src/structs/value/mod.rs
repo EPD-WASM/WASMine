@@ -1,6 +1,12 @@
-// https://webassembly.github.io/spec/core/exec/runtime.html
+// https://webassembly.github.io/spec/core/exec/runti`me`.html
 
 use wasm_types::FuncIdx;
+use std::
+    rc::Rc
+;
+
+mod number_ops;
+mod number_impls;
 
 #[derive(Debug, Clone)]
 pub(crate) enum Number {
@@ -21,6 +27,9 @@ impl Default for Number {
 }
 
 pub(crate) type Vector = u128;
+
+pub(crate) type FunctionReference = FuncIdx;
+pub(crate) type ExternReference = u32;
 
 #[derive(Debug, Clone)]
 pub(crate) enum Reference {

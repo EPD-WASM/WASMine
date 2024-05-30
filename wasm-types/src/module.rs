@@ -3,7 +3,7 @@ use crate::*;
 #[derive(Debug, Clone, Copy)]
 pub struct TableType {
     pub ref_type: RefType,
-    pub lim: LimType,
+    pub lim: Limits,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -39,4 +39,4 @@ pub enum Section {
     DataCount,
 }
 
-pub type MemType = LimType;
+pub type MemType = Limits;

@@ -41,7 +41,7 @@ pub type ResType = Vec<ValType>;
 pub type FuncType = (ResType, ResType);
 
 #[derive(Debug, Clone, Copy)]
-pub struct LimType {
+pub struct Limits {
     pub min: u32,
     pub max: Option<u32>,
 }

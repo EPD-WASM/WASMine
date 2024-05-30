@@ -5,7 +5,10 @@ use crate::{
         InstructionEncoder,
     },
     parser::{error::ParserError, wasm_stream_reader::WasmStreamReader},
-    structs::{instruction::ControlInstruction, table::Table},
+    structs::{
+        instruction::ControlInstruction,
+        table::{Table, Tablelike},
+    },
 };
 use wasm_types::instruction::BlockType;
 use wasm_types::module::TableType;
@@ -499,14 +502,8 @@ fn parse_terminator(
                     "icall table index out of bounds".to_string(),
                 ))
             } else if !matches!(
-                ctxt.module.tables[table_idx as usize],
-                Table {
-                    r#type: TableType {
-                        ref_type: RefType::FunctionReference,
-                        ..
-                    },
-                    ..
-                }
+                ctxt.module.tables[table_idx as usize].get_ref_type(),
+                RefType::FunctionReference
             ) {
                 ctxt.poison(ValidationError::Msg(
                     "icall table type mismatch".to_string(),

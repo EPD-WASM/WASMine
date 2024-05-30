@@ -1,5 +1,7 @@
 use super::*;
-use crate::parser::parsable::Parse;
+use crate::{
+    parser::parsable::Parse,
+};
 
 #[derive(Debug, Clone)]
 pub struct ReferenceIsNullInstruction {

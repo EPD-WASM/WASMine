@@ -1,7 +1,7 @@
 use super::*;
 use crate::parser::parsable::Parse;
 use crate::structs::element::Element;
-use crate::structs::table::Table;
+use crate::structs::table::{Table, Tablelike};
 use wasm_types::*;
 
 #[derive(Debug, Clone)]
@@ -104,7 +104,7 @@ pub(crate) fn table_get(
             return Ok(());
         }
     };
-    let table_ref_type = table.r#type.ref_type;
+    let table_ref_type = table.get_ref_type();
     let out = ctxt.create_var(ValType::Reference(table_ref_type));
     o.write(TableGetInstruction {
         table_idx,
@@ -171,7 +171,7 @@ pub(crate) fn table_grow(
             return Ok(());
         }
     };
-    let table_type = ValType::Reference(table.r#type.ref_type);
+    let table_type = ValType::Reference(table.get_ref_type());
 
     let size = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
     let value_to_fill = ctxt.pop_var_with_type(&table_type);
@@ -306,15 +306,14 @@ pub(crate) fn table_fill(
             ref_value.type_
         ))),
     };
-    match ctxt.module.tables.get(table_idx as usize) {
-        Some(Table {
-            r#type:
-                TableType {
-                    ref_type: table_type,
-                    lim: _,
-                },
-        }) => {
-            if ref_value_type != *table_type {
+    match ctxt
+        .module
+        .tables
+        .get(table_idx as usize)
+        .map(Table::get_ref_type)
+    {
+        Some(table_type) => {
+            if ref_value_type != table_type {
                 ctxt.poison(ValidationError::Msg(format!(
                     "table value to set must be of reference type {:?}, but got {:?}",
                     table_type, ref_value_type
@@ -393,28 +392,26 @@ pub(crate) fn table_copy(
     let d = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
 
     // validate
-    let table_type_x = match ctxt.module.tables.get(table_idx_x as usize) {
-        Some(Table {
-            r#type:
-                TableType {
-                    ref_type: table_type,
-                    lim: _,
-                },
-        }) => *table_type,
+    let table_type_x = match ctxt
+        .module
+        .tables
+        .get(table_idx_x as usize)
+        .map(Table::get_ref_type)
+    {
+        Some(table_type) => table_type,
         None => ctxt.poison(ValidationError::Msg(format!(
             "table with id {} does not exist",
             table_idx_x
         ))),
     };
 
-    let table_type_y = match ctxt.module.tables.get(table_idx_y as usize) {
-        Some(Table {
-            r#type:
-                TableType {
-                    ref_type: table_type,
-                    lim: _,
-                },
-        }) => *table_type,
+    let table_type_y = match ctxt
+        .module
+        .tables
+        .get(table_idx_y as usize)
+        .map(Table::get_ref_type)
+    {
+        Some(table_type) => table_type,
         None => ctxt.poison(ValidationError::Msg(format!(
             "table with id {} does not exist",
             table_idx_y
@@ -495,14 +492,13 @@ pub(crate) fn table_init(
     let d = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
 
     // validate
-    let table_type = match ctxt.module.tables.get(table_idx as usize) {
-        Some(Table {
-            r#type:
-                TableType {
-                    ref_type: table_type,
-                    lim: _,
-                },
-        }) => *table_type,
+    let table_type = match ctxt
+        .module
+        .tables
+        .get(table_idx as usize)
+        .map(Table::get_ref_type)
+    {
+        Some(table_type) => table_type,
         None => ctxt.poison(ValidationError::Msg(format!(
             "table with id {} does not exist",
             table_idx

@@ -4,9 +4,9 @@ use wasm_types::*;
 #[derive(Debug, Clone)]
 pub(crate) struct IUnaryInstruction {
     types: NumType,
-    op: IUnaryOp,
-    in1: VariableID,
-    out1: VariableID,
+    pub(crate) op: IUnaryOp,
+    pub(crate) in1: VariableID,
+    pub(crate) out1: VariableID,
 }
 
 impl Instruction for IUnaryInstruction {
@@ -75,9 +75,9 @@ fn f_arith(ctxt: &mut C, o: &mut O, op: FUnaryOp, type_: NumType) -> PR {
 #[derive(Debug, Clone)]
 pub(crate) struct FUnaryInstruction {
     types: NumType,
-    op: FUnaryOp,
-    in1: VariableID,
-    out1: VariableID,
+    pub(crate) op: FUnaryOp,
+    pub(crate) in1: VariableID,
+    pub(crate) out1: VariableID,
 }
 
 impl Instruction for FUnaryInstruction {

@@ -1,7 +1,4 @@
-use wasm_types::{
-    module::{GlobalType, MemType, Name, TableType},
-    TypeIdx,
-};
+use wasm_types::{GlobalType, Limits, Name, TableType, TypeIdx};
 
 #[derive(Debug, Clone)]
 pub(crate) struct Import {
@@ -14,6 +11,6 @@ pub(crate) struct Import {
 pub(crate) enum ImportDesc {
     Func(TypeIdx),
     Table(TableType),
-    Mem(MemType),
+    Mem(Limits),
     Global(GlobalType),
 }

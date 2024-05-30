@@ -4,10 +4,10 @@ use wasm_types::*;
 #[derive(Debug, Clone)]
 pub(crate) struct IBinaryInstruction {
     types: NumType,
-    op: IBinaryOp,
-    in1: VariableID,
-    in2: VariableID,
-    out1: VariableID,
+    pub(crate) op: IBinaryOp,
+    pub(crate) in1: VariableID,
+    pub(crate) in2: VariableID,
+    pub(crate) out1: VariableID,
 }
 
 impl Instruction for IBinaryInstruction {
@@ -79,10 +79,10 @@ fn f_arith(ctxt: &mut C, o: &mut O, op: FBinaryOp, type_: NumType) -> PR {
 #[derive(Debug, Clone)]
 pub(crate) struct FBinaryInstruction {
     types: NumType,
-    op: FBinaryOp,
-    in1: VariableID,
-    in2: VariableID,
-    out1: VariableID,
+    pub(crate) op: FBinaryOp,
+    pub(crate) in1: VariableID,
+    pub(crate) in2: VariableID,
+    pub(crate) out1: VariableID,
 }
 
 impl Instruction for FBinaryInstruction {
