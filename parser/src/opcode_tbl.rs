@@ -2,6 +2,7 @@ use self::wasm_stream_reader::WasmStreamReader;
 use super::*;
 use crate::error::ParserError;
 use crate::instructions::*;
+use context::Context;
 use ir::InstructionEncoder;
 
 /// Reference: https://webassembly.github.io/spec/core/bikeshed/#a7-index-of-instructions

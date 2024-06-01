@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use thiserror::Error;
 
-use wasm_types::{FuncIdx, InstructionType};
+use wasm_types::{ExecutionContext, FuncIdx, GlobalStorage, InstructionType, RTImport};
 use {
     ir::instructions::VariableID,
     ir::structs::{module::Module, value::Value},
@@ -13,7 +13,7 @@ use {
 mod numeric;
 
 #[derive(Debug, Error)]
-pub(crate) enum InterpreterError {
+pub enum InterpreterError {
     #[error("Execution error: {0}")]
     ExecutionError(String),
     #[error("Type mismatch")]
@@ -67,14 +67,14 @@ struct StackFrame {
     vars: LocalVariableStore,
 }
 
-pub(crate) struct InterpreterContext {
+pub struct InterpreterContext {
     module: Module,
     variables: HashMap<VariableID, Value>,
     stack: Vec<StackFrame>,
 }
 
 impl InterpreterContext {
-    fn new(module: Module) -> Self {
+    pub fn new(module: Module) -> Self {
         Self {
             module,
             variables: HashMap::new(),
@@ -83,26 +83,32 @@ impl InterpreterContext {
     }
 }
 
-struct Interpreter {
+pub struct Interpreter {
     ctx: InterpreterContext,
 }
 
 impl Interpreter {
-    fn new(context: InterpreterContext) -> Self {
+    pub fn new(context: InterpreterContext) -> Self {
         Self { ctx: context }
     }
 
-    fn run(&mut self) -> Result<(), InterpreterError> {
+    pub fn run(
+        &mut self,
+        runtime: impl ExecutionContext,
+        function_idx: FuncIdx,
+        imports: Vec<RTImport>,
+        globals: GlobalStorage,
+        parameters: Vec<Value>,
+    ) -> Result<Vec<Value>, InterpreterError> {
         if self.ctx.stack.is_empty() {
-            let entry_fn_idx: FuncIdx = self.ctx.module.entry_point.unwrap_or(0_u32);
             let entry_fn = self
                 .ctx
                 .module
                 .ir
                 .functions
-                .get(entry_fn_idx as usize)
+                .get(function_idx as usize)
                 // TODO: make this check only for debug builds. We KNOW that this function exists
-                .expect(format!("Function not found at index {entry_fn_idx}").as_str());
+                .expect(format!("Function not found at index {function_idx}").as_str());
 
             // TODO: store pointer to entry block. This is currently always BB0, but this might change in the future
             let basic_block = entry_fn
@@ -113,7 +119,7 @@ impl Interpreter {
 
             let decoder = InstructionDecoder::new(basic_block.instructions.clone());
             self.ctx.stack.push(StackFrame {
-                fn_idx: entry_fn_idx,
+                fn_idx: function_idx,
                 bb_idx: 0,
                 decoder,
                 vars: LocalVariableStore::new(),

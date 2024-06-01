@@ -1,6 +1,5 @@
 // https://webassembly.github.io/spec/core/exec/runti`me`.html
 
-use std::rc::Rc;
 use wasm_types::FuncIdx;
 
 mod number_impls;

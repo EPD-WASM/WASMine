@@ -1,6 +1,4 @@
 use super::*;
-use crate::structs::element::Element;
-use crate::structs::table::{Table, Tablelike};
 use wasm_types::*;
 
 #[derive(Debug, Clone)]

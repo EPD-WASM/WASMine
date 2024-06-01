@@ -1,14 +1,16 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
+use loader::Loader;
 use parser::parser::Parser;
 use wasm_smith::Module;
 
 fuzz_target!(|module: Module| {
     let wasm_bytes = module.to_bytes();
     let parser = Parser::default();
-    if parser.parse(wasm_bytes.as_slice()).is_err() {
-        std::fs::write("fuzz.wasm", wasm_bytes.as_slice()).unwrap();
+    let loader = Loader::from_buf(wasm_bytes);
+    if parser.parse(loader).is_err() {
+        std::fs::write("fuzz.wasm", module.to_bytes()).unwrap();
         panic!("Failed to parse the generated module")
     }
 });

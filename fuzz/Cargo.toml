@@ -7,6 +7,7 @@ edition = "2021"
 libfuzzer-sys = "0.4.7"
 wasm-smith = "0.207.0"
 parser = { path = "../parser" }
+loader = { path = "../loader" }
 
 [package.metadata]
 cargo-fuzz = true

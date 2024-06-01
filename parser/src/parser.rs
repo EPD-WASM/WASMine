@@ -1,7 +1,10 @@
+use crate::context::Context;
+use crate::stack::ParserStack;
+
 use super::parsable::{Parse, ParseWithContext};
 use super::parse_basic_blocks::{parse_basic_blocks, Label};
+use super::ParseResult;
 use super::{error::ParserError, wasm_stream_reader::WasmStreamReader};
-use super::{Context, ParseResult, ParserStack};
 use ir::basic_block::BasicBlock;
 use ir::function::Function;
 use ir::instructions::Variable;
@@ -13,7 +16,8 @@ use ir::structs::{
     element::Element, export::Export, global::Global, import::Import, memory::Memory,
     module::Module, table::Table,
 };
-use std::io::{BufReader, Read};
+use loader::Loader;
+use std::io::BufReader;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::vec;
 use wasm_types::module::Name;
@@ -30,7 +34,8 @@ pub struct Parser {
 }
 
 impl Parser {
-    pub fn parse(mut self, input: impl Read) -> Result<Module, ParserError> {
+    pub fn parse(mut self, loader: Loader) -> Result<Module, ParserError> {
+        let input = loader.load()?;
         let mut reader = WasmStreamReader::new(BufReader::new(input));
         match self.parse_module(&mut reader) {
             Err(e) => Err(ParserError::PositionalError(Box::new(e), reader.pos)),
@@ -158,8 +163,8 @@ impl Parser {
                     import: true,
                     ..Default::default()
                 }),
-                ImportDesc::Table(r#type) => self.module.tables.push(Table::new(r#type)),
-                ImportDesc::Mem(limits) => self.module.memories.push(Memory::new(limits)),
+                ImportDesc::Table(r#type) => self.module.tables.push(Table { r#type }),
+                ImportDesc::Mem(limits) => self.module.memories.push(Memory { limits }),
                 ImportDesc::Global(r#type) => self.module.globals.push(Global {
                     r#type,
                     import: true,

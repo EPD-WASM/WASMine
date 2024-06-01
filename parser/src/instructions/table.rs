@@ -1,7 +1,6 @@
 use super::*;
 use crate::parsable::Parse;
 use ir::structs::element::Element;
-use ir::structs::table::{Table, Tablelike};
 use wasm_types::*;
 
 pub(crate) fn table_set(
@@ -41,7 +40,7 @@ pub(crate) fn table_get(
             return Ok(());
         }
     };
-    let table_ref_type = table.get_ref_type();
+    let table_ref_type = table.r#type.ref_type;
     let out = ctxt.create_var(ValType::Reference(table_ref_type));
     o.write(TableGetInstruction {
         table_idx,
@@ -67,7 +66,7 @@ pub(crate) fn table_grow(
             return Ok(());
         }
     };
-    let table_type = ValType::Reference(table.get_ref_type());
+    let table_type = ValType::Reference(table.r#type.ref_type);
 
     let size = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
     let value_to_fill = ctxt.pop_var_with_type(&table_type);
@@ -132,7 +131,7 @@ pub(crate) fn table_fill(
         .module
         .tables
         .get(table_idx as usize)
-        .map(Table::get_ref_type)
+        .map(|t| t.r#type.ref_type)
     {
         Some(table_type) => {
             if ref_value_type != table_type {
@@ -173,7 +172,7 @@ pub(crate) fn table_copy(
         .module
         .tables
         .get(table_idx_x as usize)
-        .map(Table::get_ref_type)
+        .map(|t| t.r#type.ref_type)
     {
         Some(table_type) => table_type,
         None => ctxt.poison(ValidationError::Msg(format!(
@@ -186,7 +185,7 @@ pub(crate) fn table_copy(
         .module
         .tables
         .get(table_idx_y as usize)
-        .map(Table::get_ref_type)
+        .map(|t| t.r#type.ref_type)
     {
         Some(table_type) => table_type,
         None => ctxt.poison(ValidationError::Msg(format!(
@@ -228,7 +227,7 @@ pub(crate) fn table_init(
         .module
         .tables
         .get(table_idx as usize)
-        .map(Table::get_ref_type)
+        .map(|t| t.r#type.ref_type)
     {
         Some(table_type) => table_type,
         None => ctxt.poison(ValidationError::Msg(format!(

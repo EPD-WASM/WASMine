@@ -97,6 +97,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
+name = "cfg_aliases"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd16c4719339c4530435d38e511904438d07cce7950afa3718a84ac36c10e89e"
+
+[[package]]
 name = "clap"
 version = "2.34.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -232,6 +238,7 @@ name = "fuzz"
 version = "0.1.0"
 dependencies = [
  "libfuzzer-sys",
+ "loader",
  "parser",
  "wasm-smith",
 ]
@@ -360,6 +367,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "loader"
+version = "0.1.0"
+
+[[package]]
 name = "log"
 version = "0.4.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -370,6 +381,18 @@ name = "memchr"
 version = "2.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c8640c5d730cb13ebd907d8d04b52f55ac9a2eec55b440c8892f40d56c76c1d"
+
+[[package]]
+name = "nix"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab2156c4fce2f8df6c499cc1c763e4394b7482525bf2a9701c9d79d215f519e4"
+dependencies = [
+ "bitflags 2.5.0",
+ "cfg-if",
+ "cfg_aliases",
+ "libc",
+]
 
 [[package]]
 name = "num-conv"
@@ -412,6 +435,7 @@ name = "parser"
 version = "0.1.0"
 dependencies = [
  "ir",
+ "loader",
  "log",
  "simplelog",
  "thiserror",
@@ -518,6 +542,21 @@ name = "regex-syntax"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "adad44e29e4c806119491a7f06f03de4d1af22c3a680dd47f1e6e179439d1f56"
+
+[[package]]
+name = "runtime-lib"
+version = "0.1.0"
+dependencies = [
+ "interpreter",
+ "ir",
+ "libc",
+ "loader",
+ "log",
+ "nix",
+ "parser",
+ "thiserror",
+ "wasm-types",
+]
 
 [[package]]
 name = "ryu"
@@ -808,11 +847,11 @@ version = "0.1.0"
 dependencies = [
  "criterion",
  "gen_util",
- "lazy_static",
+ "loader",
  "log",
  "parser",
+ "runtime-lib",
  "simplelog",
- "thiserror",
  "wasm-types",
  "wasmparser",
  "wast",

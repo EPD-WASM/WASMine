@@ -1,5 +1,6 @@
 use crate::{
-    error::ParserError, instructions::meta::new_phinode, wasm_stream_reader::WasmStreamReader,
+    context::Context, error::ParserError, instructions::meta::new_phinode, stack::ParserStack,
+    wasm_stream_reader::WasmStreamReader,
 };
 use ir::{
     basic_block::{BasicBlock, BasicBlockGlue, BasicBlockID, BasicBlockStorage},
@@ -7,13 +8,13 @@ use ir::{
         meta::{self},
         Instruction, VariableID,
     },
-    structs::{instruction::ControlInstruction, table::Tablelike},
+    structs::instruction::ControlInstruction,
     InstructionEncoder,
 };
 use wasm_types::instruction::BlockType;
 use wasm_types::{NumType, RefType, ResType, ValType};
 
-use super::{opcode_tbl::LVL1_JMP_TABLE, Context, ParseResult, ParserStack, ValidationError};
+use super::{opcode_tbl::LVL1_JMP_TABLE, ParseResult, ValidationError};
 
 fn setup_block_stack(block_type: BlockType, ctxt: &mut Context) {
     let input_signature = get_block_input_signature(ctxt, block_type);
@@ -501,7 +502,7 @@ fn parse_terminator(
                     "icall table index out of bounds".to_string(),
                 ))
             } else if !matches!(
-                ctxt.module.tables[table_idx as usize].get_ref_type(),
+                ctxt.module.tables[table_idx as usize].r#type.ref_type,
                 RefType::FunctionReference
             ) {
                 ctxt.poison(ValidationError::Msg(

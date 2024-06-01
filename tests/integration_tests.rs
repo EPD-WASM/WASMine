@@ -1,4 +1,5 @@
 use gen_util::generate_spec_test_cases;
+use loader::Loader;
 use parser::parser::Parser;
 use wast::Wast;
 
@@ -21,7 +22,8 @@ pub fn test_parser(file_path: &str) {
             wast::WastDirective::Wat(wast::QuoteWat::Wat(wast::Wat::Module(mut module))) => {
                 let binary_mod = module.encode().unwrap();
                 let parser = Parser::default();
-                let res = parser.parse(binary_mod.as_slice());
+                let loader = Loader::from_buf(binary_mod.clone());
+                let res = parser.parse(loader);
                 if res.is_err() {
                     std::fs::write("test_module_dump.wasm", binary_mod).unwrap();
                     println!(
@@ -38,7 +40,8 @@ pub fn test_parser(file_path: &str) {
             } => {
                 let binary_mod = module.encode().unwrap();
                 let parser = Parser::default();
-                let res = parser.parse(binary_mod.as_slice());
+                let loader = Loader::from_buf(binary_mod.clone());
+                let res = parser.parse(loader);
                 if res.is_ok() {
                     std::fs::write("test_module_dump.wasm", binary_mod).unwrap();
                     panic!(

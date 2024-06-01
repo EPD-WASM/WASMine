@@ -1,10 +1,12 @@
 pub mod instruction;
 pub mod module;
+pub mod runtime;
 
 use std::fmt::{self, Display, Formatter};
 
 pub use instruction::*;
 pub use module::*;
+pub use runtime::*;
 
 /// https://webassembly.github.io/spec/core/syntax/types.html#number-types
 #[derive(Debug, Clone, PartialEq, Copy, Default)]

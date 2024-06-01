@@ -1,6 +1,8 @@
+use crate::context::Context;
+
 use super::{
     error::ParserError, parse_basic_blocks::parse_basic_blocks,
-    wasm_stream_reader::WasmStreamReader, Context,
+    wasm_stream_reader::WasmStreamReader,
 };
 use ir::{
     function::Function,
@@ -157,13 +159,17 @@ impl Parse for Import {
 
 impl Parse for Table {
     fn parse(i: &mut WasmStreamReader) -> Result<Table, ParserError> {
-        Ok(Table::new(TableType::parse(i)?))
+        Ok(Table {
+            r#type: TableType::parse(i)?,
+        })
     }
 }
 
 impl Parse for Memory {
     fn parse(i: &mut WasmStreamReader) -> Result<Memory, ParserError> {
-        Ok(Memory::new(Limits::parse(i)?))
+        Ok(Memory {
+            limits: Limits::parse(i)?,
+        })
     }
 }
 

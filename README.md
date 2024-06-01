@@ -71,6 +71,8 @@ package code-handling {
     component interpreter
     interpreter -up-> ir : use
     interpreter -up-> "wasm-types" : use
+
+    component loader
 }
 
 package runtime-system {
@@ -79,6 +81,7 @@ package runtime-system {
     component runtime
     runtime -up-> parser : use
     runtime -up-> interpreter : use
+    runtime -up-> loader : use
     runtime -left-> "WASI-runtime"
 }
 

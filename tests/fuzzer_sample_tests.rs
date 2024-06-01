@@ -17,7 +17,8 @@ fn test_fuzzer_samples() {
         let mut wast_repr: Wat = wast::parser::parse(&wast_parsebuf).unwrap();
         let wasm_bytes = wast_repr.encode().unwrap();
         let parser = parser::parser::Parser::default();
-        if let Err(e) = parser.parse(wasm_bytes.as_slice()) {
+        let loader = loader::Loader::from_buf(wasm_bytes.clone());
+        if let Err(e) = parser.parse(loader) {
             panic!("Failed to parse wasm file {:?}: {}", file_path, e)
         }
     });

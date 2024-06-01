@@ -1,14 +1,7 @@
 (module
     ;; add(a, b) returns a+b
-    (func $add (export "add") (param $a i32) (param $b i32)
-        unreachable
-        (block $my_block
-            (block $my_block2
-                (i32.add (local.get $a) (local.get $b))
-                drop
-                br $my_block
-                unreachable
-            )
-        )
+    (func $aaa (export "_start") (param $a i32) (param $b i32) (result i32 f64)
+        i32.const 15
+        f64.const 15.5
     )
 )

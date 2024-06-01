@@ -1,4 +1,4 @@
-workspace = { members = [ "fuzz", "interpreter", "ir", "parser", "tests/gen_util", "wasm-types"] }
+workspace = { members = [ "fuzz", "runtime-lib", "interpreter", "ir", "parser", "tests/gen_util", "wasm-types", "loader"] }
 
 [package]
 name = "wasm_rt"
@@ -8,12 +8,12 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-lazy_static = "1.4.0"
-log = "0.4.21"
+runtime-lib = { path = "runtime-lib" }
 simplelog = "0.12.2"
-thiserror = "1.0.60"
 wasm-types = { path = "./wasm-types" }
 parser = { path = "./parser" }
+loader = { path = "./loader" }
+log = "0.4.21"
 
 [dev-dependencies]
 wast = "206.0.0"
@@ -24,3 +24,7 @@ wasmparser = "0.207.0"
 [[bench]]
 name = "parser_bench"
 harness = false
+
+[[bin]]
+name = "wasm_rt"
+path = "./bin/main.rs"

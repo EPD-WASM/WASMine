@@ -1,10 +1,9 @@
-use crate::instructions::PhiNode;
-
 use super::{
     basic_block::{BasicBlock, BasicBlockGlue},
     function::Function,
     InstructionDecoder, IR,
 };
+use crate::instructions::PhiNode;
 use crate::structs::module::Module;
 use crate::{instructions::*, structs::global::Global};
 use std::fmt::{Display, Formatter};
