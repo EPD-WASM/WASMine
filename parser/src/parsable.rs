@@ -334,13 +334,7 @@ impl ParseWithContext for ConstantExpression {
         i: &mut WasmStreamReader,
         module: &Module,
     ) -> Result<ConstantExpression, ParserError> {
-        let locals = Vec::new();
-        let fake_func = Function {
-            type_idx: 0,
-            locals,
-            basic_blocks: Vec::new(),
-            import: false,
-        };
+        let fake_func = Function::create_empty(0);
         let mut ctxt = Context::new(module, &fake_func);
         let mut labels = Vec::new();
         let mut parsed_init_blocks = parse_basic_blocks(i, &mut ctxt, &mut labels, 0, None)?;

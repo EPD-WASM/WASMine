@@ -183,14 +183,7 @@ impl Parser {
             return Ok(());
         }
         let mut parsed_functions = (0..num_functions)
-            .map(|_| {
-                TypeIdx::parse(i).map(|idx| Function {
-                    type_idx: idx,
-                    locals: Vec::new(),
-                    basic_blocks: Vec::new(),
-                    import: false,
-                })
-            })
+            .map(|_| TypeIdx::parse(i).map(Function::create_empty))
             .collect::<Result<Vec<Function>, ParserError>>()?;
         let max_func_type = parsed_functions.iter().map(|f| f.type_idx).max().unwrap();
         if max_func_type as usize >= self.module.function_types.len() {
@@ -346,6 +339,7 @@ impl Parser {
         if let Some(poison) = ctxt.poison {
             return Err(poison.into());
         }
+        self.module.ir.functions[function_idx].num_vars = ctxt.var_count.load(Ordering::Relaxed);
         self.module.ir.functions[function_idx].basic_blocks = parsed_basic_blocks;
         Ok(())
     }
@@ -392,7 +386,7 @@ impl Parser {
             let mut function_parse_result = self.parse_function(i, function_idx);
             #[cfg(debug_assertions)]
             {
-                let function_name = Function::query_function_name(function_idx, &self.module);
+                let function_name = Function::debug_function_name(function_idx, &self.module);
                 function_parse_result = function_parse_result.map_err(|e| {
                     ParserError::Msg(format!(
                         "Error during parsing of function `{}`: {}",

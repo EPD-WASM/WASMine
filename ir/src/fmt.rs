@@ -35,7 +35,7 @@ pub struct FunctionDisplayContext<'a> {
 
 impl<'a> Display for FunctionDisplayContext<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let name = Function::query_function_name(self.idx, self.module);
+        let name = Function::debug_function_name(self.idx, self.module);
 
         write!(f, "define @{}", name)?;
 
@@ -183,7 +183,7 @@ impl Display for BasicBlockGlueDisplayContext<'_> {
                 format_vars(output_vars)
             ),
             BasicBlockGlue::JmpTable {
-                cond_var,
+                selector_var: cond_var,
                 targets,
                 targets_output_vars,
                 default_target,
@@ -208,8 +208,14 @@ impl Display for BasicBlockGlueDisplayContext<'_> {
                 func_idx,
                 return_bb,
                 call_params,
+                return_vars,
             } => {
-                let function_name = Function::query_function_name(*func_idx as usize, self.module);
+                let function_name = Function::debug_function_name(*func_idx as usize, self.module);
+                match return_vars.len() {
+                    0 => write!(f, "void = ")?,
+                    1 => write!(f, "%{} = ", return_vars[0])?,
+                    _ => write!(f, "({}) = ", format_vars(return_vars))?,
+                }
                 write!(
                     f,
                     "call {}({}) -> bb{}",
@@ -223,15 +229,23 @@ impl Display for BasicBlockGlueDisplayContext<'_> {
                 table_idx,
                 return_bb,
                 call_params,
+                return_vars,
                 ..
-            } => write!(
-                f,
-                "call_indirect (table_{}[%{}])({}) -> bb{}",
-                table_idx,
-                selector_var,
-                format_vars(call_params),
-                return_bb
-            ),
+            } => {
+                match return_vars.len() {
+                    0 => write!(f, "void = ")?,
+                    1 => write!(f, "%{} = ", return_vars[0])?,
+                    _ => write!(f, "({}) = ", format_vars(return_vars))?,
+                }
+                write!(
+                    f,
+                    "call_indirect (table_{}[%{}])({}) -> bb{}",
+                    table_idx,
+                    selector_var,
+                    format_vars(call_params),
+                    return_bb
+                )
+            }
             BasicBlockGlue::Return { return_vars } => {
                 write!(f, "ret {}", format_vars(return_vars))
             }

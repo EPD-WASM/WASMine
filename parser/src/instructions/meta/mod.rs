@@ -12,6 +12,7 @@ pub(crate) fn new_phinode(
     let res = PhiNode {
         inputs,
         out: out.id,
+        r#type: var_type,
     };
     ctxt.push_var(out);
     res

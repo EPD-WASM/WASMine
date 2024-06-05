@@ -4,10 +4,7 @@ use crate::{
 };
 use ir::{
     basic_block::{BasicBlock, BasicBlockGlue, BasicBlockID, BasicBlockStorage},
-    instructions::{
-        meta::{self},
-        Instruction, VariableID,
-    },
+    instructions::{meta, Instruction, Variable, VariableID},
     structs::instruction::ControlInstruction,
     InstructionEncoder,
 };
@@ -146,7 +143,6 @@ fn parse_terminator(
             // TODO: stack should be copied here, so that the block can't alter the stack for the outer block
             let mut nested_blocks =
                 parse_basic_blocks(i, ctxt, labels, first_nested_block_id, None)?;
-            bbs.append(&mut nested_blocks);
 
             // restore outer scope
             labels.truncate(label_depth);
@@ -170,10 +166,24 @@ fn parse_terminator(
                     }
                 }
             }
+            bbs.append(&mut nested_blocks);
 
             let mut after_block_instrs = InstructionEncoder::new();
-            for phi in phis.into_iter() {
-                meta::PhiNode::serialize(phi, &mut after_block_instrs);
+            for (idx, phi) in phis.into_iter().rev().enumerate() {
+                if phi.inputs.len() == 1 {
+                    // if there is only one input, we can just directly use the value from the predecessor bb
+                    debug_assert_eq!(
+                        ctxt.stack.stack[ctxt.stack.stack.len() - 1 - idx].id,
+                        phi.out,
+                    );
+                    let stack_len = ctxt.stack.stack.len();
+                    ctxt.stack.stack[stack_len - 1 - idx] = Variable {
+                        id: phi.inputs[0].1,
+                        type_: phi.r#type,
+                    };
+                } else {
+                    meta::PhiNode::serialize(phi, &mut after_block_instrs);
+                }
             }
 
             // collect all other blocks until the next outside "end"
@@ -301,9 +311,26 @@ fn parse_terminator(
                     }
                 }
             }
+            let mut after_block_instrs = InstructionEncoder::new();
+            for (idx, phi) in phis.into_iter().rev().enumerate() {
+                if phi.inputs.len() == 1 {
+                    // if there is only one input, we can just directly use the value from the predecessor bb
+                    debug_assert_eq!(
+                        ctxt.stack.stack[ctxt.stack.stack.len() - 1 - idx].id,
+                        phi.out
+                    );
+                    let stack_len = ctxt.stack.stack.len();
+                    ctxt.stack.stack[stack_len - 1 - idx] = Variable {
+                        id: phi.inputs[0].1,
+                        type_: phi.r#type,
+                    };
+                } else {
+                    meta::PhiNode::serialize(phi, &mut after_block_instrs);
+                }
+            }
 
             let mut blocks_after_ifelse =
-                parse_basic_blocks(i, ctxt, labels, bb_after_ifelse, None)?;
+                parse_basic_blocks(i, ctxt, labels, bb_after_ifelse, Some(after_block_instrs))?;
             bbs.append(&mut blocks_after_ifelse);
             Ok(bbs)
         }
@@ -377,7 +404,7 @@ fn parse_terminator(
                     })
                     .unzip();
             bb.terminator = BasicBlockGlue::JmpTable {
-                cond_var,
+                selector_var: cond_var,
                 targets: target_bbs,
                 targets_output_vars: target_bbs_out_vars,
                 default_target: default_bb.bb_id,
@@ -479,17 +506,24 @@ fn parse_terminator(
             ctxt.stack
                 .stack
                 .truncate(ctxt.stack.stack.len() - call_params.len());
+
+            let return_vars = func
+                .1
+                .iter()
+                .map(|val| {
+                    let var = ctxt.create_var(*val);
+                    let tmp = var.id;
+                    ctxt.push_var(var);
+                    tmp
+                })
+                .collect();
             bb.terminator = BasicBlockGlue::Call {
                 func_idx,
                 return_bb: cont_bb_id,
                 call_params,
+                return_vars,
             };
             bbs.push(bb);
-
-            for return_var in func.1 {
-                let var = ctxt.create_var(return_var);
-                ctxt.push_var(var);
-            }
 
             let mut cont_bbs = parse_basic_blocks(i, ctxt, labels, cont_bb_id, None)?;
             bbs.append(&mut cont_bbs);
@@ -527,19 +561,26 @@ fn parse_terminator(
             ctxt.stack
                 .stack
                 .truncate(ctxt.stack.stack.len() - call_params.len());
+
+            let return_vars = func_type
+                .1
+                .iter()
+                .map(|val| {
+                    let var = ctxt.create_var(*val);
+                    let tmp = var.id;
+                    ctxt.push_var(var);
+                    tmp
+                })
+                .collect();
             bb.terminator = BasicBlockGlue::CallIndirect {
                 type_idx,
                 table_idx,
                 selector_var,
                 return_bb: cont_bb_id,
                 call_params,
+                return_vars,
             };
             bbs.push(bb);
-
-            for return_var in &func_type.1 {
-                let var = ctxt.create_var(*return_var);
-                ctxt.push_var(var);
-            }
 
             let mut cont_bbs = parse_basic_blocks(i, ctxt, labels, cont_bb_id, None)?;
             bbs.append(&mut cont_bbs);

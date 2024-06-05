@@ -117,7 +117,7 @@ pub enum BasicBlockGlue {
     },
 
     JmpTable {
-        cond_var: VariableID,
+        selector_var: VariableID,
         targets: Vec<BasicBlockID>,
         targets_output_vars: Vec<Vec<VariableID>>,
         default_target: BasicBlockID,
@@ -128,6 +128,7 @@ pub enum BasicBlockGlue {
         func_idx: u32,
         return_bb: BasicBlockID,
         call_params: Vec<VariableID>,
+        return_vars: Vec<VariableID>,
     },
 
     CallIndirect {
@@ -136,6 +137,7 @@ pub enum BasicBlockGlue {
         table_idx: BasicBlockID,
         return_bb: BasicBlockID,
         call_params: Vec<VariableID>,
+        return_vars: Vec<VariableID>,
     },
 
     Return {
