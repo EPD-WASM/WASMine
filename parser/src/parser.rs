@@ -123,6 +123,18 @@ impl Parser {
             return Err(ParserError::Msg("function without code".into()));
         }
         self.is_complete = true;
+
+        // #[cfg(debug_assertions)]
+        // {
+        //     use ir::fmt::IRDisplayContext;
+        //     log::debug!(
+        //         "WASMine IR: -------------------------\n{}-------------------------",
+        //         IRDisplayContext {
+        //             module: &self.module,
+        //             ir: &self.module.ir
+        //         }
+        //     );
+        // }
         Ok(())
     }
 
@@ -132,7 +144,7 @@ impl Parser {
         let name = Name::parse(i)?;
         let name_byte_len = i.pos - reader_pos_safe;
 
-        log::warn!("Skipping parsing of custom section {}", name);
+        log::warn!("Skipping parsing of custom section \"{}\"", name);
         for _ in name_byte_len..section_size {
             let _ = i.read_byte()?;
         }

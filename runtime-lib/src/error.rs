@@ -23,6 +23,6 @@ pub enum RuntimeError {
     ArgumentNumberMismatch(usize, usize),
     #[error("Invalid argument type. Expected: {0}, provided: {1}")]
     InvalidArgumentType(ValType, String),
-    #[error("Interpreter Error: {0}")]
+    #[error("Interpreter error: {0}")]
     InterpreterError(#[from] InterpreterError),
 }

@@ -5,12 +5,14 @@ use wasm_types::*;
 pub struct DropInstruction {}
 
 impl Instruction for DropInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Parametric(ParametricInstructionType::Drop));
+    fn serialize(self, _: &mut InstructionEncoder) {
+        unimplemented!("Control instructions are not serialized.")
     }
 
     fn deserialize(_: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
-        Ok(DropInstruction {})
+        unimplemented!(
+            "Drop instructions are not serialized and can therefore not be deserialized."
+        )
     }
 }
 

@@ -22,7 +22,7 @@ impl<'a> Display for IRDisplayContext<'a> {
                 module: self.module,
                 idx: i,
             };
-            writeln!(f, "{}\n", func)?;
+            writeln!(f, "{}", func)?;
         }
         Ok(())
     }
@@ -131,7 +131,7 @@ impl<'a> Display for BasicBlockDisplayContext<'a> {
                 InstructionType::Variable(VariableInstructionType::GlobalSet) => writeln!(f, "{}", decoder.read::<GlobalSetInstruction>(next_instr_t).unwrap())?,
                 InstructionType::Variable(VariableInstructionType::LocalGet) => writeln!(f, "{}", decoder.read::<LocalGetInstruction>(next_instr_t).unwrap())?,
                 InstructionType::Variable(VariableInstructionType::LocalSet) => writeln!(f, "{}", decoder.read::<LocalSetInstruction>(next_instr_t).unwrap())?,
-                InstructionType::Variable(VariableInstructionType::LocalTee) => writeln!(f, "{}", decoder.read::<TeeLocalInstruction>(next_instr_t).unwrap())?,
+                InstructionType::Variable(VariableInstructionType::LocalTee) => writeln!(f, "{}", decoder.read::<LocalTeeInstruction>(next_instr_t).unwrap())?,
 
                 InstructionType::Meta(MetaInstructionType::PhiNode) => writeln!(f, "{}", decoder.read::<PhiNode>(next_instr_t).unwrap())?,
 
@@ -178,8 +178,8 @@ impl Display for BasicBlockGlueDisplayContext<'_> {
                 f,
                 "jmp (%{} == 0 ? bb{} : bb{})({})",
                 cond_var,
-                target_if_true,
                 target_if_false,
+                target_if_true,
                 format_vars(output_vars)
             ),
             BasicBlockGlue::JmpTable {

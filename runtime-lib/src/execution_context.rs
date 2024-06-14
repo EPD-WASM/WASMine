@@ -28,7 +28,7 @@ impl ExecutionContext {
     }
 }
 
-impl wasm_types::ExecutionContext for ExecutionContext {
+impl runtime_interface::ExecutionContext for ExecutionContext {
     extern "C" fn memory_grow(&self, memory_idx: usize, grow_by: u32) -> i32 {
         let memory = &self.memories[memory_idx];
         let max_memory_size = unsafe { (*self.runtime).config.memories[memory_idx].max_size };

@@ -7,7 +7,7 @@ use wasm_types::FuncIdx;
 mod number_impls;
 mod number_ops;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Number {
     I32(u32),
     I64(u64),
@@ -45,7 +45,7 @@ pub type Vector = u128;
 pub type FunctionReference = FuncIdx;
 pub type ExternReference = u32;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Reference {
     Null,
     Function(FuncIdx),
@@ -62,7 +62,7 @@ impl Display for Reference {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Number(Number),
     Vector(Vector),

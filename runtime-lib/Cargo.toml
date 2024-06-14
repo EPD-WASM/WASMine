@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
-crate-type = ["dylib"]
 bench = false
 
 [dependencies]
@@ -17,3 +16,4 @@ loader = { path = "../loader" }
 interpreter = { path = "../interpreter" }
 libc = "0.2.155"
 log = "0.4.21"
+runtime-interface = { path = "../runtime-interface" }

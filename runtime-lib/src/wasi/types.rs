@@ -503,10 +503,10 @@ pub struct CIOVec {
 }
 
 /// List of scatter/gather vectors.
-pub type IOVecArray<'a> = &'a [IOVec];
+pub type IOVecArray = *const IOVec;
 
 /// List of constant scatter/gather vectors.
-pub type CIOVecArray<'a> = &'a [CIOVec];
+pub type CIOVecArray = *const CIOVec;
 
 /// Relative offset within a file.
 pub type FileDelta = i64;

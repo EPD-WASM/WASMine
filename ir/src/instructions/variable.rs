@@ -110,13 +110,13 @@ impl Display for GlobalSetInstruction {
 }
 
 #[derive(Debug, Clone)]
-pub struct TeeLocalInstruction {
+pub struct LocalTeeInstruction {
     pub local_idx: LocalIdx,
     pub in1: VariableID,
     pub out1: VariableID,
 }
 
-impl Instruction for TeeLocalInstruction {
+impl Instruction for LocalTeeInstruction {
     fn serialize(self, o: &mut InstructionEncoder) {
         o.write_instruction_type(InstructionType::Variable(VariableInstructionType::LocalTee));
         o.write_immediate(self.local_idx);
@@ -128,7 +128,7 @@ impl Instruction for TeeLocalInstruction {
         let local_idx = i.read_immediate()?;
         let in1 = i.read_variable()?;
         let out1 = i.read_variable()?;
-        Ok(TeeLocalInstruction {
+        Ok(LocalTeeInstruction {
             local_idx,
             in1,
             out1,
@@ -136,7 +136,7 @@ impl Instruction for TeeLocalInstruction {
     }
 }
 
-impl Display for TeeLocalInstruction {
+impl Display for LocalTeeInstruction {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
             f,

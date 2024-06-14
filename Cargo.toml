@@ -1,4 +1,4 @@
-workspace = { members = [ "fuzz", "runtime-lib", "interpreter", "ir", "parser", "tests/gen_util", "wasm-types", "loader"] }
+workspace = { members = [ "fuzz", "runtime-lib", "interpreter", "ir", "parser", "tests/gen_util", "wasm-types", "loader", "runtime-interface"] }
 
 [package]
 name = "wasm_rt"
@@ -13,6 +13,8 @@ simplelog = "0.12.2"
 wasm-types = { path = "./wasm-types" }
 parser = { path = "./parser" }
 loader = { path = "./loader" }
+interpreter = { path = "./interpreter" }
+ir = { path = "./ir" }
 log = "0.4.21"
 
 [dev-dependencies]
@@ -20,6 +22,7 @@ wast = "206.0.0"
 gen_util = { path = "./tests/gen_util" }
 criterion = "0.3"
 wasmparser = "0.207.0"
+test-log = "0.2.16"
 
 [[bench]]
 name = "parser_bench"

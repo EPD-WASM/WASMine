@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
+use runtime_interface::{ExecutionContext, GlobalStorage, RTImport};
 use thiserror::Error;
 
-use wasm_types::{ExecutionContext, FuncIdx, GlobalStorage, InstructionType, RTImport};
+use wasm_types::{FuncIdx, InstructionType};
 use {
     ir::instructions::VariableID,
     ir::structs::{module::Module, value::Value},

@@ -160,7 +160,7 @@ pub(crate) fn local_tee(
 
     let out_stack_var = ctxt.create_var(local_var.type_);
 
-    o.write(TeeLocalInstruction {
+    o.write(LocalTeeInstruction {
         local_idx,
         in1: in_stack_var.id,
         out1: out_stack_var.id,

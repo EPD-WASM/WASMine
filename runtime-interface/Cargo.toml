@@ -1,0 +1,7 @@
+[package]
+name = "runtime-interface"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+wasm-types = { path = "../wasm-types" }

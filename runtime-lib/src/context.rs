@@ -2,9 +2,10 @@ use ir::structs::data::DataMode;
 use ir::structs::export::ExportDesc;
 use ir::structs::import::ImportDesc;
 use ir::structs::value::Value;
+use runtime_interface::RTImport;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use wasm_types::{FuncType, RTImport};
+use wasm_types::FuncType;
 
 #[derive(Clone)]
 pub struct RTMemory {
@@ -82,7 +83,7 @@ fn collect_available_imports() -> HashMap<&'static str, RTImport> {
 }
 
 impl RTContext {
-    pub(crate) fn new(module: Module) -> Result<Self, RuntimeError> {
+    pub fn new(module: Module) -> Result<Self, RuntimeError> {
         let mut config = RTContext::default();
         for table in module.tables.iter() {
             config.tables.push(RTTable {
@@ -155,16 +156,19 @@ impl RTContext {
         if let Some(start_func_idx) = self.module.entry_point {
             return Ok(start_func_idx);
         }
-        if let Some(f) = self.exported_functions.get("_start") {
-            return Ok(f.function_idx);
-        }
-        if let Some(f) = self.exported_functions.get("run") {
+        self.find_func("_start")
+            .or_else(|_| self.find_func("run"))
+            .or(Err(RuntimeError::NoStartFunction))
+    }
+
+    pub fn find_func(&self, name: &str) -> Result<u32, RuntimeError> {
+        if let Some(f) = self.exported_functions.get(name) {
             return Ok(f.function_idx);
         }
         Err(RuntimeError::NoStartFunction)
     }
 
-    pub(crate) fn get_function_type(&self, func_idx: u32) -> &FuncType {
+    pub fn get_function_type(&self, func_idx: u32) -> &FuncType {
         &self.module.function_types[self.module.ir.functions[func_idx as usize].type_idx as usize]
     }
 }

@@ -8,3 +8,4 @@ thiserror = "1.0.60"
 wasm-types = { path = "../wasm-types" }
 parser = { path = "../parser" }
 ir = { path = "../ir" }
+runtime-interface = { path = "../runtime-interface" }

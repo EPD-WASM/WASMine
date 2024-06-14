@@ -1,4 +1,4 @@
-use crate::FuncType;
+use wasm_types::FuncType;
 
 pub trait ExecutionContext {
     extern "C" fn memory_grow(&self, memory_idx: usize, grow_by: u32) -> i32;

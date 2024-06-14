@@ -1,5 +1,6 @@
+use runtime_interface::RTImport;
 use std::collections::HashMap;
-use wasm_types::{NumType, RTImport, ValType};
+use wasm_types::{NumType, ValType};
 
 /// Reference: https://github.com/WebAssembly/WASI/blob/89646e96b8f61fc57ae4c7d510d2dce68620e6a4/legacy/preview1/docs.md
 mod functions;

@@ -19,14 +19,14 @@ use wasm_types::{FuncType, NumType, ValType};
     - Data Management / Loading
 */
 mod config;
-mod context;
+pub mod context;
 mod data;
 mod error;
 mod execution_context;
 pub mod globals;
 mod helpers;
 mod memory;
-mod runtime;
+pub mod runtime;
 mod tables;
 mod wasi;
 
@@ -91,52 +91,39 @@ fn parse_input_params_for_function(function_type: &FuncType) -> Result<Vec<Value
     Ok(values)
 }
 
-pub fn run(path: &str) -> u8 {
+fn run_internal(path: &str) -> Result<Vec<Value>, RuntimeError> {
     let path = path::Path::new(path);
     let loader = loader::Loader::from_file(path);
     let parser = parser::Parser::default();
     let module = parser.parse(loader).unwrap();
-    let context = match RTContext::new(module.clone()) {
-        Ok(context) => context,
-        Err(e) => {
-            eprintln!("Error: {}", e);
-            return 1;
-        }
-    };
-    let start_function = match context.query_start_function() {
-        Ok(start_function) => start_function,
-        Err(e) => {
-            eprintln!("Error: {}", e);
-            return 1;
-        }
-    };
+    let context = RTContext::new(module.clone())?;
+    let start_function = context.query_start_function()?;
     let function_type = context.get_function_type(start_function);
-    let input_params = match parse_input_params_for_function(function_type) {
-        Ok(input_params) => input_params,
-        Err(e) => {
-            eprintln!("Error: {}", e);
-            return 1;
-        }
-    };
+    let input_params = parse_input_params_for_function(function_type)?;
     let runtime = Runtime::init(context);
-    let execution_context = match unsafe { (*runtime).create_execution_context() } {
-        Ok(execution_context) => execution_context,
+    let execution_context = unsafe { (*runtime).create_execution_context()? };
+
+    interpreter::Interpreter::new(InterpreterContext::new(module))
+        .run(
+            execution_context,
+            start_function,
+            unsafe { (*runtime).config.imports.clone() },
+            unsafe { (*runtime).globals.clone() },
+            input_params,
+        )
+        .map_err(RuntimeError::InterpreterError)
+}
+
+pub fn run(path: &str) -> u8 {
+    match run_internal(path) {
+        Ok(return_values) => {
+            for v in return_values {
+                log::info!("Result: {}", v);
+            }
+            0
+        }
         Err(e) => {
             eprintln!("Error: {}", e);
-            return 1;
-        }
-    };
-    let res = interpreter::Interpreter::new(InterpreterContext::new(module)).run(
-        execution_context,
-        start_function,
-        unsafe { (*runtime).config.imports.clone() },
-        unsafe { (*runtime).globals.clone() },
-        input_params,
-    );
-    match res {
-        Ok(_) => 0,
-        Err(e) => {
-            eprintln!("Error: {}", RuntimeError::from(e));
             1
         }
     }

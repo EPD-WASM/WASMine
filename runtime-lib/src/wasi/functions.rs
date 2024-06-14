@@ -11,7 +11,7 @@ pub extern "C" fn args_get(argv: Ptr<Ptr<u8>>, argv_buf: Ptr<u8>) -> Result<(), 
 /// #### Results
 /// - `Result<(Size, Size), Errno>`: Returns the number of arguments and the size of the argument string data, or an error.
 #[no_mangle]
-pub extern "C" fn args_sizes_get() -> Result<(Size, Size), Errno> {
+pub extern "C" fn args_sizes_get(out: Ptr<(Size, Size)>) -> Errno {
     unimplemented!()
 }
 
@@ -35,7 +35,7 @@ pub extern "C" fn environ_get(environ: Ptr<Ptr<u8>>, environ_buf: Ptr<u8>) -> Re
 /// #### Results
 /// - `Result<(Size, Size), Errno>`: Returns the number of environment variable arguments and the size of the environment variable data.
 #[no_mangle]
-pub extern "C" fn environ_sizes_get() -> Result<(Size, Size), Errno> {
+pub extern "C" fn environ_sizes_get(out: Ptr<(Size, Size)>) -> Errno {
     unimplemented!()
 }
 
@@ -140,7 +140,7 @@ pub extern "C" fn fd_datasync(fd: FD) -> Result<(), Errno> {
 /// #### Results
 /// - `Result<fdstat, Errno>`: Returns the attributes of the file descriptor if successful, or an error if one occurred.
 #[no_mangle]
-pub extern "C" fn fd_fdstat_get(fd: FD) -> Result<FdStat, Errno> {
+pub extern "C" fn fd_fdstat_get(fd: FD, out: Ptr<FdStat>) -> Errno {
     unimplemented!()
 }
 
@@ -260,11 +260,7 @@ pub extern "C" fn fd_prestat_get(fd: FD) -> Result<PreStat, Errno> {
 /// #### Results
 /// - `Result<(), Errno>`: Returns `Ok(())` if the description is successfully written to the buffer, or an error if one occurred.
 #[no_mangle]
-pub extern "C" fn fd_prestat_dir_name(
-    fd: FD,
-    path: Ptr<libc::c_char>,
-    path_len: Size,
-) -> Result<(), Errno> {
+pub extern "C" fn fd_prestat_dir_name(fd: FD, path: Ptr<libc::c_char>, path_len: Size) -> Errno {
     unimplemented!()
 }
 
@@ -340,8 +336,9 @@ pub extern "C" fn fd_write(fd: FD, iovs: CIOVecArray) -> Result<Size, Errno> {
 pub extern "C" fn path_filestat_get(
     fd: FD,
     flags: LookupFlags,
-    path: String,
-) -> Result<FileStat, Errno> {
+    path: *const libc::c_char,
+    out: Ptr<FileStat>,
+) -> Errno {
     unimplemented!()
 }
 
@@ -364,7 +361,7 @@ pub extern "C" fn path_filestat_get(
 pub extern "C" fn path_open(
     fd: FD,
     dirflags: LookupFlags,
-    path: String,
+    path: *const libc::c_char,
     oflags: OpenFlags,
     fs_rights_base: Rights,
     fs_rights_inheriting: Rights,

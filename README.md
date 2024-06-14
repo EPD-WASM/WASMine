@@ -6,6 +6,11 @@
 
 ## Building
 
+Build Requirements:
+ - rustc 1.78.0
+ - cargo 1.78.0
+ - [LLVM 18.1.6](https://github.com/llvm/llvm-project/releases/tag/llvmorg-18.1.6)
+
 This project uses `cargo` for its project management. Therefore, a development / debug build is created using
 ```sh
 cargo build
@@ -18,6 +23,8 @@ cargo build --release
 ```sh
 cargo run -r
 ```
+
+To select a different LLVM version than your system's default, you may set the `LLVM_SYS_180_PREFIX` environment variable.
 
 ## Testing
 
@@ -73,6 +80,10 @@ package code-handling {
     interpreter -up-> "wasm-types" : use
 
     component loader
+
+    component "llvm-gen"
+    "llvm-gen" -up-> ir : use
+    "llvm-gen" -up-> "wasm-types" : use
 }
 
 package runtime-system {
@@ -81,6 +92,7 @@ package runtime-system {
     component runtime
     runtime -up-> parser : use
     runtime -up-> interpreter : use
+    runtime -up-> "llvm-gen" : use
     runtime -up-> loader : use
     runtime -left-> "WASI-runtime"
 }

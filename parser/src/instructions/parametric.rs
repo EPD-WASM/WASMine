@@ -8,7 +8,6 @@ pub(crate) fn drop(
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     ctxt.pop_var();
-    o.write(DropInstruction {});
     Ok(())
 }
 
