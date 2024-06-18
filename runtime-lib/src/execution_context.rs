@@ -1,17 +1,7 @@
 use crate::{context::RTMemory, error::RuntimeError, memory::MemoryStorage, runtime::Runtime};
 
-/// The only top level datastructure always available to the executing WASM code
-#[repr(C)]
-pub struct ExecutionContext {
-    id: u32,
-
-    runtime: *mut Runtime,
-
-    /// number of current recursion levels, used to prevent stack overflowing
-    recursion_size: u32,
-
-    memories: MemoryStorage,
-}
+#[repr(transparent)]
+pub(crate) struct ExecutionContext(pub(crate) runtime_interface::ExecutionContext);
 
 impl ExecutionContext {
     pub(crate) fn init(
@@ -19,33 +9,59 @@ impl ExecutionContext {
         runtime: *mut Runtime,
         memories_meta: Vec<RTMemory>,
     ) -> Result<Self, RuntimeError> {
-        Ok(Self {
+        let memories = Box::new(MemoryStorage::new(&memories_meta)?);
+        let (memories_ptr, memories_len, memories_cap) = memories.into_raw_parts();
+        Ok(Self(runtime_interface::ExecutionContext {
             id,
-            runtime,
+            runtime: runtime as *mut std::ffi::c_void,
             recursion_size: 0,
-            memories: MemoryStorage::new(&memories_meta)?,
-        })
+            memories_ptr,
+            memories_len,
+            memories_cap,
+        }))
     }
 }
 
-impl runtime_interface::ExecutionContext for ExecutionContext {
-    extern "C" fn memory_grow(&self, memory_idx: usize, grow_by: u32) -> i32 {
-        let memory = &self.memories[memory_idx];
-        let max_memory_size = unsafe { (*self.runtime).config.memories[memory_idx].max_size };
-        memory.grow(grow_by, max_memory_size)
-    }
-    extern "C" fn memory_fill(&self, memory_idx: usize, offset: usize, size: usize, value: u8) {
-        let memory = &self.memories[memory_idx];
-        memory.fill(offset, size, value)
-    }
-    extern "C" fn memory_copy(
-        &self,
-        memory_idx: usize,
-        src_offset: usize,
-        dst_offset: usize,
-        size: usize,
-    ) {
-        let memory = &self.memories[memory_idx];
-        memory.copy(src_offset, dst_offset, size)
-    }
+extern "C" fn memory_grow(ctxt: &ExecutionContext, memory_idx: usize, grow_by: u32) -> i32 {
+    let memories = MemoryStorage::from_raw_parts(
+        ctxt.0.memories_ptr,
+        ctxt.0.memories_len,
+        ctxt.0.memories_cap,
+    );
+    let rt_ptr = ctxt.0.runtime as *mut Runtime;
+    let memory = &memories.0[memory_idx];
+    let max_memory_size = unsafe { (*rt_ptr).config.memories[memory_idx].max_size };
+    memory.grow(grow_by, max_memory_size)
+}
+
+extern "C" fn memory_fill(
+    ctxt: &ExecutionContext,
+    memory_idx: usize,
+    offset: usize,
+    size: usize,
+    value: u8,
+) {
+    let memories = MemoryStorage::from_raw_parts(
+        ctxt.0.memories_ptr,
+        ctxt.0.memories_len,
+        ctxt.0.memories_cap,
+    );
+    let memory = &memories.0[memory_idx];
+    memory.fill(offset, size, value)
+}
+
+extern "C" fn memory_copy(
+    ctxt: &ExecutionContext,
+    memory_idx: usize,
+    src_offset: usize,
+    dst_offset: usize,
+    size: usize,
+) {
+    let memories = MemoryStorage::from_raw_parts(
+        ctxt.0.memories_ptr,
+        ctxt.0.memories_len,
+        ctxt.0.memories_cap,
+    );
+    let memory = &memories.0[memory_idx];
+    memory.copy(src_offset, dst_offset, size)
 }

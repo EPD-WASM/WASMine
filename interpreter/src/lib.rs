@@ -95,7 +95,7 @@ impl Interpreter {
 
     pub fn run(
         &mut self,
-        runtime: impl ExecutionContext,
+        runtime: ExecutionContext,
         function_idx: FuncIdx,
         imports: Vec<RTImport>,
         globals: GlobalStorage,

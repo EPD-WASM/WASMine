@@ -34,10 +34,9 @@ pub const WASM_PAGE_SIZE: u32 = 2_u32.pow(16);
 // maximum amount of wasm pages
 pub const WASM_PAGE_LIMIT: u32 = 2_u32.pow(16);
 // maximal address accessible from 32-bit wasm code
-pub const WASM_MAX_ADDRESS: u32 = 2_u32 + 2_u32 + 15;
+pub const WASM_MAX_ADDRESS: u64 = 2_u64.pow(33) + 15;
 // least amount of reserved intl pages to encorporate max wasm address
-pub const WASM_RESERVED_MEMORY_SIZE: usize =
-    WASM_MAX_ADDRESS.next_multiple_of(INTL_PAGE_SIZE) as usize;
+pub const WASM_RESERVED_MEMORY_SIZE: u64 = WASM_MAX_ADDRESS.next_multiple_of(INTL_PAGE_SIZE as u64);
 // x86 small page size = 4KiB
 pub const INTL_PAGE_SIZE: u32 = 2_u32.pow(12);
 

@@ -1,5 +1,4 @@
 use crate::{error::RuntimeError, helpers::trap, runtime::Runtime};
-use wasm_types::TypeIdx;
 
 impl Runtime {
     /// Resolves indirect call via table
@@ -9,7 +8,7 @@ impl Runtime {
         table_idx: usize,
         type_idx: usize,
         entry_idx: usize,
-    ) -> TypeIdx {
+    ) -> FunctionAddress {
         if table_idx >= self.tables.len() {
             trap()
         }
@@ -24,25 +23,21 @@ impl Runtime {
             trap()
         }
 
-        let func_idx = match table.values[entry_idx] {
-            TableItem::FuncIdx(func_idx) => func_idx,
+        match table.values[entry_idx] {
+            TableItem::Func(func_addr) => func_addr,
             TableItem::Null => trap(),
-            TableItem::ExternIdx(_) => unimplemented!(),
-        };
-        let func_ref = &self.config.module.ir.functions[func_idx as usize];
-        let func_ref_type = &self.config.module.function_types[func_ref.type_idx as usize];
-        if func_ref_type != func_type {
-            trap()
+            TableItem::Extern(_) => unimplemented!(),
         }
-        func_idx
     }
 }
 
-// this type information is also stored in the config. We could therefore omit this whole enum...
+pub(crate) type FunctionAddress = u64;
+
 #[derive(Clone, Copy)]
 pub(crate) enum TableItem {
-    FuncIdx(u32),
-    ExternIdx(u32),
+    // store raw function addresses
+    Func(FunctionAddress),
+    Extern(FunctionAddress),
     Null,
 }
 

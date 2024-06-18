@@ -38,6 +38,17 @@ To select specific test(s), run
 cargo test --test=<test_suit_name> <test_name>
 ```
 
+For better debugging output, run tests single-threaded and get the full logging output:
+```sh
+RUST_LOG=debug cargo test --test=integration_tests -- --nocapture --test-threads=1
+```
+
+You may also enable address and memory sanitizers on tests (requires nightly):
+```sh
+RUSTFLAGS=-Zsanitizer=address cargo +nightly test -Zbuild-std --target x86_64-unknown-linux-gnu --test=integration_tests
+RUSTFLAGS="-Zsanitizer=memory -Zsanitizer-memory-track-origins" cargo +nightly test -Zbuild-std --target x86_64-unknown-linux-gnu --test=integration_tests
+```
+
 ## Fuzzing
 
 To run the fuzzing for our wasm parser:

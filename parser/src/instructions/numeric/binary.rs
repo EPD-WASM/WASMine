@@ -2,8 +2,8 @@ use super::*;
 use wasm_types::*;
 
 fn i_arith(ctxt: &mut C, o: &mut O, op: IBinaryOp, type_: NumType) -> PR {
-    let in1 = ctxt.pop_var_with_type(&ValType::Number(type_));
     let in2 = ctxt.pop_var_with_type(&ValType::Number(type_));
+    let in1 = ctxt.pop_var_with_type(&ValType::Number(type_));
     let out = ctxt.create_var(ValType::Number(type_));
     o.write(IBinaryInstruction {
         types: type_,
@@ -17,8 +17,8 @@ fn i_arith(ctxt: &mut C, o: &mut O, op: IBinaryOp, type_: NumType) -> PR {
 }
 
 fn f_arith(ctxt: &mut C, o: &mut O, op: FBinaryOp, type_: NumType) -> PR {
-    let in1 = ctxt.pop_var_with_type(&ValType::Number(type_));
     let in2 = ctxt.pop_var_with_type(&ValType::Number(type_));
+    let in1 = ctxt.pop_var_with_type(&ValType::Number(type_));
     let out = ctxt.create_var(ValType::Number(type_));
     o.write(FBinaryInstruction {
         types: type_,

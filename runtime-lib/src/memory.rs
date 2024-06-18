@@ -1,3 +1,4 @@
+use std::mem::ManuallyDrop;
 use std::ops::Index;
 
 use crate::context::RTMemory;
@@ -7,31 +8,29 @@ use nix::errno::Errno;
 use nix::libc::mprotect;
 use nix::{errno, libc};
 
-pub(crate) struct MemoryInstance {
-    data: *mut u8,
-    size: u32,
-}
+#[repr(transparent)]
+pub(crate) struct MemoryInstance(pub(crate) runtime_interface::MemoryInstance);
 
 impl MemoryInstance {
     pub(crate) fn new(data: *mut u8, size: u32) -> Self {
-        Self { data, size }
+        Self(runtime_interface::MemoryInstance { data, size })
     }
 
     pub(crate) fn grow(&self, grow_by: u32, max_memory_size: u32) -> i32 {
         // larger than 2**32 = 4GiB?
-        if self.size + grow_by > 2_u32.pow(16) {
+        if self.0.size + grow_by > 2_u32.pow(16) {
             return -1;
         }
         // larger than memory::limits::max_size?
-        if self.size + grow_by > max_memory_size {
+        if self.0.size + grow_by > max_memory_size {
             return -1;
         }
 
         // increase size!
-        let new_size = (self.size + grow_by) * WASM_PAGE_SIZE;
+        let new_size = (self.0.size + grow_by) * WASM_PAGE_SIZE;
         let res = unsafe {
             mprotect(
-                self.data as *mut libc::c_void,
+                self.0.data as *mut libc::c_void,
                 new_size as usize,
                 libc::PROT_READ | libc::PROT_WRITE,
             )
@@ -40,7 +39,7 @@ impl MemoryInstance {
             println!("Memory grow failed: {}", errno::Errno::last());
             return -1;
         }
-        self.size as i32
+        self.0.size as i32
     }
 
     pub(crate) fn fill(&self, offset: usize, size: usize, value: u8) {
@@ -54,17 +53,23 @@ impl MemoryInstance {
 
 impl Drop for MemoryInstance {
     fn drop(&mut self) {
-        if unsafe { libc::munmap(self.data as *mut libc::c_void, WASM_RESERVED_MEMORY_SIZE) } != 0 {
+        if unsafe {
+            libc::munmap(
+                self.0.data as *mut libc::c_void,
+                WASM_RESERVED_MEMORY_SIZE as usize,
+            )
+        } != 0
+        {
             println!(
                 "Failed to unmap memory at 0x{:x}: {}",
-                self.data as usize,
+                self.0.data as usize,
                 Errno::last()
             );
         }
     }
 }
 
-pub(crate) struct MemoryStorage(Vec<MemoryInstance>);
+pub(crate) struct MemoryStorage(pub(crate) Vec<MemoryInstance>);
 
 impl MemoryStorage {
     pub(crate) fn new(memories_meta: &Vec<RTMemory>) -> Result<Self, RuntimeError> {
@@ -73,7 +78,7 @@ impl MemoryStorage {
             let memory_ptr = unsafe {
                 libc::mmap(
                     core::ptr::null_mut::<libc::c_void>(),
-                    WASM_RESERVED_MEMORY_SIZE,
+                    WASM_RESERVED_MEMORY_SIZE as usize,
                     libc::PROT_NONE,
                     libc::MAP_ANONYMOUS | libc::MAP_PRIVATE | libc::MAP_NORESERVE,
                     -1,
@@ -99,6 +104,26 @@ impl MemoryStorage {
             ))
         }
         Ok(Self(memories))
+    }
+
+    pub(crate) fn into_raw_parts(
+        mut self,
+    ) -> (*mut runtime_interface::MemoryInstance, usize, usize) {
+        let length = self.0.len();
+        let capacity = self.0.capacity();
+        let ptr = self.0.as_mut_ptr() as *mut runtime_interface::MemoryInstance;
+        std::mem::forget(self.0);
+        (ptr, length, capacity)
+    }
+
+    pub(crate) fn from_raw_parts(
+        ptr: *mut runtime_interface::MemoryInstance,
+        len: usize,
+        capacity: usize,
+    ) -> ManuallyDrop<Self> {
+        ManuallyDrop::new(Self(unsafe {
+            Vec::from_raw_parts(ptr as *mut MemoryInstance, len, capacity)
+        }))
     }
 }
 

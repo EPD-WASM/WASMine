@@ -147,6 +147,13 @@ impl RTContext {
                 )));
             }
         }
+        for memory in module.memories.iter() {
+            config.memories.push(RTMemory {
+                min_size: memory.limits.min,
+                max_size: memory.limits.max.unwrap_or(WASM_PAGE_LIMIT),
+                shared: false,
+            })
+        }
 
         config.module = module;
         Ok(config)

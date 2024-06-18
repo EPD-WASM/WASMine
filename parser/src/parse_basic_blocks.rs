@@ -91,11 +91,16 @@ fn parse_until_next_end(
 
 #[derive(Debug, Clone)]
 pub(crate) struct Label {
+    // id of the basic block jump target
     pub(crate) bb_id: BasicBlockID,
     pub(crate) result_type: ResType,
+
+    // currently only required for loops
+    pub(crate) loop_after_bb_id: Option<BasicBlockID>,
+    pub(crate) loop_after_result_type: Option<ResType>,
 }
 
-fn parse_terminator(
+pub(crate) fn parse_terminator(
     i: &mut WasmStreamReader,
     instruction_storage: BasicBlockStorage,
     ctxt: &mut Context,
@@ -110,11 +115,6 @@ fn parse_terminator(
 
             let after_block_instr_bb_id = BasicBlock::next_id();
             let first_nested_block_id = BasicBlock::next_id();
-            let jump_target_bb_id = if is_loop {
-                first_nested_block_id
-            } else {
-                after_block_instr_bb_id
-            };
 
             // complete leading bb
             let mut pre_block_instr_bb = BasicBlock::new(start_id);
@@ -129,13 +129,23 @@ fn parse_terminator(
             let label_depth = labels.len();
 
             // add next label to jump to (one more recursion level)
-            let block_label = Label {
-                bb_id: jump_target_bb_id,
-                result_type: if !is_loop {
-                    get_block_return_signature(ctxt, block_type.clone())
-                } else {
-                    Vec::new()
-                },
+            let block_label = if is_loop {
+                Label {
+                    bb_id: first_nested_block_id,
+                    result_type: get_block_input_signature(ctxt, block_type.clone()),
+                    loop_after_bb_id: Some(after_block_instr_bb_id),
+                    loop_after_result_type: Some(get_block_return_signature(
+                        ctxt,
+                        block_type.clone(),
+                    )),
+                }
+            } else {
+                Label {
+                    bb_id: after_block_instr_bb_id,
+                    result_type: get_block_return_signature(ctxt, block_type.clone()),
+                    loop_after_bb_id: None,
+                    loop_after_result_type: None,
+                }
             };
             labels.push(block_label.clone());
 
@@ -148,53 +158,63 @@ fn parse_terminator(
             labels.truncate(label_depth);
             ctxt.stack.unstash();
 
-            // parse all jumps outside of the block to the block lable as phis (TODO: optimize this linear search through a predecessor list)
-            let mut phis = get_block_return_signature(ctxt, block_type.clone())
-                .into_iter()
-                .map(|val| new_phinode(Vec::new(), val, ctxt))
-                .collect::<Vec<_>>();
-            for parsed_block in nested_blocks.iter() {
-                if parsed_block
-                    .successors()
-                    .any(|s| s == after_block_instr_bb_id)
-                {
-                    for (phi, bb_out_var) in phis
-                        .iter_mut()
-                        .zip(parsed_block.target_out_vars(after_block_instr_bb_id))
+            let after_blocks_have_at_least_one_predecessor = nested_blocks
+                .iter()
+                .any(|bb| bb.successors().any(|s| s == after_block_instr_bb_id));
+            if after_blocks_have_at_least_one_predecessor {
+                // parse all jumps outside of the block to the block lable as phis (TODO: optimize this linear search through a predecessor list)
+                let mut phis = get_block_return_signature(ctxt, block_type.clone())
+                    .into_iter()
+                    .map(|val| new_phinode(Vec::new(), val, ctxt))
+                    .collect::<Vec<_>>();
+                for parsed_block in nested_blocks.iter() {
+                    if parsed_block
+                        .successors()
+                        .any(|s| s == after_block_instr_bb_id)
                     {
-                        phi.inputs.push((parsed_block.id, bb_out_var));
+                        for (phi, bb_out_var) in phis
+                            .iter_mut()
+                            .zip(parsed_block.target_out_vars(after_block_instr_bb_id))
+                        {
+                            phi.inputs.push((parsed_block.id, bb_out_var));
+                        }
                     }
                 }
-            }
-            bbs.append(&mut nested_blocks);
-
-            let mut after_block_instrs = InstructionEncoder::new();
-            for (idx, phi) in phis.into_iter().rev().enumerate() {
-                if phi.inputs.len() == 1 {
-                    // if there is only one input, we can just directly use the value from the predecessor bb
-                    debug_assert_eq!(
-                        ctxt.stack.stack[ctxt.stack.stack.len() - 1 - idx].id,
-                        phi.out,
-                    );
-                    let stack_len = ctxt.stack.stack.len();
-                    ctxt.stack.stack[stack_len - 1 - idx] = Variable {
-                        id: phi.inputs[0].1,
-                        type_: phi.r#type,
-                    };
-                } else {
-                    meta::PhiNode::serialize(phi, &mut after_block_instrs);
+                bbs.append(&mut nested_blocks);
+                let mut after_block_instrs = InstructionEncoder::new();
+                for (idx, phi) in phis.into_iter().rev().enumerate() {
+                    if phi.inputs.is_empty() {
+                        continue;
+                    }
+                    if phi.inputs.len() == 1 {
+                        // if there is only one input, we can just directly use the value from the predecessor bb
+                        debug_assert_eq!(
+                            ctxt.stack.stack[ctxt.stack.stack.len() - 1 - idx].id,
+                            phi.out,
+                        );
+                        let stack_len = ctxt.stack.stack.len();
+                        ctxt.stack.stack[stack_len - 1 - idx] = Variable {
+                            id: phi.inputs[0].1,
+                            type_: phi.r#type,
+                        };
+                    } else {
+                        meta::PhiNode::serialize(phi, &mut after_block_instrs);
+                    }
                 }
-            }
 
-            // collect all other blocks until the next outside "end"
-            let mut after_blocks = parse_basic_blocks(
-                i,
-                ctxt,
-                labels,
-                after_block_instr_bb_id,
-                Some(after_block_instrs),
-            )?;
-            bbs.append(&mut after_blocks);
+                // collect all other blocks until the next outside "end"
+                let mut after_blocks = parse_basic_blocks(
+                    i,
+                    ctxt,
+                    labels,
+                    after_block_instr_bb_id,
+                    Some(after_block_instrs),
+                )?;
+                bbs.append(&mut after_blocks);
+            } else {
+                bbs.append(&mut nested_blocks);
+                parse_until_next_end(i, ctxt, labels, &mut bbs)?;
+            }
             Ok(bbs)
         }
 
@@ -211,6 +231,8 @@ fn parse_terminator(
             // add next label to jump to (one more recursion level)
             let block_label = Label {
                 bb_id: bb_after_ifelse,
+                loop_after_bb_id: None,
+                loop_after_result_type: None,
                 result_type: get_block_return_signature(ctxt, block_type.clone()),
             };
             labels.push(block_label.clone());
@@ -448,10 +470,16 @@ fn parse_terminator(
                 _ => {
                     // return from block, jump to last label
                     let last_label = labels.last().unwrap();
-                    let output_vars =
-                        validate_and_extract_result_from_stack(ctxt, &last_label.result_type);
+
+                    let output_vars = validate_and_extract_result_from_stack(
+                        ctxt,
+                        last_label
+                            .loop_after_result_type
+                            .as_ref()
+                            .unwrap_or(&last_label.result_type),
+                    );
                     bb.terminator = BasicBlockGlue::Jmp {
-                        target: last_label.bb_id,
+                        target: last_label.loop_after_bb_id.unwrap_or(last_label.bb_id),
                         output_vars,
                     }
                 }

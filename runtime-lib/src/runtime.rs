@@ -21,11 +21,14 @@ impl Runtime {
         Box::into_raw(runtime)
     }
 
-    pub fn create_execution_context(&mut self) -> Result<ExecutionContext, RuntimeError> {
+    pub fn create_execution_context(
+        &mut self,
+    ) -> Result<runtime_interface::ExecutionContext, RuntimeError> {
         ExecutionContext::init(
             unsafe { libc::gettid() } as u32,
             self,
             self.config.memories.clone(),
         )
+        .map(|ctxt| ctxt.0)
     }
 }
