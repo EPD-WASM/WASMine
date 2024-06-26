@@ -16,7 +16,7 @@ impl MemoryInstance {
         Self(runtime_interface::MemoryInstance { data, size })
     }
 
-    pub(crate) fn grow(&self, grow_by: u32, max_memory_size: u32) -> i32 {
+    pub(crate) fn grow(&mut self, grow_by: u32, max_memory_size: u32) -> i32 {
         // larger than 2**32 = 4GiB?
         if self.0.size + grow_by > 2_u32.pow(16) {
             return -1;
@@ -39,7 +39,9 @@ impl MemoryInstance {
             println!("Memory grow failed: {}", errno::Errno::last());
             return -1;
         }
-        self.0.size as i32
+        let old_size = self.0.size;
+        self.0.size += grow_by;
+        old_size as i32
     }
 
     pub(crate) fn fill(&self, offset: usize, size: usize, value: u8) {
@@ -73,7 +75,7 @@ pub(crate) struct MemoryStorage(pub(crate) Vec<MemoryInstance>);
 
 impl MemoryStorage {
     pub(crate) fn new(memories_meta: &Vec<RTMemory>) -> Result<Self, RuntimeError> {
-        let mut memories = Vec::new();
+        let mut memories = Vec::with_capacity(1);
         for memory_desc in memories_meta {
             let memory_ptr = unsafe {
                 libc::mmap(

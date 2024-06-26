@@ -2,7 +2,9 @@
 
 use std::fmt::{Display, Formatter};
 
-use wasm_types::FuncIdx;
+use wasm_types::{FuncIdx, NumType, RefType, ValType};
+
+use crate::utils::numeric_transmutes::Bit64;
 
 mod number_impls;
 mod number_ops;
@@ -75,6 +77,24 @@ impl Display for Value {
             Value::Number(n) => write!(f, "{}", *n),
             Value::Vector(v) => write!(f, "{}", v),
             Value::Reference(r) => write!(f, "{}", *r),
+        }
+    }
+}
+
+impl Value {
+    pub fn from_generic(val_type: ValType, val: u64) -> Self {
+        match val_type {
+            ValType::Number(NumType::I32) => Value::Number(Number::I32(val.trans_u32())),
+            ValType::Number(NumType::I64) => Value::Number(Number::I64(val)),
+            ValType::Number(NumType::F32) => Value::Number(Number::F32(val.trans_f32())),
+            ValType::Number(NumType::F64) => Value::Number(Number::F64(val.trans_f64())),
+            ValType::Reference(RefType::ExternReference) => {
+                Value::Reference(Reference::Extern(val.trans_u32()))
+            }
+            ValType::Reference(RefType::FunctionReference) => {
+                Value::Reference(Reference::Function(val.trans_u32()))
+            }
+            ValType::VecType => Value::Vector(val.trans_u64() as u128),
         }
     }
 }

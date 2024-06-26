@@ -107,7 +107,7 @@ fn run_internal(path: &str) -> Result<Vec<Value>, RuntimeError> {
             execution_context,
             start_function,
             unsafe { (*runtime).config.imports.clone() },
-            unsafe { (*runtime).globals.clone() },
+            unsafe { (*runtime).globals.0.clone() },
             input_params,
         )
         .map_err(RuntimeError::InterpreterError)

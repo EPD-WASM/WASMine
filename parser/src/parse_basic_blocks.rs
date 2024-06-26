@@ -1,30 +1,33 @@
 use crate::{
-    context::Context, error::ParserError, instructions::meta::new_phinode, stack::ParserStack,
+    context::Context, error::ParserError, function_builder::FunctionBuilder, stack::ParserStack,
     wasm_stream_reader::WasmStreamReader,
 };
 use ir::{
-    basic_block::{BasicBlock, BasicBlockGlue, BasicBlockID, BasicBlockStorage},
-    instructions::{meta, Instruction, Variable, VariableID},
+    basic_block::{BasicBlock, BasicBlockGlue, BasicBlockID},
+    instructions::{Variable, VariableID},
     structs::instruction::ControlInstruction,
-    InstructionEncoder,
 };
 use wasm_types::instruction::BlockType;
 use wasm_types::{NumType, RefType, ResType, ValType};
 
 use super::{opcode_tbl::LVL1_JMP_TABLE, ParseResult, ValidationError};
 
-fn setup_block_stack(block_type: BlockType, ctxt: &mut Context) {
+fn setup_block_stack(block_type: BlockType, ctxt: &mut Context) -> Vec<VariableID> {
     let input_signature = get_block_input_signature(ctxt, block_type);
     let input_length = input_signature.len();
     // divide stack into block stack (input params) and remaining stack (output params)
     ctxt.stack.stash_with_keep(input_length);
+    let mut input_vars = Vec::new();
     for (i, input_var) in input_signature.iter().enumerate() {
         if ctxt.stack[i].type_ != *input_var {
             ctxt.poison(ValidationError::Msg(
                 "mismatched input signature in target label".to_string(),
             ))
+        } else {
+            input_vars.push(ctxt.stack[i].id);
         }
     }
+    input_vars
 }
 
 fn get_block_return_signature(ctxt: &Context, block_type: BlockType) -> ResType {
@@ -53,8 +56,8 @@ fn validate_and_extract_result_from_stack(
             "stack underflow in target label".to_string(),
         ));
     }
-    for (i, return_value) in out_params.iter().rev().enumerate() {
-        let idx = stack_depth - i - 1;
+    for (i, return_value) in out_params.iter().enumerate() {
+        let idx = stack_depth - out_params.len() + i;
         let stack_var = &ctxt.stack[idx];
         if stack_var.type_ != *return_value {
             return ctxt.poison(ValidationError::Msg(
@@ -70,20 +73,22 @@ fn parse_until_next_end(
     i: &mut WasmStreamReader,
     ctxt: &mut Context,
     labels: &mut Vec<Label>,
-    bbs: &mut Vec<BasicBlock>,
+    builder: &mut FunctionBuilder,
 ) -> ParseResult {
     let mut saved_stack = ParserStack::new();
+    let saved_poison = ctxt.poison.take();
+    let mut trash_builder = FunctionBuilder::new();
+    trash_builder.start_bb();
     std::mem::swap(&mut saved_stack, &mut ctxt.stack);
-    let parsed_blocks = parse_basic_blocks(i, ctxt, labels, BasicBlock::next_id(), None)?;
-    ctxt.poison = None;
+    parse_basic_blocks(i, ctxt, labels, &mut trash_builder)?;
+    ctxt.poison = saved_poison;
     ctxt.stack = saved_stack;
 
     // we can forget parsed basic blocks IFF we didn't parse an else-tag
-    if let Some(last_parsed_bb) = parsed_blocks.last() {
+    if let Some(last_parsed_bb) = trash_builder.current_bb_try_get() {
         if let BasicBlockGlue::ElseMarker { output_vars } = last_parsed_bb.terminator.clone() {
-            let mut empty_bb = BasicBlock::new(BasicBlock::next_id());
-            empty_bb.terminator = BasicBlockGlue::ElseMarker { output_vars };
-            bbs.push(empty_bb);
+            builder.start_bb();
+            builder.terminate_else(output_vars);
         }
     }
     Ok(())
@@ -100,177 +105,166 @@ pub(crate) struct Label {
     pub(crate) loop_after_result_type: Option<ResType>,
 }
 
-pub(crate) fn parse_terminator(
+fn parse_terminator(
     i: &mut WasmStreamReader,
-    instruction_storage: BasicBlockStorage,
     ctxt: &mut Context,
     labels: &mut Vec<Label>,
-    start_id: u32,
-) -> Result<Vec<BasicBlock>, ParserError> {
-    let mut bbs = Vec::new();
-    match instruction_storage.terminator.clone() {
-        ControlInstruction::Block(block_type) | ControlInstruction::Loop(block_type) => {
-            let is_loop = matches!(instruction_storage.terminator, ControlInstruction::Loop(_));
-            setup_block_stack(block_type.clone(), ctxt);
-
-            let after_block_instr_bb_id = BasicBlock::next_id();
-            let first_nested_block_id = BasicBlock::next_id();
+    builder: &mut FunctionBuilder,
+) -> Result<(), ParserError> {
+    match builder.current_bb_terminator().clone() {
+        ControlInstruction::Block(block_type) => {
+            let block_input_vars = setup_block_stack(block_type.clone(), ctxt);
 
             // complete leading bb
-            let mut pre_block_instr_bb = BasicBlock::new(start_id);
-            pre_block_instr_bb.instructions = instruction_storage;
-            pre_block_instr_bb.terminator = BasicBlockGlue::Jmp {
-                target: first_nested_block_id,
-                output_vars: Vec::new(),
-            };
-            bbs.push(pre_block_instr_bb);
+            let first_nested_block_id = BasicBlock::next_id();
+            builder.terminate_jmp(first_nested_block_id, block_input_vars);
 
             // save label stack size outside of block
             let label_depth = labels.len();
 
             // add next label to jump to (one more recursion level)
-            let block_label = if is_loop {
-                Label {
-                    bb_id: first_nested_block_id,
-                    result_type: get_block_input_signature(ctxt, block_type.clone()),
-                    loop_after_bb_id: Some(after_block_instr_bb_id),
-                    loop_after_result_type: Some(get_block_return_signature(
-                        ctxt,
-                        block_type.clone(),
-                    )),
-                }
-            } else {
-                Label {
-                    bb_id: after_block_instr_bb_id,
-                    result_type: get_block_return_signature(ctxt, block_type.clone()),
-                    loop_after_bb_id: None,
-                    loop_after_result_type: None,
-                }
+            let after_block_bb_id = BasicBlock::next_id();
+            let block_label = Label {
+                bb_id: after_block_bb_id,
+                result_type: get_block_return_signature(ctxt, block_type.clone()),
+                loop_after_bb_id: None,
+                loop_after_result_type: None,
             };
             labels.push(block_label.clone());
 
+            builder.reserve_bb_with_phis(
+                after_block_bb_id,
+                ctxt,
+                get_block_return_signature(ctxt, block_type.clone()),
+            );
+
             // parse block instructions until the block's "end"
-            // TODO: stack should be copied here, so that the block can't alter the stack for the outer block
-            let mut nested_blocks =
-                parse_basic_blocks(i, ctxt, labels, first_nested_block_id, None)?;
+            builder.start_bb_with_id(first_nested_block_id);
+            parse_basic_blocks(i, ctxt, labels, builder)?;
 
             // restore outer scope
             labels.truncate(label_depth);
             ctxt.stack.unstash();
 
-            let after_blocks_have_at_least_one_predecessor = nested_blocks
-                .iter()
-                .any(|bb| bb.successors().any(|s| s == after_block_instr_bb_id));
-            if after_blocks_have_at_least_one_predecessor {
-                // parse all jumps outside of the block to the block lable as phis (TODO: optimize this linear search through a predecessor list)
-                let mut phis = get_block_return_signature(ctxt, block_type.clone())
-                    .into_iter()
-                    .map(|val| new_phinode(Vec::new(), val, ctxt))
-                    .collect::<Vec<_>>();
-                for parsed_block in nested_blocks.iter() {
-                    if parsed_block
-                        .successors()
-                        .any(|s| s == after_block_instr_bb_id)
-                    {
-                        for (phi, bb_out_var) in phis
-                            .iter_mut()
-                            .zip(parsed_block.target_out_vars(after_block_instr_bb_id))
-                        {
-                            phi.inputs.push((parsed_block.id, bb_out_var));
-                        }
-                    }
-                }
-                bbs.append(&mut nested_blocks);
-                let mut after_block_instrs = InstructionEncoder::new();
-                for (idx, phi) in phis.into_iter().rev().enumerate() {
-                    if phi.inputs.is_empty() {
-                        continue;
-                    }
-                    if phi.inputs.len() == 1 {
-                        // if there is only one input, we can just directly use the value from the predecessor bb
-                        debug_assert_eq!(
-                            ctxt.stack.stack[ctxt.stack.stack.len() - 1 - idx].id,
-                            phi.out,
-                        );
-                        let stack_len = ctxt.stack.stack.len();
-                        ctxt.stack.stack[stack_len - 1 - idx] = Variable {
-                            id: phi.inputs[0].1,
-                            type_: phi.r#type,
-                        };
-                    } else {
-                        meta::PhiNode::serialize(phi, &mut after_block_instrs);
-                    }
-                }
+            // put phis onto stack for block tail / bbs after block
+            builder.continue_bb(after_block_bb_id);
+            builder.put_phi_inputs_on_stack(ctxt);
 
-                // collect all other blocks until the next outside "end"
-                let mut after_blocks = parse_basic_blocks(
-                    i,
-                    ctxt,
-                    labels,
-                    after_block_instr_bb_id,
-                    Some(after_block_instrs),
-                )?;
-                bbs.append(&mut after_blocks);
-            } else {
-                bbs.append(&mut nested_blocks);
-                parse_until_next_end(i, ctxt, labels, &mut bbs)?;
-            }
-            Ok(bbs)
+            // collect all other blocks until the next outside "end"
+            parse_basic_blocks(i, ctxt, labels, builder)?;
         }
 
-        ControlInstruction::IfElse(block_type) => {
-            let mut pred_bb: BasicBlock = BasicBlock::new(start_id);
-            pred_bb.instructions = instruction_storage;
-            let cond_var = ctxt.pop_var_with_type(&ValType::Number(NumType::I32)).id;
+        ControlInstruction::Loop(block_type) => {
+            let block_input_vars = setup_block_stack(block_type.clone(), ctxt);
+            let leading_bb_id = builder.current_bb_get().id;
 
-            let bb_after_ifelse = BasicBlock::next_id();
+            let loop_hdr_bb_id = BasicBlock::next_id();
+            let loop_body_bb_id = BasicBlock::next_id();
+            let loop_exit_bb_id = BasicBlock::next_id();
+
+            // loop entry
+            {
+                builder.reserve_bb_with_phis(
+                    loop_hdr_bb_id,
+                    ctxt,
+                    get_block_input_signature(ctxt, block_type.clone()),
+                );
+                builder.replace_phi_inputs_on_stack(ctxt);
+                builder.terminate_jmp(
+                    loop_body_bb_id,
+                    builder
+                        .current_bb_get()
+                        .inputs
+                        .iter()
+                        .map(|phi| phi.out)
+                        .collect(),
+                );
+            }
+
+            // loop exit
+            builder.reserve_bb_with_phis(
+                loop_exit_bb_id,
+                ctxt,
+                get_block_return_signature(ctxt, block_type.clone()),
+            );
+
+            // complete leading bb
+            builder.continue_bb(leading_bb_id);
+            builder.terminate_jmp(loop_hdr_bb_id, block_input_vars);
 
             // save label stack size outside of block
             let label_depth = labels.len();
 
             // add next label to jump to (one more recursion level)
             let block_label = Label {
-                bb_id: bb_after_ifelse,
-                loop_after_bb_id: None,
-                loop_after_result_type: None,
-                result_type: get_block_return_signature(ctxt, block_type.clone()),
+                bb_id: loop_hdr_bb_id,
+                result_type: get_block_input_signature(ctxt, block_type.clone()),
+                loop_after_bb_id: Some(loop_exit_bb_id),
+                loop_after_result_type: Some(get_block_return_signature(ctxt, block_type.clone())),
             };
             labels.push(block_label.clone());
 
-            let input_signature = get_block_input_signature(ctxt, block_type.clone());
-            let input_length = input_signature.len();
-            let mut input_vars = Vec::new();
-            for (idx, val) in input_signature.into_iter().enumerate() {
-                let opt = ctxt.stack.get(ctxt.stack.len() - 1 - idx).cloned();
-                match opt {
-                    None => ctxt.poison(ValidationError::Msg(
-                        "stack underflow in target label".to_string(),
-                    )),
-                    Some(var) if var.type_ != val => ctxt.poison(ValidationError::Msg(
-                        "mismatched input signature in target label".to_string(),
-                    )),
-                    Some(var) => input_vars.push(var),
-                }
-            }
-            ctxt.stack.stash_with_keep(input_length);
+            // parse block instructions until the block's "end"
+            // TODO: stack should be copied here, so that the block can't alter the stack for the outer block
+            builder.start_bb_with_id(loop_body_bb_id);
+            parse_basic_blocks(i, ctxt, labels, builder)?;
+
+            // restore outer scope
+            labels.truncate(label_depth);
+            ctxt.stack.unstash();
+
+            // collect all other blocks until the next outside "end"
+            builder.continue_bb(loop_exit_bb_id);
+            builder.put_phi_inputs_on_stack(ctxt);
+            parse_basic_blocks(i, ctxt, labels, builder)?;
+        }
+
+        ControlInstruction::IfElse(block_type) => {
+            let pred_bb_id = builder.current_bb_get().id;
+            let cond_var = ctxt.pop_var_with_type(&ValType::Number(NumType::I32)).id;
+            let return_signature = get_block_return_signature(ctxt, block_type.clone());
+
+            let if_else_exit_bb = BasicBlock::next_id();
+            builder.reserve_bb_with_phis(if_else_exit_bb, ctxt, return_signature.clone());
+
+            // save label stack size outside of block
+            let label_depth = labels.len();
+
+            // add next label to jump to (one more recursion level)
+            let block_label = Label {
+                bb_id: if_else_exit_bb,
+                loop_after_bb_id: None,
+                loop_after_result_type: None,
+                result_type: return_signature.clone(),
+            };
+            labels.push(block_label.clone());
+
+            let block_input_vars = setup_block_stack(block_type.clone(), ctxt);
 
             let target_if_true = BasicBlock::next_id();
-            let mut blocks_for_true_path =
-                parse_basic_blocks(i, ctxt, labels, target_if_true, None)?;
+            builder.start_bb_with_id(target_if_true);
+            parse_basic_blocks(i, ctxt, labels, builder)?;
+
             if let BasicBlockGlue::ElseMarker {
                 output_vars: ref end_of_then_out_vars,
-            } = blocks_for_true_path.last().unwrap().terminator
+            } = builder.current_bb_get().terminator
             {
-                // if-else-end
-                blocks_for_true_path.last_mut().unwrap().terminator = BasicBlockGlue::Jmp {
-                    target: bb_after_ifelse,
-                    output_vars: end_of_then_out_vars.clone(),
-                };
+                if end_of_then_out_vars.len() != return_signature.len() {
+                    // this is only a marker block and it only means trouble keeping it
+                    builder.eliminate_current_bb();
+                } else {
+                    // if-else-end -> overwrite elsemarker (= end of "then" block) with direct jmp to after if-else
+                    builder.terminate_jmp(if_else_exit_bb, end_of_then_out_vars.clone());
+                }
                 // restore state from if-statement
                 ctxt.stack.unstash();
                 ctxt.stack.stash();
-                for var in input_vars.into_iter().rev() {
-                    ctxt.push_var(var);
+                for (var, type_) in block_input_vars
+                    .iter()
+                    .zip(get_block_input_signature(ctxt, block_type))
+                    .rev()
+                {
+                    ctxt.push_var(Variable { id: *var, type_ });
                 }
 
                 labels.truncate(label_depth);
@@ -278,135 +272,81 @@ pub(crate) fn parse_terminator(
 
                 // parse "else" branch
                 let target_if_false = BasicBlock::next_id();
-                let mut blocks_for_false_path =
-                    parse_basic_blocks(i, ctxt, labels, target_if_false, None)?;
+                builder.start_bb_with_id(target_if_false);
+                parse_basic_blocks(i, ctxt, labels, builder)?;
 
-                pred_bb.terminator = BasicBlockGlue::JmpCond {
+                builder.continue_bb(pred_bb_id);
+                builder.terminate_jmp_cond(
                     cond_var,
                     target_if_true,
                     target_if_false,
-                    output_vars: Vec::new(),
-                };
-                bbs.push(pred_bb);
-                bbs.append(&mut blocks_for_true_path);
-                bbs.append(&mut blocks_for_false_path);
+                    block_input_vars,
+                );
             } else {
                 // if-end (no else)
                 debug_assert!(
                     matches!(
-                        blocks_for_true_path.last().unwrap().terminator,
+                        builder.current_bb_get().terminator,
                         BasicBlockGlue::Unreachable
                             | BasicBlockGlue::Jmp { .. }
                             | BasicBlockGlue::JmpTable { .. }
                             | BasicBlockGlue::Return { .. }
                     ),
                     "{:?}",
-                    blocks_for_true_path.last().unwrap().terminator
+                    builder.current_bb_get().terminator
                 );
-                pred_bb.terminator = BasicBlockGlue::JmpCond {
+                builder.continue_bb(pred_bb_id);
+                builder.terminate_jmp_cond(
                     cond_var,
                     target_if_true,
-                    target_if_false: bb_after_ifelse,
+                    if_else_exit_bb,
                     // empty output vars, because this is a jump "inside" of a block and not outside
-                    output_vars: Vec::new(),
-                };
-                bbs.push(pred_bb);
-                bbs.append(&mut blocks_for_true_path);
+                    Vec::new(),
+                );
             }
 
             // restore outer scope
             ctxt.stack.unstash();
             labels.truncate(label_depth);
 
-            // parse all jumps outside of the block to the block lable as phis (TODO: optimize this linear search through a predecessor list)
-            let mut phis = get_block_return_signature(ctxt, block_type.clone())
-                .into_iter()
-                .map(|val| new_phinode(Vec::new(), val, ctxt))
-                .collect::<Vec<_>>();
-            for parsed_block in bbs.iter() {
-                if parsed_block.successors().any(|s| s == bb_after_ifelse) {
-                    for (phi, bb_out_var) in phis
-                        .iter_mut()
-                        .zip(parsed_block.target_out_vars(bb_after_ifelse))
-                    {
-                        phi.inputs.push((parsed_block.id, bb_out_var));
-                    }
-                }
-            }
-            let mut after_block_instrs = InstructionEncoder::new();
-            for (idx, phi) in phis.into_iter().rev().enumerate() {
-                if phi.inputs.len() == 1 {
-                    // if there is only one input, we can just directly use the value from the predecessor bb
-                    debug_assert_eq!(
-                        ctxt.stack.stack[ctxt.stack.stack.len() - 1 - idx].id,
-                        phi.out
-                    );
-                    let stack_len = ctxt.stack.stack.len();
-                    ctxt.stack.stack[stack_len - 1 - idx] = Variable {
-                        id: phi.inputs[0].1,
-                        type_: phi.r#type,
-                    };
-                } else {
-                    meta::PhiNode::serialize(phi, &mut after_block_instrs);
-                }
-            }
-
-            let mut blocks_after_ifelse =
-                parse_basic_blocks(i, ctxt, labels, bb_after_ifelse, Some(after_block_instrs))?;
-            bbs.append(&mut blocks_after_ifelse);
-            Ok(bbs)
+            // parse blocks after if-else
+            builder.continue_bb(if_else_exit_bb);
+            builder.put_phi_inputs_on_stack(ctxt);
+            parse_basic_blocks(i, ctxt, labels, builder)?;
         }
 
         ControlInstruction::Br(label_idx) => {
             if labels.is_empty() || label_idx >= labels.len() as u32 {
                 return Err(ParserError::Msg("label index out of bounds".to_string()));
             }
-
-            let mut bb: BasicBlock = BasicBlock::new(start_id);
-            bb.instructions = instruction_storage;
             let target_label = labels[labels.len() - label_idx as usize - 1].clone();
             let output_vars =
                 validate_and_extract_result_from_stack(ctxt, &target_label.result_type);
-
-            bb.terminator = BasicBlockGlue::Jmp {
-                target: target_label.bb_id,
-                output_vars,
-            };
-            bbs.push(bb);
+            builder.terminate_jmp(target_label.bb_id, output_vars);
 
             // unconditional branch -> following blocks only need to parsed, but not validated
-            parse_until_next_end(i, ctxt, labels, &mut bbs)?;
-
-            Ok(bbs)
+            parse_until_next_end(i, ctxt, labels, builder)?;
         }
 
         ControlInstruction::BrIf(label_idx) => {
-            let mut bb: BasicBlock = BasicBlock::new(start_id);
-            bb.instructions = instruction_storage;
             let cond_var = ctxt.pop_var_with_type(&ValType::Number(NumType::I32)).id;
-            let cont_bb_id = BasicBlock::next_id();
+            let target_if_false = BasicBlock::next_id();
             let target_if_true = labels[labels.len() - label_idx as usize - 1].clone();
             let output_vars =
                 validate_and_extract_result_from_stack(ctxt, &target_if_true.result_type);
 
-            bb.terminator = BasicBlockGlue::JmpCond {
+            builder.terminate_jmp_cond(
                 cond_var,
-                target_if_true: target_if_true.bb_id,
-                target_if_false: cont_bb_id,
+                target_if_true.bb_id,
+                target_if_false,
                 output_vars,
-            };
-            bbs.push(bb);
-
-            let mut cont_bbs = parse_basic_blocks(i, ctxt, labels, cont_bb_id, None)?;
-            bbs.append(&mut cont_bbs);
-            Ok(bbs)
+            );
+            builder.start_bb_with_id(target_if_false);
+            parse_basic_blocks(i, ctxt, labels, builder)?;
         }
 
         ControlInstruction::BrTable(default_label, label_table) => {
-            let mut bb: BasicBlock = BasicBlock::new(start_id);
-            bb.instructions = instruction_storage;
-            let cond_var = ctxt.pop_var_with_type(&ValType::Number(NumType::I32)).id;
-
+            let selector_var = ctxt.pop_var_with_type(&ValType::Number(NumType::I32)).id;
             let default_bb = if default_label >= labels.len() as u32 {
                 return Err(ParserError::Msg("label index out of bounds".to_string()));
             } else {
@@ -415,7 +355,7 @@ pub(crate) fn parse_terminator(
             let default_output_vars =
                 validate_and_extract_result_from_stack(ctxt, &default_bb.result_type);
 
-            let (target_bbs, target_bbs_out_vars): (Vec<BasicBlockID>, Vec<Vec<VariableID>>) =
+            let (targets, targets_output_vars): (Vec<BasicBlockID>, Vec<Vec<VariableID>>) =
                 label_table
                     .into_iter()
                     .map(|label_idx| &labels[labels.len() - label_idx as usize - 1])
@@ -425,85 +365,22 @@ pub(crate) fn parse_terminator(
                         (target_label.bb_id, output_vars)
                     })
                     .unzip();
-            bb.terminator = BasicBlockGlue::JmpTable {
-                selector_var: cond_var,
-                targets: target_bbs,
-                targets_output_vars: target_bbs_out_vars,
-                default_target: default_bb.bb_id,
+            builder.terminate_jmp_table(
+                selector_var,
+                targets,
+                targets_output_vars,
+                default_bb.bb_id,
                 default_output_vars,
-            };
-            bbs.push(bb);
+            );
 
             // unconditional branch -> following blocks only need to parsed, but not validated
-            parse_until_next_end(i, ctxt, labels, &mut bbs)?;
-
-            Ok(bbs)
+            parse_until_next_end(i, ctxt, labels, builder)?;
         }
 
         ControlInstruction::Unreachable => {
-            let mut bb: BasicBlock = BasicBlock::new(start_id);
-            bb.instructions = instruction_storage;
-            bb.terminator = BasicBlockGlue::Unreachable;
-            bbs.push(bb);
-
+            builder.terminate_unreachable();
             // parse away following junk
-            parse_until_next_end(i, ctxt, labels, &mut bbs)?;
-            Ok(bbs)
-        }
-
-        ControlInstruction::End => {
-            let mut bb: BasicBlock = BasicBlock::new(start_id);
-            bb.instructions = instruction_storage;
-
-            match labels.len() {
-                1 => {
-                    // return from function
-                    let func_scope_label = labels.last().unwrap();
-                    let return_vars =
-                        validate_and_extract_result_from_stack(ctxt, &func_scope_label.result_type);
-                    bb.terminator = BasicBlockGlue::Return { return_vars };
-                }
-                0 => {
-                    // parsing after return from function scope OR parsing outside of function => unreachable
-                    bb.terminator = BasicBlockGlue::Unreachable;
-                }
-                _ => {
-                    // return from block, jump to last label
-                    let last_label = labels.last().unwrap();
-
-                    let output_vars = validate_and_extract_result_from_stack(
-                        ctxt,
-                        last_label
-                            .loop_after_result_type
-                            .as_ref()
-                            .unwrap_or(&last_label.result_type),
-                    );
-                    bb.terminator = BasicBlockGlue::Jmp {
-                        target: last_label.loop_after_bb_id.unwrap_or(last_label.bb_id),
-                        output_vars,
-                    }
-                }
-            }
-            bbs.push(bb);
-            Ok(bbs)
-        }
-
-        ControlInstruction::Return => {
-            // validate return parameter types
-            let func_scope_label = labels.first().ok_or(ParserError::Msg(
-                "return instruction outside of function scope".to_string(),
-            ))?;
-            let return_vars =
-                validate_and_extract_result_from_stack(ctxt, &func_scope_label.result_type);
-
-            let mut bb: BasicBlock = BasicBlock::new(start_id);
-            bb.instructions = instruction_storage;
-            bb.terminator = BasicBlockGlue::Return { return_vars };
-            bbs.push(bb);
-
-            // parse away the following end instruction and any junk that might follow
-            parse_until_next_end(i, ctxt, labels, &mut bbs)?;
-            Ok(bbs)
+            parse_until_next_end(i, ctxt, labels, builder)?;
         }
 
         ControlInstruction::Call(func_idx) => {
@@ -512,11 +389,6 @@ pub(crate) fn parse_terminator(
                     "call function index out of bounds".to_string(),
                 ))
             }
-
-            let mut bb: BasicBlock = BasicBlock::new(start_id);
-            bb.instructions = instruction_storage;
-
-            let cont_bb_id = BasicBlock::next_id();
             let func = ctxt
                 .module
                 .ir
@@ -545,17 +417,12 @@ pub(crate) fn parse_terminator(
                     tmp
                 })
                 .collect();
-            bb.terminator = BasicBlockGlue::Call {
-                func_idx,
-                return_bb: cont_bb_id,
-                call_params,
-                return_vars,
-            };
-            bbs.push(bb);
+            let return_bb = BasicBlock::next_id();
+            builder.terminate_call(func_idx, return_bb, call_params, return_vars);
 
-            let mut cont_bbs = parse_basic_blocks(i, ctxt, labels, cont_bb_id, None)?;
-            bbs.append(&mut cont_bbs);
-            Ok(bbs)
+            // parse continuation basic blocks
+            builder.start_bb_with_id(return_bb);
+            parse_basic_blocks(i, ctxt, labels, builder)?;
         }
 
         ControlInstruction::CallIndirect(type_idx, table_idx) => {
@@ -578,10 +445,6 @@ pub(crate) fn parse_terminator(
                 ))
             }
 
-            let mut bb: BasicBlock = BasicBlock::new(start_id);
-            bb.instructions = instruction_storage;
-
-            let cont_bb_id = BasicBlock::next_id();
             let selector_var = ctxt.pop_var_with_type(&ValType::Number(NumType::I32)).id;
             let func_type = ctxt.module.function_types.get(type_idx as usize).unwrap();
             let call_params = validate_and_extract_result_from_stack(ctxt, &func_type.0);
@@ -600,33 +463,71 @@ pub(crate) fn parse_terminator(
                     tmp
                 })
                 .collect();
-            bb.terminator = BasicBlockGlue::CallIndirect {
+            let return_bb = BasicBlock::next_id();
+            builder.terminate_call_indirect(
                 type_idx,
-                table_idx,
                 selector_var,
-                return_bb: cont_bb_id,
+                table_idx,
+                return_bb,
                 call_params,
                 return_vars,
-            };
-            bbs.push(bb);
+            );
 
-            let mut cont_bbs = parse_basic_blocks(i, ctxt, labels, cont_bb_id, None)?;
-            bbs.append(&mut cont_bbs);
-            Ok(bbs)
+            // parse continuation basic blocks
+            builder.start_bb_with_id(return_bb);
+            parse_basic_blocks(i, ctxt, labels, builder)?;
+        }
+
+        ControlInstruction::End => {
+            match labels.len() {
+                1 => {
+                    // return from function
+                    let func_scope_label = labels.last().unwrap();
+                    let return_vars =
+                        validate_and_extract_result_from_stack(ctxt, &func_scope_label.result_type);
+                    builder.terminate_return(return_vars);
+                }
+                0 => {
+                    // parsing after return from function scope OR parsing outside of function => unreachable
+                    builder.terminate_unreachable();
+                }
+                _ => {
+                    // return from block, jump to last label
+                    let last_label = labels.last().unwrap();
+
+                    let output_vars = validate_and_extract_result_from_stack(
+                        ctxt,
+                        last_label
+                            .loop_after_result_type
+                            .as_ref()
+                            .unwrap_or(&last_label.result_type),
+                    );
+                    builder.terminate_jmp(
+                        last_label.loop_after_bb_id.unwrap_or(last_label.bb_id),
+                        output_vars,
+                    );
+                }
+            }
+        }
+
+        ControlInstruction::Return => {
+            // validate return parameter types
+            let func_scope_label = labels.first().ok_or(ParserError::Msg(
+                "return instruction outside of function scope".to_string(),
+            ))?;
+            let return_vars =
+                validate_and_extract_result_from_stack(ctxt, &func_scope_label.result_type);
+            builder.terminate_return(return_vars);
+            // parse away the following end instruction and any junk that might follow
+            parse_until_next_end(i, ctxt, labels, builder)?;
         }
 
         ControlInstruction::Else => {
-            let mut bb: BasicBlock = BasicBlock::new(start_id);
-            bb.instructions = instruction_storage;
-
             let ifscopelabel = labels.last().unwrap();
             let output_vars =
                 validate_and_extract_result_from_stack(ctxt, &ifscopelabel.result_type);
-            bb.terminator = BasicBlockGlue::ElseMarker { output_vars };
-            bbs.push(bb);
-
+            builder.terminate_else(output_vars);
             // stop parsing here, because the "else" block is parsed in the "if" block
-            Ok(bbs)
         }
 
         ControlInstruction::Nop => {
@@ -634,21 +535,19 @@ pub(crate) fn parse_terminator(
             unreachable!()
         }
     }
+    Ok(())
 }
 
 pub(crate) fn parse_basic_blocks(
     i: &mut WasmStreamReader,
     ctxt: &mut Context,
     labels: &mut Vec<Label>,
-    start_id: u32,
-    instruction_writer: Option<InstructionEncoder>,
-) -> Result<Vec<BasicBlock>, ParserError> {
-    let mut instruction_writer = instruction_writer.unwrap_or_default();
-    while !instruction_writer.is_finished() {
+    builder: &mut FunctionBuilder,
+) -> Result<(), ParserError> {
+    let instrs = builder.current_bb_instrs();
+    while !instrs.is_finished() {
         let opcode: u8 = i.read_byte()?;
-        LVL1_JMP_TABLE[opcode as usize](ctxt, i, &mut instruction_writer)?;
+        LVL1_JMP_TABLE[opcode as usize](ctxt, i, instrs)?;
     }
-
-    let instruction_storage = instruction_writer.extract_data();
-    parse_terminator(i, instruction_storage, ctxt, labels, start_id)
+    parse_terminator(i, ctxt, labels, builder)
 }

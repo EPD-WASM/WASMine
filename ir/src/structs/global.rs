@@ -1,5 +1,5 @@
-use super::{expression::ConstantExpression, value::Value};
-use wasm_types::{module::GlobalType, NumType};
+use super::value::Value;
+use wasm_types::module::GlobalType;
 
 #[derive(Debug, Clone)]
 pub struct Global {

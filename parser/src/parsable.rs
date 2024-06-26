@@ -1,4 +1,4 @@
-use crate::context::Context;
+use crate::{context::Context, function_builder::FunctionBuilder};
 
 use super::{
     error::ParserError, parse_basic_blocks::parse_basic_blocks,
@@ -337,7 +337,10 @@ impl ParseWithContext for ConstantExpression {
         let fake_func = Function::create_empty(0);
         let mut ctxt = Context::new(module, &fake_func);
         let mut labels = Vec::new();
-        let mut parsed_init_blocks = parse_basic_blocks(i, &mut ctxt, &mut labels, 0, None)?;
+        let mut builder = FunctionBuilder::new();
+        builder.start_bb();
+        parse_basic_blocks(i, &mut ctxt, &mut labels, &mut builder)?;
+        let mut parsed_init_blocks = builder.finalize();
         if parsed_init_blocks.len() != 1
             || parsed_init_blocks[0].instructions.instruction_storage.len() != 1
         {

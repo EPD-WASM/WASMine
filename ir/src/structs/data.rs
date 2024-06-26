@@ -1,4 +1,4 @@
-use super::{expression::ConstantExpression, value::Value};
+use super::value::Value;
 use wasm_types::MemIdx;
 
 #[derive(Debug, Clone)]

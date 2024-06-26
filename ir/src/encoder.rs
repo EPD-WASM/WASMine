@@ -1,12 +1,13 @@
 use super::basic_block::BasicBlockStorage;
 use crate::{
-    instructions::{Instruction, VariableID},
+    instructions::{Instruction, PhiNode, VariableID},
     structs::instruction::ControlInstruction,
     utils::integer_traits::Integer,
 };
 use std::collections::VecDeque;
 use wasm_types::{InstructionType, ValType};
 
+#[derive(Clone)]
 pub struct InstructionEncoder {
     storage: BasicBlockStorage,
     finished: bool,
@@ -50,8 +51,16 @@ impl InstructionEncoder {
         self.finished = true;
     }
 
+    pub fn add_input(&mut self, phi: PhiNode) {
+        self.storage.inputs.push(phi);
+    }
+
     pub fn extract_data(self) -> BasicBlockStorage {
         self.storage
+    }
+
+    pub fn peek_terminator(&self) -> &ControlInstruction {
+        &self.storage.terminator
     }
 }
 
@@ -64,6 +73,7 @@ impl Default for InstructionEncoder {
                 type_storage: VecDeque::new(),
                 instruction_storage: VecDeque::new(),
                 terminator: ControlInstruction::Unreachable,
+                inputs: Vec::new(),
             },
             finished: false,
         }

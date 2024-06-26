@@ -1,7 +1,4 @@
-use super::{
-    expression::ConstantExpression,
-    value::{Reference, Value},
-};
+use super::value::Value;
 use wasm_types::{FuncIdx, RefType, TableIdx};
 
 #[derive(Debug, Clone)]

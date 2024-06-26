@@ -2,14 +2,14 @@ use super::*;
 use wasm_types::*;
 
 fn i_arith(ctxt: &mut C, o: &mut O, op: IBinaryOp, type_: NumType) -> PR {
-    let in2 = ctxt.pop_var_with_type(&ValType::Number(type_));
-    let in1 = ctxt.pop_var_with_type(&ValType::Number(type_));
+    let rhs = ctxt.pop_var_with_type(&ValType::Number(type_));
+    let lhs = ctxt.pop_var_with_type(&ValType::Number(type_));
     let out = ctxt.create_var(ValType::Number(type_));
     o.write(IBinaryInstruction {
         types: type_,
         op,
-        in1: in1.id,
-        in2: in2.id,
+        lhs: lhs.id,
+        rhs: rhs.id,
         out1: out.id,
     });
     ctxt.push_var(out);
@@ -17,14 +17,14 @@ fn i_arith(ctxt: &mut C, o: &mut O, op: IBinaryOp, type_: NumType) -> PR {
 }
 
 fn f_arith(ctxt: &mut C, o: &mut O, op: FBinaryOp, type_: NumType) -> PR {
-    let in2 = ctxt.pop_var_with_type(&ValType::Number(type_));
-    let in1 = ctxt.pop_var_with_type(&ValType::Number(type_));
+    let rhs = ctxt.pop_var_with_type(&ValType::Number(type_));
+    let lhs = ctxt.pop_var_with_type(&ValType::Number(type_));
     let out = ctxt.create_var(ValType::Number(type_));
     o.write(FBinaryInstruction {
         types: type_,
         op,
-        in1: in1.id,
-        in2: in2.id,
+        lhs: lhs.id,
+        rhs: rhs.id,
         out1: out.id,
     });
     ctxt.push_var(out);

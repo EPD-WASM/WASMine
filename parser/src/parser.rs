@@ -3,12 +3,11 @@ use super::parse_basic_blocks::{parse_basic_blocks, Label};
 use super::ParseResult;
 use super::{error::ParserError, wasm_stream_reader::WasmStreamReader};
 use crate::context::Context;
-use crate::instructions::meta::new_phinode;
-use crate::parse_basic_blocks::parse_terminator;
+use crate::function_builder::FunctionBuilder;
 use crate::stack::ParserStack;
 use ir::basic_block::BasicBlock;
 use ir::function::Function;
-use ir::instructions::{Instruction, PhiNode, Variable};
+use ir::instructions::Variable;
 use ir::structs::data::{Data, DataMode};
 use ir::structs::expression::ConstantExpression;
 use ir::structs::import::ImportDesc;
@@ -17,7 +16,6 @@ use ir::structs::{
     element::Element, export::Export, global::Global, import::Import, memory::Memory,
     module::Module, table::Table,
 };
-use ir::InstructionEncoder;
 use loader::Loader;
 use std::io::BufReader;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -339,9 +337,19 @@ impl Parser {
             var_count,
             poison: None,
         };
+        let mut builder = FunctionBuilder::new();
 
         let entry_basic_block = BasicBlock::next_id();
         let exit_basic_block = BasicBlock::next_id();
+
+        builder.reserve_bb_with_phis(
+            exit_basic_block,
+            &mut ctxt,
+            self.module.function_types[function_type_idx as usize]
+                .1
+                .clone(),
+        );
+
         let function_scope_label = Label {
             bb_id: exit_basic_block,
             loop_after_bb_id: None,
@@ -351,65 +359,25 @@ impl Parser {
                 .clone(),
         };
         let mut labels = vec![function_scope_label];
-        let mut parsed_basic_blocks =
-            parse_basic_blocks(i, &mut ctxt, &mut labels, entry_basic_block, None)?;
+        builder.start_bb_with_id(entry_basic_block);
+        parse_basic_blocks(i, &mut ctxt, &mut labels, &mut builder)?;
 
         // insert last basic block that always returns from function (jump target for function scope label)
-        let function_block_has_jump = parsed_basic_blocks
-            .iter()
-            .any(|bb| bb.successors().any(|s| s == exit_basic_block));
-        if function_block_has_jump {
-            let mut fake_storage = InstructionEncoder::new();
-            let mut phis = self.module.function_types[function_type_idx as usize]
-                .1
+        builder.continue_bb(exit_basic_block);
+        builder.terminate_return(
+            builder
+                .current_bb_get()
+                .inputs
                 .iter()
-                .map(|val| new_phinode(Vec::new(), *val, &mut ctxt))
-                .collect::<Vec<_>>();
-            for parsed_block in parsed_basic_blocks.iter() {
-                if parsed_block.successors().any(|s| s == exit_basic_block) {
-                    for (phi, bb_out_var) in phis
-                        .iter_mut()
-                        .zip(parsed_block.target_out_vars(exit_basic_block))
-                    {
-                        phi.inputs.push((parsed_block.id, bb_out_var));
-                    }
-                }
-            }
-            for (idx, phi) in phis.into_iter().rev().enumerate() {
-                if phi.inputs.is_empty() {
-                    // skip phis without any inputs (these only exist if this basic block has no predecessors and can be removed anyways)
-                    continue;
-                }
-                if phi.inputs.len() == 1 {
-                    // if there is only one input, we can just directly use the value from the predecessor bb
-                    debug_assert_eq!(
-                        ctxt.stack.stack[ctxt.stack.stack.len() - 1 - idx].id,
-                        phi.out,
-                    );
-                    let stack_len = ctxt.stack.stack.len();
-                    ctxt.stack.stack[stack_len - 1 - idx] = Variable {
-                        id: phi.inputs[0].1,
-                        type_: phi.r#type,
-                    };
-                } else {
-                    PhiNode::serialize(phi, &mut fake_storage);
-                }
-            }
-            fake_storage.write(ir::instructions::End {});
-            parsed_basic_blocks.append(&mut parse_terminator(
-                i,
-                fake_storage.extract_data(),
-                &mut ctxt,
-                &mut labels,
-                exit_basic_block,
-            )?);
-        }
+                .map(|phi| phi.out)
+                .collect(),
+        );
 
         if let Some(poison) = ctxt.poison {
             return Err(poison.into());
         }
         self.module.ir.functions[function_idx].num_vars = ctxt.var_count.load(Ordering::Relaxed);
-        self.module.ir.functions[function_idx].basic_blocks = parsed_basic_blocks;
+        self.module.ir.functions[function_idx].basic_blocks = builder.finalize();
         Ok(())
     }
 

@@ -1,5 +1,6 @@
 mod context;
 pub mod error;
+mod function_builder;
 pub(crate) mod instructions;
 mod opcode_tbl;
 pub(crate) mod parsable;

@@ -16,42 +16,6 @@ pub(crate) fn i32_wrap_i64(
     Ok(())
 }
 
-pub(crate) fn parse_trunc(
-    ctxt: &mut Context,
-    o: &mut InstructionEncoder,
-    input_type: NumType,
-    out_type: NumType,
-    signed: bool,
-) -> ParseResult {
-    let in_ = ctxt.pop_var_with_type(&ValType::Number(input_type));
-    let out = ctxt.create_var(ValType::Number(out_type));
-    o.write(TruncInstruction {
-        in1: in_.id,
-        in1_type: input_type,
-        out1: out.id,
-        out1_type: out_type,
-        signed,
-    });
-    ctxt.push_var(out);
-    Ok(())
-}
-
-#[rustfmt::skip]
-mod trunc_specializations {
-    use super::*;
-
-    pub(crate) fn i32_trunc_f32_s(ctxt: &mut C, _: &mut I, o: &mut O) -> PR {parse_trunc(ctxt, o, NumType::F32, NumType::I32, true)}
-    pub(crate) fn i32_trunc_f32_u(ctxt: &mut C, _: &mut I, o: &mut O) -> PR {parse_trunc(ctxt, o, NumType::F32, NumType::I32, false)}
-    pub(crate) fn i32_trunc_f64_s(ctxt: &mut C, _: &mut I, o: &mut O) -> PR {parse_trunc(ctxt, o, NumType::F64, NumType::I32, true)}
-    pub(crate) fn i32_trunc_f64_u(ctxt: &mut C, _: &mut I, o: &mut O) -> PR {parse_trunc(ctxt, o, NumType::F64, NumType::I32, false)}
-
-    pub(crate) fn i64_trunc_f32_s(ctxt: &mut C, _: &mut I, o: &mut O) -> PR {parse_trunc(ctxt, o, NumType::F32, NumType::I64, true)}
-    pub(crate) fn i64_trunc_f32_u(ctxt: &mut C, _: &mut I, o: &mut O) -> PR {parse_trunc(ctxt, o, NumType::F32, NumType::I64, false)}
-    pub(crate) fn i64_trunc_f64_s(ctxt: &mut C, _: &mut I, o: &mut O) -> PR {parse_trunc(ctxt, o, NumType::F64, NumType::I64, true)}
-    pub(crate) fn i64_trunc_f64_u(ctxt: &mut C, _: &mut I, o: &mut O) -> PR {parse_trunc(ctxt, o, NumType::F64, NumType::I64, false)}
-}
-pub(crate) use trunc_specializations::*;
-
 pub(crate) fn parse_convert(
     ctxt: &mut Context,
     o: &mut InstructionEncoder,
@@ -127,7 +91,7 @@ pub(crate) fn parse_extend(
 ) -> ParseResult {
     let in_ = ctxt.pop_var_with_type(&ValType::Number(out_type));
     let out = ctxt.create_var(ValType::Number(out_type));
-    o.write(ExtendInstruction {
+    o.write(ExtendBitsInstruction {
         in1: in_.id,
         in1_type: out_type,
         input_size,

@@ -12,8 +12,8 @@ impl Executable for FBinaryInstruction {
 
         let types = todo!();
 
-        let num1 = stack_frame.vars.get(self.in1).to_number(&types);
-        let num2 = stack_frame.vars.get(self.in2).to_number(&types);
+        let num1 = stack_frame.vars.get(self.lhs).to_number(&types);
+        let num2 = stack_frame.vars.get(self.rhs).to_number(&types);
 
         let res1 = match self.op {
             FBinaryOp::Add => num1 + num2,

@@ -70,14 +70,6 @@ impl ParserStack {
     pub(crate) fn len(&self) -> usize {
         self.stack.len() - self.stash.last().unwrap()
     }
-
-    pub(crate) fn get(&self, index: usize) -> Option<&Variable> {
-        if index + self.stash.last().unwrap() >= self.stack.len() {
-            None
-        } else {
-            Some(&self[index])
-        }
-    }
 }
 
 impl Index<usize> for ParserStack {

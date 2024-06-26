@@ -1,4 +1,7 @@
-use crate::{instructions::VariableID, structs::instruction::ControlInstruction};
+use crate::{
+    instructions::{PhiNode, VariableID},
+    structs::instruction::ControlInstruction,
+};
 use lazy_static::lazy_static;
 use std::{
     collections::VecDeque,
@@ -17,6 +20,7 @@ pub type BasicBlockID = u32;
 pub struct BasicBlock {
     // instructions encoded
     pub instructions: BasicBlockStorage,
+    pub inputs: Vec<PhiNode>,
     pub terminator: BasicBlockGlue,
     pub id: BasicBlockID,
 }
@@ -28,6 +32,7 @@ pub struct BasicBlockStorage {
     pub type_storage: VecDeque<ValType>,
     pub instruction_storage: VecDeque<InstructionType>,
     pub terminator: ControlInstruction,
+    pub inputs: Vec<PhiNode>,
 }
 
 impl BasicBlock {
@@ -63,7 +68,7 @@ impl BasicBlock {
         }
     }
 
-    pub fn target_out_vars(&self, target: BasicBlockID) -> impl Iterator<Item = VariableID> {
+    pub fn output_vars_for_target(&self, target: BasicBlockID) -> impl Iterator<Item = VariableID> {
         match &self.terminator {
             BasicBlockGlue::Jmp {
                 output_vars,
@@ -96,7 +101,10 @@ impl BasicBlock {
                     targets_output_vars[idx].clone().into_iter()
                 }
             }
-            _ => vec![].into_iter(),
+            BasicBlockGlue::Call { return_vars, .. } => return_vars.clone().into_iter(),
+            BasicBlockGlue::CallIndirect { return_vars, .. } => return_vars.clone().into_iter(),
+            BasicBlockGlue::Return { return_vars } => return_vars.clone().into_iter(),
+            _ => panic!("Invalid terminator for output vars"),
         }
     }
 }

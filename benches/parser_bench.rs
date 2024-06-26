@@ -19,6 +19,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         )
         .unwrap();
         group.throughput(Throughput::Bytes(wasm_bytes.len() as u64));
+        group.sample_size(50);
         group.bench_with_input(
             BenchmarkId::new("WASM_RT: parsing", file_name),
             &wasm_bytes,

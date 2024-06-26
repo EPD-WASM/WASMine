@@ -16,6 +16,7 @@ loader = { path = "./loader" }
 interpreter = { path = "./interpreter" }
 ir = { path = "./ir" }
 log = "0.4.21"
+runtime-interface = { version = "0.1.0", path = "runtime-interface" }
 
 [dev-dependencies]
 wast = "206.0.0"
@@ -31,3 +32,6 @@ harness = false
 [[bin]]
 name = "wasm_rt"
 path = "./bin/main.rs"
+
+[profile.release]
+debug = true

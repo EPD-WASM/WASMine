@@ -5,8 +5,8 @@ use wasm_types::*;
 pub struct IBinaryInstruction {
     pub types: NumType,
     pub op: IBinaryOp,
-    pub in1: VariableID,
-    pub in2: VariableID,
+    pub lhs: VariableID,
+    pub rhs: VariableID,
     pub out1: VariableID,
 }
 
@@ -16,8 +16,8 @@ impl Instruction for IBinaryInstruction {
             NumericInstructionCategory::IBinary(self.op.clone()),
         ));
         o.write_value_type(ValType::Number(self.types));
-        o.write_variable(self.in1);
-        o.write_variable(self.in2);
+        o.write_variable(self.lhs);
+        o.write_variable(self.rhs);
         o.write_variable(self.out1);
     }
 
@@ -29,8 +29,8 @@ impl Instruction for IBinaryInstruction {
         Ok(IBinaryInstruction {
             types: extract_numtype!(i.read_value_type()?),
             op,
-            in1: i.read_variable()?,
-            in2: i.read_variable()?,
+            lhs: i.read_variable()?,
+            rhs: i.read_variable()?,
             out1: i.read_variable()?,
         })
     }
@@ -41,7 +41,7 @@ impl Display for IBinaryInstruction {
         write!(
             f,
             "%{}: {} = {} {} %{} %{}",
-            self.out1, self.types, self.op, self.types, self.in1, self.in2
+            self.out1, self.types, self.op, self.types, self.lhs, self.rhs
         )
     }
 }
@@ -50,8 +50,8 @@ impl Display for IBinaryInstruction {
 pub struct FBinaryInstruction {
     pub types: NumType,
     pub op: FBinaryOp,
-    pub in1: VariableID,
-    pub in2: VariableID,
+    pub lhs: VariableID,
+    pub rhs: VariableID,
     pub out1: VariableID,
 }
 
@@ -61,8 +61,8 @@ impl Instruction for FBinaryInstruction {
             NumericInstructionCategory::FBinary(self.op.clone()),
         ));
         o.write_value_type(ValType::Number(self.types));
-        o.write_variable(self.in1);
-        o.write_variable(self.in2);
+        o.write_variable(self.lhs);
+        o.write_variable(self.rhs);
         o.write_variable(self.out1);
     }
 
@@ -74,8 +74,8 @@ impl Instruction for FBinaryInstruction {
         Ok(FBinaryInstruction {
             types: extract_numtype!(i.read_value_type()?),
             op,
-            in1: i.read_variable()?,
-            in2: i.read_variable()?,
+            lhs: i.read_variable()?,
+            rhs: i.read_variable()?,
             out1: i.read_variable()?,
         })
     }
@@ -86,7 +86,7 @@ impl Display for FBinaryInstruction {
         write!(
             f,
             "%{}: {} = {} {} %{} %{}",
-            self.out1, self.types, self.op, self.types, self.in1, self.in2
+            self.out1, self.types, self.op, self.types, self.lhs, self.rhs
         )
     }
 }

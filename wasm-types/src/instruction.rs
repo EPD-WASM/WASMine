@@ -113,8 +113,10 @@ pub enum FRelationalOp {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ConversionOp {
     Wrap,
-    Extend,
+    ExtendBits,
+    ExtendType,
     Trunc,
+    TruncSat,
     Demote,
     Promote,
     Convert,
@@ -363,8 +365,10 @@ impl Display for ConversionOp {
             "{}",
             match self {
                 ConversionOp::Wrap => "wrap",
-                ConversionOp::Extend => "extend",
+                ConversionOp::ExtendBits => "extend_bits",
+                ConversionOp::ExtendType => "extend_type",
                 ConversionOp::Trunc => "trunc",
+                ConversionOp::TruncSat => "trunc_sat",
                 ConversionOp::Demote => "demote",
                 ConversionOp::Promote => "promote",
                 ConversionOp::Convert => "convert",

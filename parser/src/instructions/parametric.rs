@@ -5,7 +5,7 @@ use wasm_types::*;
 pub(crate) fn drop(
     ctxt: &mut Context,
     _: &mut WasmStreamReader,
-    o: &mut InstructionEncoder,
+    _: &mut InstructionEncoder,
 ) -> ParseResult {
     ctxt.pop_var();
     Ok(())

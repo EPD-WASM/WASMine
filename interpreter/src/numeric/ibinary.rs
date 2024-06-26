@@ -9,8 +9,8 @@ impl Executable for IBinaryInstruction {
     fn execute(&mut self, ctx: &mut InterpreterContext) -> Result<(), InterpreterError> {
         let stack_frame = ctx.stack.last_mut().unwrap();
 
-        let in1_u64 = stack_frame.vars.get(self.in1);
-        let in2_u64 = stack_frame.vars.get(self.in2);
+        let in1_u64 = stack_frame.vars.get(self.lhs);
+        let in2_u64 = stack_frame.vars.get(self.rhs);
 
         let types = todo!();
         let in1 = Number::trans_from_u64(in1_u64, &types);

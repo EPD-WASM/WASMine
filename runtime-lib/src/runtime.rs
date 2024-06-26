@@ -1,7 +1,8 @@
-use runtime_interface::GlobalStorage;
-
 use crate::{
-    context::RTContext, error::RuntimeError, execution_context::ExecutionContext, globals,
+    context::RTContext,
+    error::RuntimeError,
+    execution_context::ExecutionContext,
+    globals::{self, GlobalStorage},
     tables::TableInstance,
 };
 

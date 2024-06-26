@@ -104,10 +104,12 @@ impl<'a> Display for BasicBlockDisplayContext<'a> {
                 InstructionType::Numeric(NumericInstructionCategory::FRelational(_)) => writeln!(f, "{}", decoder.read::<FRelationalInstruction>(next_instr_t).unwrap())?,
                 InstructionType::Numeric(NumericInstructionCategory::Conversion(ConversionOp::Convert)) => writeln!(f, "{}", decoder.read::<ConvertInstruction>(next_instr_t).unwrap())?,
                 InstructionType::Numeric(NumericInstructionCategory::Conversion(ConversionOp::Demote)) => writeln!(f, "{}", decoder.read::<DemoteInstruction>(next_instr_t).unwrap())?,
-                InstructionType::Numeric(NumericInstructionCategory::Conversion(ConversionOp::Extend)) => writeln!(f, "{}", decoder.read::<ExtendInstruction>(next_instr_t).unwrap())?,
+                InstructionType::Numeric(NumericInstructionCategory::Conversion(ConversionOp::ExtendBits)) => writeln!(f, "{}", decoder.read::<ExtendBitsInstruction>(next_instr_t).unwrap())?,
+                InstructionType::Numeric(NumericInstructionCategory::Conversion(ConversionOp::ExtendType)) => writeln!(f, "{}", decoder.read::<ExtendTypeInstruction>(next_instr_t).unwrap())?,
                 InstructionType::Numeric(NumericInstructionCategory::Conversion(ConversionOp::Promote)) => writeln!(f, "{}", decoder.read::<PromoteInstruction>(next_instr_t).unwrap())?,
                 InstructionType::Numeric(NumericInstructionCategory::Conversion(ConversionOp::Reinterpret)) => writeln!(f, "{}", decoder.read::<ReinterpretInstruction>(next_instr_t).unwrap())?,
                 InstructionType::Numeric(NumericInstructionCategory::Conversion(ConversionOp::Trunc)) => writeln!(f, "{}", decoder.read::<TruncInstruction>(next_instr_t).unwrap())?,
+                InstructionType::Numeric(NumericInstructionCategory::Conversion(ConversionOp::TruncSat)) => writeln!(f, "{}", decoder.read::<TruncSaturationInstruction>(next_instr_t).unwrap())?,
                 InstructionType::Numeric(NumericInstructionCategory::Conversion(ConversionOp::Wrap)) => writeln!(f, "{}", decoder.read::<WrapInstruction>(next_instr_t).unwrap())?,
                 InstructionType::Numeric(NumericInstructionCategory::ITest(_)) => writeln!(f, "{}", decoder.read::<ITestInstruction>(next_instr_t).unwrap())?,
 
