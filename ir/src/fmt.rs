@@ -81,6 +81,10 @@ pub struct BasicBlockDisplayContext<'a> {
 #[rustfmt::skip]
 impl<'a> Display for BasicBlockDisplayContext<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        for phi in &self.bb.inputs {
+            writeln!(f, "{}", phi)?;
+        }
+
         let mut decoder = InstructionDecoder::new(self.bb.instructions.clone());
         while let Ok(next_instr_t) = decoder.read_instruction_type() {
             write!(f, "\t")?;
@@ -135,9 +139,9 @@ impl<'a> Display for BasicBlockDisplayContext<'a> {
                 InstructionType::Variable(VariableInstructionType::LocalSet) => writeln!(f, "{}", decoder.read::<LocalSetInstruction>(next_instr_t).unwrap())?,
                 InstructionType::Variable(VariableInstructionType::LocalTee) => writeln!(f, "{}", decoder.read::<LocalTeeInstruction>(next_instr_t).unwrap())?,
 
-                InstructionType::Meta(MetaInstructionType::PhiNode) => writeln!(f, "{}", decoder.read::<PhiNode>(next_instr_t).unwrap())?,
-
+                InstructionType::Meta(MetaInstructionType::PhiNode) => unreachable!("Phi nodes are not encoded."),
                 InstructionType::Control(_) => unreachable!("Control instructions should already be converted into BasicBlockGlue"),
+
                 InstructionType::Vector(_) => unimplemented!(),
             }
         }
