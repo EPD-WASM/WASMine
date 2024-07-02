@@ -13,7 +13,14 @@ wasm-types = { path = "../wasm-types" }
 ir = { path = "../ir" }
 parser = { path = "../parser" }
 loader = { path = "../loader" }
-interpreter = { path = "../interpreter" }
+interpreter = { path = "../interpreter", optional=true }
 libc = "0.2.155"
 log = "0.4.21"
+llvm-gen = { path = "../llvm-gen", optional=true }
 runtime-interface = { path = "../runtime-interface" }
+
+[features]
+default = ["interp"]
+llvm = ["dep:llvm-gen"]
+interp = ["dep:interpreter"]
+asm = []

@@ -3,8 +3,10 @@ use super::{
     function::Function,
     InstructionDecoder, IR,
 };
-use crate::instructions::PhiNode;
-use crate::structs::module::Module;
+use crate::{
+    function::{FunctionImport, FunctionInternal, FunctionSource},
+    structs::module::Module,
+};
 use crate::{instructions::*, structs::global::Global};
 use std::fmt::{Display, Formatter};
 use wasm_types::*;
@@ -20,7 +22,7 @@ impl<'a> Display for IRDisplayContext<'a> {
             let func = FunctionDisplayContext {
                 function,
                 module: self.module,
-                idx: i,
+                idx: i as FuncIdx,
             };
             writeln!(f, "{}", func)?;
         }
@@ -30,7 +32,7 @@ impl<'a> Display for IRDisplayContext<'a> {
 pub struct FunctionDisplayContext<'a> {
     function: &'a Function,
     module: &'a Module,
-    idx: usize,
+    idx: FuncIdx,
 }
 
 impl<'a> Display for FunctionDisplayContext<'a> {
@@ -39,34 +41,39 @@ impl<'a> Display for FunctionDisplayContext<'a> {
 
         write!(f, "define @{}", name)?;
 
-        let function_type = self
-            .module
-            .function_types
-            .get(self.function.type_idx as usize)
-            .unwrap();
+        let type_idx = self.function.type_idx;
+        let function_type = self.module.function_types.get(type_idx as usize).unwrap();
         let ret_types: Vec<String> = function_type.1.iter().map(|t| format!("{}", t)).collect();
         let ret_types_str = ret_types.join(", ");
         write!(f, " {}", ret_types_str)?;
 
-        let input_types: Vec<String> = self
-            .function
-            .locals
-            .iter()
-            .take(function_type.0.len())
-            .map(|t| format!("{} %{}", t.type_, t.id))
-            .collect();
-        let input_types_str = input_types.join(", ");
-        writeln!(f, " ({}) {{", input_types_str)?;
-        if self.function.import {
-            write!(f, "/* imported */")?;
-        } else {
-            for bb in self.function.basic_blocks.iter() {
-                writeln!(f, "bb{}:", bb.id)?;
-                let bb = BasicBlockDisplayContext {
-                    module: self.module,
-                    bb,
-                };
-                write!(f, "{}", bb)?;
+        match &self.function.src {
+            FunctionSource::Import(FunctionImport { import_idx }) => {
+                let import = &self.module.imports[*import_idx as usize];
+                let import_name = format!("{}.{}", import.module, import.name);
+                let input_types: Vec<String> =
+                    function_type.0.iter().map(|t| format!("{}", t)).collect();
+                let input_types_str = input_types.join(", ");
+                writeln!(f, " ({}) {{", input_types_str)?;
+                write!(f, "/* imported: {} */", import_name)?
+            }
+            FunctionSource::Internal(FunctionInternal { bbs, locals, .. }) => {
+                let input_types: Vec<String> = locals
+                    .iter()
+                    .take(function_type.0.len())
+                    .map(|t| format!("{} %{}", t.type_, t.id))
+                    .collect();
+                let input_types_str = input_types.join(", ");
+                writeln!(f, " ({}) {{", input_types_str)?;
+
+                for bb in bbs.iter() {
+                    writeln!(f, "bb{}:", bb.id)?;
+                    let bb = BasicBlockDisplayContext {
+                        module: self.module,
+                        bb,
+                    };
+                    write!(f, "{}", bb)?;
+                }
             }
         }
         write!(f, "}}")
@@ -216,7 +223,7 @@ impl Display for BasicBlockGlueDisplayContext<'_> {
                 call_params,
                 return_vars,
             } => {
-                let function_name = Function::debug_function_name(*func_idx as usize, self.module);
+                let function_name = Function::debug_function_name(*func_idx, self.module);
                 match return_vars.len() {
                     0 => write!(f, "void = ")?,
                     1 => write!(f, "%{} = ", return_vars[0])?,

@@ -6,11 +6,10 @@ use crate::context::Context;
 use crate::function_builder::FunctionBuilder;
 use crate::stack::ParserStack;
 use ir::basic_block::BasicBlock;
-use ir::function::Function;
+use ir::function::{Function, FunctionImport, FunctionInternal, FunctionSource};
 use ir::instructions::Variable;
 use ir::structs::data::{Data, DataMode};
 use ir::structs::expression::ConstantExpression;
-use ir::structs::import::ImportDesc;
 use ir::structs::value::{Reference, Value};
 use ir::structs::{
     element::Element, export::Export, global::Global, import::Import, memory::Memory,
@@ -22,7 +21,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::vec;
 use wasm_types::module::Name;
 use wasm_types::{module::Section, FuncIdx, FuncType, TypeIdx};
-use wasm_types::{MemIdx, ValType};
+use wasm_types::{ImportDesc, MemIdx, ValType};
 
 const WASM_MODULE_PREAMBLE: &[u8] = &[b'\0', b'a', b's', b'm'];
 const WASM_MODULE_VERSION: u32 = 1;
@@ -118,7 +117,14 @@ impl Parser {
             .ir
             .functions
             .iter()
-            .any(|f| f.basic_blocks.is_empty() && !f.import)
+            .filter_map(|f| {
+                if let FunctionSource::Internal(FunctionInternal { bbs, .. }) = &f.src {
+                    Some(bbs)
+                } else {
+                    None
+                }
+            })
+            .any(Vec::is_empty)
         {
             return Err(ParserError::Msg("function without code".into()));
         }
@@ -170,13 +176,18 @@ impl Parser {
         for import_idx in 0..num_imports {
             let import = Import::parse(i)?;
             match import.desc.clone() {
-                ImportDesc::Func(idx) => self.module.ir.functions.push(Function {
-                    type_idx: idx,
-                    import: true,
-                    ..Default::default()
+                ImportDesc::Func(type_idx) => self.module.ir.functions.push(Function {
+                    type_idx,
+                    src: FunctionSource::Import(FunctionImport { import_idx }),
                 }),
-                ImportDesc::Table(r#type) => self.module.tables.push(Table { r#type }),
-                ImportDesc::Mem(limits) => self.module.memories.push(Memory { limits }),
+                ImportDesc::Table(r#type) => self.module.tables.push(Table {
+                    r#type,
+                    import: true,
+                }),
+                ImportDesc::Mem(limits) => self.module.memories.push(Memory {
+                    limits,
+                    import: true,
+                }),
                 ImportDesc::Global(r#type) => self.module.globals.push(Global {
                     r#type,
                     import: true,
@@ -285,7 +296,14 @@ impl Parser {
         Ok(())
     }
 
-    fn parse_function(&mut self, i: &mut WasmStreamReader, function_idx: usize) -> ParseResult {
+    fn parse_function(&mut self, i: &mut WasmStreamReader, function_idx: FuncIdx) -> ParseResult {
+        debug_assert!(!matches!(
+            self.module.ir.functions[function_idx as usize].src,
+            FunctionSource::Import(..)
+        ));
+        let type_idx = self.module.ir.functions[function_idx as usize].type_idx;
+        let function_type = self.module.function_types[type_idx as usize].clone();
+
         // we don't need the code size for decoding an thus don't validate it
         let _ = i.read_leb128::<u32>()?;
 
@@ -306,78 +324,84 @@ impl Parser {
             return Err(ParserError::Msg("too many locals".into()));
         }
 
-        let function_type_idx = self.module.ir.functions[function_idx].type_idx;
-        let input_param_types = self.module.function_types[function_type_idx as usize]
-            .0
-            .clone();
-        let mut locals = Vec::with_capacity(input_param_types.len() + num_expanded_locals as usize);
-        for param_type in input_param_types {
-            locals.push(Variable {
-                type_: param_type,
-                id: var_count.fetch_add(1, Ordering::Relaxed),
-            });
-        }
-        let mut expaneded_locals = local_prototypes
-            .into_iter()
-            .flat_map(|(count, val_type)| {
-                let id = var_count.fetch_add(count, Ordering::Relaxed);
-                (0..count).map(move |_| Variable {
-                    type_: val_type,
-                    id,
+        let input_param_types = function_type.0;
+        {
+            let locals = match &mut self.module.ir.functions[function_idx as usize].src {
+                FunctionSource::Internal(f) => &mut f.locals,
+                _ => unreachable!(),
+            };
+            *locals = Vec::with_capacity(input_param_types.len() + num_expanded_locals as usize);
+            for param_type in input_param_types {
+                locals.push(Variable {
+                    type_: param_type,
+                    id: var_count.fetch_add(1, Ordering::Relaxed),
+                });
+            }
+            let mut expaneded_locals = local_prototypes
+                .into_iter()
+                .flat_map(|(count, val_type)| {
+                    let id = var_count.fetch_add(count, Ordering::Relaxed);
+                    (0..count).map(move |_| Variable {
+                        type_: val_type,
+                        id,
+                    })
                 })
-            })
-            .collect();
-        locals.append(&mut expaneded_locals);
-        self.module.ir.functions[function_idx].locals = locals;
-
-        let mut ctxt = Context {
-            module: &self.module,
-            stack,
-            func: &self.module.ir.functions[function_idx],
-            var_count,
-            poison: None,
-        };
-        let mut builder = FunctionBuilder::new();
-
-        let entry_basic_block = BasicBlock::next_id();
-        let exit_basic_block = BasicBlock::next_id();
-
-        builder.reserve_bb_with_phis(
-            exit_basic_block,
-            &mut ctxt,
-            self.module.function_types[function_type_idx as usize]
-                .1
-                .clone(),
-        );
-
-        let function_scope_label = Label {
-            bb_id: exit_basic_block,
-            loop_after_bb_id: None,
-            loop_after_result_type: None,
-            result_type: self.module.function_types[function_type_idx as usize]
-                .1
-                .clone(),
-        };
-        let mut labels = vec![function_scope_label];
-        builder.start_bb_with_id(entry_basic_block);
-        parse_basic_blocks(i, &mut ctxt, &mut labels, &mut builder)?;
-
-        // insert last basic block that always returns from function (jump target for function scope label)
-        builder.continue_bb(exit_basic_block);
-        builder.terminate_return(
-            builder
-                .current_bb_get()
-                .inputs
-                .iter()
-                .map(|phi| phi.out)
-                .collect(),
-        );
-
-        if let Some(poison) = ctxt.poison {
-            return Err(poison.into());
+                .collect();
+            locals.append(&mut expaneded_locals);
         }
-        self.module.ir.functions[function_idx].num_vars = ctxt.var_count.load(Ordering::Relaxed);
-        self.module.ir.functions[function_idx].basic_blocks = builder.finalize();
+
+        let (num_vars, bbs) = {
+            let mut ctxt = Context {
+                module: &self.module,
+                stack,
+                func: match &self.module.ir.functions[function_idx as usize].src {
+                    FunctionSource::Internal(f) => f,
+                    _ => unreachable!(),
+                },
+                var_count,
+                poison: None,
+            };
+            let mut builder = FunctionBuilder::new();
+
+            let entry_basic_block = BasicBlock::next_id();
+            let exit_basic_block = BasicBlock::next_id();
+
+            builder.reserve_bb_with_phis(exit_basic_block, &mut ctxt, function_type.1.clone());
+
+            let function_scope_label = Label {
+                bb_id: exit_basic_block,
+                loop_after_bb_id: None,
+                loop_after_result_type: None,
+                result_type: function_type.1,
+            };
+            let mut labels = vec![function_scope_label];
+            builder.start_bb_with_id(entry_basic_block);
+            parse_basic_blocks(i, &mut ctxt, &mut labels, &mut builder)?;
+
+            // insert last basic block that always returns from function (jump target for function scope label)
+            builder.continue_bb(exit_basic_block);
+            builder.terminate_return(
+                builder
+                    .current_bb_get()
+                    .inputs
+                    .iter()
+                    .map(|phi| phi.out)
+                    .collect(),
+            );
+
+            if let Some(poison) = ctxt.poison {
+                return Err(poison.into());
+            }
+
+            (ctxt.var_count.load(Ordering::Relaxed), builder.finalize())
+        };
+        match &mut self.module.ir.functions[function_idx as usize].src {
+            FunctionSource::Internal(src) => {
+                src.num_vars = num_vars;
+                src.bbs = bbs;
+            }
+            _ => unreachable!(),
+        };
         Ok(())
     }
 
@@ -392,14 +416,7 @@ impl Parser {
             )));
         }
 
-        let mut function_idx = self
-            .module
-            .ir
-            .functions
-            .iter()
-            .position(|f| f.basic_blocks.is_empty())
-            .unwrap_or(self.module.ir.functions.len());
-
+        let mut function_idx = 0 as FuncIdx;
         while num_remaining_function_defs > 0 {
             let next_free_function_idx = self
                 .module
@@ -407,9 +424,12 @@ impl Parser {
                 .functions
                 .iter()
                 .enumerate()
-                .skip(function_idx)
-                .filter(|(_, f)| !f.import && f.basic_blocks.is_empty())
-                .map(|(i, _)| i)
+                .skip(function_idx as usize)
+                .filter(|(_, f)| match &f.src {
+                    FunctionSource::Internal(FunctionInternal { bbs, .. }) => bbs.is_empty(),
+                    _ => false,
+                })
+                .map(|(i, _)| i as FuncIdx)
                 .next();
 
             if next_free_function_idx.is_none() {
@@ -486,8 +506,6 @@ impl Parser {
             }
             self.module.datas.push(data);
         }
-
-        // TODO: if I understand the spec correctly, this should not be a necessary check, but the spec tests require it...
         if i.pos != expected_reader_pos_after_section {
             return Err(ParserError::Msg(
                 "declared data section size does not match actual section size".into(),

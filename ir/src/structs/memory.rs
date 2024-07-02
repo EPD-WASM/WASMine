@@ -10,6 +10,7 @@ pub enum MemoryError {
 #[derive(Debug, Clone)]
 pub struct Memory {
     pub limits: Limits,
+    pub import: bool,
 }
 
 #[derive(Debug, Clone)]

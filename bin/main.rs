@@ -1,7 +1,6 @@
 use log::LevelFilter;
 use simplelog::{ColorChoice, CombinedLogger, Config, TermLogger, TerminalMode};
 use std::env::args;
-use std::io::Write;
 use std::path::PathBuf;
 use std::process::ExitCode;
 

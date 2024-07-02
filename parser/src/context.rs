@@ -1,14 +1,12 @@
-use std::sync::atomic::{AtomicU32, Ordering};
-
-use ir::{function::Function, instructions::Variable, structs::module::Module};
-use wasm_types::ValType;
-
 use crate::{stack::ParserStack, ValidationError};
+use ir::{function::FunctionInternal, instructions::Variable, structs::module::Module};
+use std::sync::atomic::{AtomicU32, Ordering};
+use wasm_types::ValType;
 
 pub(crate) struct Context<'a> {
     pub(crate) module: &'a Module,
     pub(crate) stack: ParserStack,
-    pub(crate) func: &'a Function,
+    pub(crate) func: &'a FunctionInternal,
     pub(crate) var_count: AtomicU32,
     pub(crate) poison: Option<ValidationError>,
 }
@@ -35,7 +33,7 @@ impl<'a> Context<'a> {
         }
     }
 
-    pub(crate) fn new(module: &'a Module, func: &'a Function) -> Self {
+    pub(crate) fn new(module: &'a Module, func: &'a FunctionInternal) -> Self {
         Self {
             module,
             stack: ParserStack::new(),

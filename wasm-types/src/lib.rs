@@ -40,7 +40,7 @@ pub type ResType = Vec<ValType>;
 // https://webassembly.github.io/spec/core/syntax/types.html#result-types
 pub type FuncType = (ResType, ResType);
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Limits {
     pub min: u32,
     pub max: Option<u32>,

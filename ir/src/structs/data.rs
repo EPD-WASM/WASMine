@@ -1,7 +1,7 @@
 use super::value::Value;
 use wasm_types::MemIdx;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum DataMode {
     Active { memory: MemIdx, offset: Value },
     Passive,

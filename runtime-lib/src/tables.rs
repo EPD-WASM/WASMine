@@ -1,3 +1,5 @@
+use runtime_interface::RawFunctionPtr;
+
 use crate::{error::RuntimeError, helpers::trap, runtime::Runtime};
 
 impl Runtime {
@@ -8,16 +10,16 @@ impl Runtime {
         table_idx: usize,
         type_idx: usize,
         entry_idx: usize,
-    ) -> FunctionAddress {
+    ) -> RawFunctionPtr {
         if table_idx >= self.tables.len() {
             trap()
         }
         let table = &self.tables[table_idx];
 
-        if type_idx >= self.config.module.function_types.len() {
+        if type_idx >= self.module.function_types.len() {
             trap()
         }
-        let func_type = &self.config.module.function_types[type_idx];
+        let func_type = &self.module.function_types[type_idx];
 
         if entry_idx >= table.values.len() {
             trap()
@@ -31,28 +33,26 @@ impl Runtime {
     }
 }
 
-pub(crate) type FunctionAddress = u64;
-
 #[derive(Clone, Copy)]
 pub(crate) enum TableItem {
     // store raw function addresses
-    Func(FunctionAddress),
-    Extern(FunctionAddress),
+    Func(RawFunctionPtr),
+    Extern(RawFunctionPtr),
     Null,
 }
 
 // All other information like the table type, etc. are stored in the config
-#[derive(Default)]
-pub(crate) struct TableInstance {
+#[derive(Default, Clone)]
+pub struct TableInstance {
     // final, evaluated references
     pub(crate) values: Vec<TableItem>,
 }
 
 impl Runtime {
     fn init_tables(&mut self) -> Result<(), RuntimeError> {
-        for table in self.config.tables.iter() {
+        for table in self.module.tables.iter() {
             self.tables.push(TableInstance {
-                values: vec![TableItem::Null; table.min_size as usize],
+                values: vec![TableItem::Null; table.r#type.lim.min as usize],
             });
         }
 

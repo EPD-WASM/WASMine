@@ -11,15 +11,15 @@ use ir::{
         export::{Export, ExportDesc},
         expression::{ConstantExpression, ConstantExpressionError},
         global::Global,
-        import::{Import, ImportDesc},
+        import::Import,
         memory::{MemArg, Memory},
         module::Module,
         table::Table,
         value::Value,
     },
 };
-use wasm_types::instruction::BlockType;
 use wasm_types::module::{GlobalType, MemType, Name, Section, TableType};
+use wasm_types::{instruction::BlockType, ImportDesc};
 use wasm_types::{
     FuncIdx, FuncType, GlobalIdx, Limits, MemIdx, NumType, RefType, ResType, TableIdx, TypeIdx,
     ValType,
@@ -161,6 +161,7 @@ impl Parse for Table {
     fn parse(i: &mut WasmStreamReader) -> Result<Table, ParserError> {
         Ok(Table {
             r#type: TableType::parse(i)?,
+            import: false,
         })
     }
 }
@@ -169,6 +170,7 @@ impl Parse for Memory {
     fn parse(i: &mut WasmStreamReader) -> Result<Memory, ParserError> {
         Ok(Memory {
             limits: Limits::parse(i)?,
+            import: false,
         })
     }
 }
@@ -334,7 +336,10 @@ impl ParseWithContext for ConstantExpression {
         i: &mut WasmStreamReader,
         module: &Module,
     ) -> Result<ConstantExpression, ParserError> {
-        let fake_func = Function::create_empty(0);
+        let fake_func = match Function::create_empty(0).src {
+            ir::function::FunctionSource::Internal(f) => f,
+            _ => unreachable!(),
+        };
         let mut ctxt = Context::new(module, &fake_func);
         let mut labels = Vec::new();
         let mut builder = FunctionBuilder::new();

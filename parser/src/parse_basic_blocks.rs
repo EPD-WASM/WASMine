@@ -1,3 +1,4 @@
+use super::{opcode_tbl::LVL1_JMP_TABLE, ParseResult, ValidationError};
 use crate::{
     context::Context, error::ParserError, function_builder::FunctionBuilder, stack::ParserStack,
     wasm_stream_reader::WasmStreamReader,
@@ -9,8 +10,6 @@ use ir::{
 };
 use wasm_types::instruction::BlockType;
 use wasm_types::{NumType, RefType, ResType, ValType};
-
-use super::{opcode_tbl::LVL1_JMP_TABLE, ParseResult, ValidationError};
 
 fn setup_block_stack(block_type: BlockType, ctxt: &mut Context) -> Vec<VariableID> {
     let input_signature = get_block_input_signature(ctxt, block_type);
@@ -205,7 +204,6 @@ fn parse_terminator(
             labels.push(block_label.clone());
 
             // parse block instructions until the block's "end"
-            // TODO: stack should be copied here, so that the block can't alter the stack for the outer block
             builder.start_bb_with_id(loop_body_bb_id);
             parse_basic_blocks(i, ctxt, labels, builder)?;
 
@@ -389,7 +387,7 @@ fn parse_terminator(
                     "call function index out of bounds".to_string(),
                 ))
             }
-            let func = ctxt
+            let func_type = ctxt
                 .module
                 .ir
                 .functions
@@ -401,13 +399,13 @@ fn parse_terminator(
                         .cloned()
                 })
                 .unwrap();
-            let call_params = validate_and_extract_result_from_stack(ctxt, &func.0);
+            let call_params = validate_and_extract_result_from_stack(ctxt, &func_type.0);
             // pop all parameters from the stack
             ctxt.stack
                 .stack
                 .truncate(ctxt.stack.stack.len() - call_params.len());
 
-            let return_vars = func
+            let return_vars = func_type
                 .1
                 .iter()
                 .map(|val| {

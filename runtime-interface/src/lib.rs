@@ -1,6 +1,7 @@
 use std::ffi;
+use wasm_types::{DataIdx, ElemIdx, MemIdx, TableIdx, TypeIdx};
 
-use wasm_types::{DataIdx, ElemIdx, FuncType, MemIdx, TableIdx, TypeIdx};
+pub type RawFunctionPtr = *const core::ffi::c_void;
 
 /// The only top level datastructure always available to the executing WASM code
 #[repr(C)]
@@ -17,17 +18,11 @@ pub struct ExecutionContext {
     pub memories_cap: usize,
 }
 
+#[derive(Clone, Debug)]
 #[repr(C)]
 pub struct MemoryInstance {
     pub data: *mut u8,
     pub size: u32,
-}
-
-#[derive(Clone)]
-pub struct RTImport {
-    pub name: &'static str,
-    pub function_type: FuncType,
-    pub callable: *const u8,
 }
 
 #[derive(Clone)]
@@ -49,32 +44,32 @@ extern "C" {
     pub fn memory_fill(
         ctxt: &ExecutionContext,
         memory_idx: MemIdx,
-        offset: usize,
-        size: usize,
+        offset: u32,
+        size: u32,
         value: u8,
     );
     pub fn memory_copy(
         ctxt: &ExecutionContext,
         memory_idx: MemIdx,
-        src_offset: usize,
-        dst_offset: usize,
-        size: usize,
+        src_offset: u32,
+        dst_offset: u32,
+        size: u32,
     );
     pub fn memory_init(
         ctxt: &ExecutionContext,
         memory_idx: MemIdx,
         data_idx: DataIdx,
-        src_offset: usize,
-        dst_offset: usize,
-        size: usize,
+        src_offset: u32,
+        dst_offset: u32,
+        size: u32,
     );
     pub fn data_drop(ctxt: &ExecutionContext, data_idx: DataIdx);
     pub fn indirect_call(
         ctxt: &ExecutionContext,
         table_idx: TableIdx,
         type_idx: TypeIdx,
-        entry_idx: usize,
-    ) -> u64;
+        entry_idx: u32,
+    ) -> RawFunctionPtr;
     pub fn table_set(ctxt: &ExecutionContext, table_idx: usize, value: u64);
     pub fn table_get(ctxt: &ExecutionContext, table_idx: usize) -> u64;
     pub fn table_grow(

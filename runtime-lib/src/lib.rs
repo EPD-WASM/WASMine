@@ -1,31 +1,30 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
-use context::RTContext;
+#[cfg(feature = "asm")]
+compile_error!("The \"asm\" engine is not available yet.");
+
+#[cfg(not(any(feature = "llvm", feature = "interp", feature = "asm")))]
+compile_error!("You need to enable at least one execution backend!");
+
 use error::RuntimeError;
-use interpreter::InterpreterContext;
 use ir::{
     structs::value::{Number, Value},
     utils::numeric_transmutes::{Bit32, Bit64},
 };
-use runtime::Runtime;
-use std::path;
-use wasm_types::{FuncType, NumType, ValType};
-/* This runtime component library is responsible for:
-    - Memory Management
-    - WASI
-    - Bootstrapping / Loading
-    - Table Management
-    - Data Management / Loading
-*/
-mod config;
-pub mod context;
-mod data;
-mod error;
+use runtime_interface::{GlobalInstance, MemoryInstance, RawFunctionPtr};
+use std::{path, rc::Rc};
+use tables::TableInstance;
+use wasm_types::{FuncType, GlobalType, Limits, NumType, TableType, ValType};
+
+pub mod engine;
+pub mod error;
 mod execution_context;
 pub mod globals;
 mod helpers;
+pub mod linker;
 mod memory;
+pub mod module_instance;
 pub mod runtime;
 mod tables;
 mod wasi;
@@ -39,6 +38,34 @@ pub const WASM_MAX_ADDRESS: u64 = 2_u64.pow(33) + 15;
 pub const WASM_RESERVED_MEMORY_SIZE: u64 = WASM_MAX_ADDRESS.next_multiple_of(INTL_PAGE_SIZE as u64);
 // x86 small page size = 4KiB
 pub const INTL_PAGE_SIZE: u32 = 2_u32.pow(12);
+
+#[derive(Clone, Debug)]
+pub struct RTFuncImport {
+    pub name: String,
+    pub function_type: FuncType,
+    pub callable: RawFunctionPtr,
+}
+
+#[derive(Clone, Debug)]
+pub struct RTMemoryImport {
+    pub name: String,
+    pub instance: MemoryInstance,
+    pub limits: Limits,
+}
+
+#[derive(Clone)]
+pub struct RTGlobalImport {
+    pub name: String,
+    pub instance: GlobalInstance,
+    pub r#type: GlobalType,
+}
+
+#[derive(Clone)]
+pub struct RTTableImport {
+    pub name: String,
+    pub instance: TableInstance,
+    pub r#type: TableType,
+}
 
 fn parse_input_params_for_function(function_type: &FuncType) -> Result<Vec<Value>, RuntimeError> {
     let args = std::env::args().skip(2);
@@ -94,23 +121,25 @@ fn run_internal(path: &str) -> Result<Vec<Value>, RuntimeError> {
     let path = path::Path::new(path);
     let loader = loader::Loader::from_file(path);
     let parser = parser::Parser::default();
-    let module = parser.parse(loader).unwrap();
-    let context = RTContext::new(module.clone())?;
-    let start_function = context.query_start_function()?;
-    let function_type = context.get_function_type(start_function);
-    let input_params = parse_input_params_for_function(function_type)?;
-    let runtime = Runtime::init(context);
-    let execution_context = unsafe { (*runtime).create_execution_context()? };
+    let module = Rc::new(parser.parse(loader).unwrap());
 
-    interpreter::Interpreter::new(InterpreterContext::new(module))
-        .run(
-            execution_context,
-            start_function,
-            unsafe { (*runtime).config.imports.clone() },
-            unsafe { (*runtime).globals.0.clone() },
-            input_params,
+    #[cfg(feature = "interp")]
+    {
+        todo!()
+    }
+    #[cfg(feature = "llvm")]
+    {
+        let linker = Linker::new();
+        let engine = Engine::llvm()?;
+
+        let mut module_instance = linker.link(module, engine)?;
+        module_instance.run_by_name(
+            "_start",
+            parse_input_params_for_function(
+                module_instance.get_function_type(module_instance.query_start_function().unwrap()),
+            )?,
         )
-        .map_err(RuntimeError::InterpreterError)
+    }
 }
 
 pub fn run(path: &str) -> u8 {

@@ -18,8 +18,8 @@ pub(crate) fn select_numeric(
 ) -> ParseResult {
     let select_val = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
 
-    let val1 = ctxt.pop_var();
     let val2 = ctxt.pop_var();
+    let val1 = ctxt.pop_var();
     if val1.type_ != val2.type_ {
         ctxt.poison(ValidationError::Msg(format!(
             "type mismatch for select: {:?} != {:?}",

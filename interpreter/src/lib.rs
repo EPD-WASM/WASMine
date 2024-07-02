@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
-use runtime_interface::{ExecutionContext, GlobalStorage, RTImport};
+use ir::function::FunctionSource;
+use runtime_interface::{ExecutionContext, GlobalStorage};
 use thiserror::Error;
 
 use wasm_types::{FuncIdx, InstructionType};
@@ -97,7 +98,6 @@ impl Interpreter {
         &mut self,
         runtime: ExecutionContext,
         function_idx: FuncIdx,
-        imports: Vec<RTImport>,
         globals: GlobalStorage,
         parameters: Vec<Value>,
     ) -> Result<Vec<Value>, InterpreterError> {
@@ -112,11 +112,12 @@ impl Interpreter {
                 .expect(format!("Function not found at index {function_idx}").as_str());
 
             // TODO: store pointer to entry block. This is currently always BB0, but this might change in the future
-            let basic_block = entry_fn
-                .basic_blocks
-                .get(0)
-                // TODO: make this check only for debug builds. We KNOW that this basic block exists
-                .expect("Basic block not found at index 0");
+            let basic_block = match &entry_fn.src {
+                FunctionSource::Internal(f) => f.bbs.first(),
+                FunctionSource::Import(_) => None,
+            }
+            // TODO: make this check only for debug builds. We KNOW that this basic block exists
+            .expect("Basic block not found at index 0");
 
             let decoder = InstructionDecoder::new(basic_block.instructions.clone());
             self.ctx.stack.push(StackFrame {

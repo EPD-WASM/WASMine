@@ -1,4 +1,5 @@
-use runtime_interface::RTImport;
+use crate::RTFuncImport;
+use runtime_interface::RawFunctionPtr;
 use std::collections::HashMap;
 use wasm_types::{NumType, ValType};
 
@@ -8,9 +9,10 @@ mod types;
 
 static I32: ValType = ValType::Number(NumType::I32);
 
-pub(crate) fn collect_available_imports() -> HashMap<&'static str, RTImport> {
+#[allow(clippy::fn_to_numeric_cast)]
+pub(crate) fn collect_available_imports() -> HashMap<&'static str, RTFuncImport> {
     #[rustfmt::skip]
     return HashMap::from([
-        ("wasi_snapshot_preview1.fd_filestat_get", RTImport {name: "fd_filestat_get", /* inputs: fd + return_ptr, outputs: errno */ function_type: (vec![I32, I32], vec![I32]), callable: functions::fd_filestat_get as *const u8},
+        ("wasi_snapshot_preview1.fd_filestat_get", RTFuncImport {name: "fd_filestat_get".into(), /* inputs: fd + return_ptr, outputs: errno */ function_type: (vec![I32, I32], vec![I32]), callable: functions::fd_filestat_get as RawFunctionPtr},
     )]);
 }
