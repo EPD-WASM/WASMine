@@ -4,7 +4,7 @@ use std::fmt::{Display, Formatter};
 
 use wasm_types::{FuncIdx, NumType, RefType, ValType};
 
-use crate::utils::numeric_transmutes::Bit64;
+use crate::utils::numeric_transmutes::{Bit32, Bit64};
 
 mod number_impls;
 mod number_ops;
@@ -95,6 +95,42 @@ impl Value {
                 Value::Reference(Reference::Function(val.trans_u32()))
             }
             ValType::VecType => Value::Vector(val.trans_u64() as u128),
+        }
+    }
+
+    pub fn to_generic(&self) -> u64 {
+        match self {
+            Value::Number(Number::I32(n)) => n.trans_u64(),
+            Value::Number(Number::I64(n)) => n.trans_u64(),
+            Value::Number(Number::U32(n)) => n.trans_u64(),
+            Value::Number(Number::U64(n)) => n.trans_u64(),
+            Value::Number(Number::S32(n)) => n.trans_u64(),
+            Value::Number(Number::S64(n)) => n.trans_u64(),
+            Value::Number(Number::F32(n)) => n.trans_u64(),
+            Value::Number(Number::F64(n)) => n.trans_u64(),
+            Value::Vector(_) => unimplemented!(),
+            Value::Reference(Reference::Function(idx)) => idx.trans_u64(),
+            Value::Reference(Reference::Extern(idx)) => idx.trans_u64(),
+            Value::Reference(Reference::Null) => 0,
+        }
+    }
+
+    pub fn r#type(&self) -> ValType {
+        match self {
+            Value::Number(Number::I32(_))
+            | Value::Number(Number::U32(_))
+            | Value::Number(Number::S32(_)) => ValType::Number(NumType::I32),
+            Value::Number(Number::I64(_))
+            | Value::Number(Number::U64(_))
+            | Value::Number(Number::S64(_)) => ValType::Number(NumType::I64),
+            Value::Number(Number::F32(_)) => ValType::Number(NumType::F32),
+            Value::Number(Number::F64(_)) => ValType::Number(NumType::F64),
+            Value::Vector(_) => ValType::VecType,
+            Value::Reference(Reference::Function(_)) => {
+                ValType::Reference(RefType::FunctionReference)
+            }
+            Value::Reference(Reference::Extern(_)) => ValType::Reference(RefType::ExternReference),
+            Value::Reference(Reference::Null) => ValType::Reference(RefType::FunctionReference),
         }
     }
 }

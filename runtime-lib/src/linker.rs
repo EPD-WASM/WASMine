@@ -1,122 +1,216 @@
 use crate::{
-    engine::Engine, error::RuntimeError, module_instance::WasmModuleInstance, wasi, RTFuncImport,
-    RTGlobalImport, RTMemoryImport, RTTableImport,
+    engine::{Engine, EngineError},
+    module_instance::{InstanceHandle, InstantiationError},
+    segmented_list::SegmentedList,
+    wasi, Cluster,
 };
-use ir::structs::module::Module as WasmModule;
+use ir::structs::{
+    data::Data, element::Element, export::ExportDesc, module::Module as WasmModule, value::Value,
+};
 use runtime_interface::RawFunctionPtr;
 use std::{collections::HashMap, rc::Rc};
-use wasm_types::{FuncType, ImportDesc};
+use wasm_types::{FuncType, GlobalType, ImportDesc, Limits, TableType};
+
+#[derive(thiserror::Error, Debug)]
+pub enum LinkingError {
+    #[error("Module cluster mismatch. Bound linker received module from foreign cluster.")]
+    ClusterMismatch,
+    #[error("Missing required module '{module_name}'.")]
+    ModuleNotFound { module_name: String },
+    #[error("Function type mismatch. Requested: {requested:?}, Actual: {actual:?}.")]
+    FunctionTypeMismatch {
+        requested: FuncType,
+        actual: FuncType,
+    },
+    #[error("Global type mismatch. Requested: {requested:?}, Actual: {actual:?}.")]
+    GlobalTypeMismatch {
+        requested: GlobalType,
+        actual: GlobalType,
+    },
+    #[error("Table type mismatch. Requested: {requested:?}, Actual: {actual:?}.")]
+    TableTypeMismatch {
+        requested: TableType,
+        actual: TableType,
+    },
+    #[error("Global '{global_name}' not found in module '{module_name}'.")]
+    GlobalNotFound {
+        global_name: String,
+        module_name: String,
+    },
+    #[error("Encountered error during call to execution engine: {0}")]
+    EngineError(#[from] EngineError),
+    #[error("Function '{name}' not found in module '{module_name}'.")]
+    FunctionNotFound { module_name: String, name: String },
+    #[error("Error during instantiation of module: {0}")]
+    InstantiationError(#[from] InstantiationError),
+}
+
+pub struct BoundLinker<'a> {
+    registered_modules: HashMap<String, &'a InstanceHandle<'a>>,
+    transferred_handles: SegmentedList<InstanceHandle<'a>>,
+    cluster: &'a Cluster,
+}
+
+impl<'a> BoundLinker<'a> {
+    pub fn new(cluster: &'a Cluster) -> Self {
+        Self {
+            registered_modules: Default::default(),
+            transferred_handles: Default::default(),
+            cluster,
+        }
+    }
+
+    pub fn register(
+        &mut self,
+        module_name: &str,
+        instance_handle: &'a InstanceHandle<'a>,
+    ) -> Result<(), LinkingError> {
+        if instance_handle.cluster.uuid != self.cluster.uuid {
+            return Err(LinkingError::ClusterMismatch);
+        }
+        self.registered_modules
+            .insert(module_name.to_owned(), instance_handle);
+        Ok(())
+    }
+
+    pub fn transfer(
+        &mut self,
+        module_name: &str,
+        instance_handle: InstanceHandle<'a>,
+    ) -> Result<(), LinkingError> {
+        if instance_handle.cluster.uuid != self.cluster.uuid {
+            return Err(LinkingError::ClusterMismatch);
+        }
+        self.transferred_handles.push(instance_handle);
+        let reference = self
+            .transferred_handles
+            .get_last_segments_ref()
+            .first()
+            .unwrap();
+        self.registered_modules
+            .insert(module_name.to_owned(), reference);
+        Ok(())
+    }
+
+    pub fn instantiate_and_link(
+        &self,
+        module: Rc<WasmModule>,
+        engine: Engine,
+    ) -> Result<InstanceHandle<'a>, LinkingError> {
+        let imports = self.collect_imports_for_module(&module)?;
+        Ok(InstanceHandle::new(self.cluster, module, engine, imports)?)
+    }
+
+    fn collect_imports_for_module(
+        &self,
+        module: &WasmModule,
+    ) -> Result<Vec<RTImport>, LinkingError> {
+        module
+            .imports
+            .iter()
+            .map(|import| {
+                let exporting_module = match self.registered_modules.get(&import.module) {
+                    Some(m) => m,
+                    None => {
+                        return Err(LinkingError::ModuleNotFound {
+                            module_name: import.module.clone(),
+                        })
+                    }
+                };
+                match &import.desc {
+                    ImportDesc::Func(type_idx) => {
+                        let requested_function_type =
+                            module.function_types[*type_idx as usize].clone();
+                        let actual_function_type =
+                            match exporting_module.get_function_type_from_name(&import.name) {
+                                Some(t) => t,
+                                None => {
+                                    return Err(LinkingError::FunctionNotFound {
+                                        name: import.name.clone(),
+                                        module_name: import.module.clone(),
+                                    })
+                                }
+                            };
+                        if requested_function_type != *actual_function_type {
+                            return Err(LinkingError::FunctionTypeMismatch {
+                                requested: requested_function_type,
+                                actual: actual_function_type.clone(),
+                            });
+                        }
+                        match exporting_module.get_raw_function_ptr(&import.name) {
+                            Ok(callable) => Ok(RTImport::Func(RTFuncImport {
+                                name: import.name.clone(),
+                                function_type: requested_function_type,
+                                callable,
+                            })),
+                            Err(e) => Err(e.into()),
+                        }
+                    }
+                    ImportDesc::Global(requested_type) => {
+                        let exported_global = match exporting_module
+                            .wasm_module()
+                            .exports
+                            .iter()
+                            .find_map(|export| match &export.desc {
+                                ExportDesc::Global(idx) if export.name == import.name => Some(idx),
+                                _ => None,
+                            }) {
+                            Some(idx) => idx,
+                            None => {
+                                return Err(LinkingError::GlobalNotFound {
+                                    global_name: import.name.clone(),
+                                    module_name: import.module.clone(),
+                                })
+                            }
+                        };
+                        let exported_global =
+                            &exporting_module.wasm_module().globals[*exported_global as usize];
+                        let actual_type = &exported_global.r#type;
+                        if requested_type != actual_type {
+                            return Err(LinkingError::GlobalTypeMismatch {
+                                requested: *requested_type,
+                                actual: *actual_type,
+                            });
+                        }
+                        Ok(RTImport::Global(RTGlobalImport {
+                            name: import.name.clone(),
+                            init: exported_global.init.clone(),
+                            r#type: *requested_type,
+                        }))
+                    }
+                    ImportDesc::Mem(limits) => {
+                        todo!()
+                    }
+                    ImportDesc::Table(table_type) => {
+                        todo!()
+                    }
+                }
+            })
+            .collect()
+    }
+}
 
 #[derive(Default)]
 pub struct Linker {
-    func_storage: HashMap<String, RTFuncImport>,
-    memory_storage: HashMap<String, RTMemoryImport>,
-    global_storage: HashMap<String, RTGlobalImport>,
-    table_storage: HashMap<String, RTTableImport>,
+    host_functions: HashMap<String, RTFuncImport>,
 }
 
 impl Linker {
+    pub fn bind_to<'a>(&self, cluster: &'a Cluster) -> BoundLinker<'a> {
+        BoundLinker::new(cluster)
+    }
+
     pub fn new() -> Self {
-        let mut s = Self::default();
-        // TODO: make this more efficient
-        for (_, import) in collect_available_imports() {
-            s.register_external_func(import)
-        }
-        s
+        Self::default()
     }
 
-    pub fn register_external_func(&mut self, import: RTFuncImport) {
-        self.func_storage.insert(import.name.to_owned(), import);
-    }
-
-    fn lookup_func_addr(&self, fn_name: &str) -> Option<RawFunctionPtr> {
-        self.func_storage.get(fn_name).map(|res| res.callable)
-    }
-
-    fn lookup_func_type(&self, fn_name: &str) -> Option<FuncType> {
-        self.func_storage
-            .get(fn_name)
-            .map(|res| res.function_type.clone())
-    }
-
-    pub fn register_external_memory(&mut self, import: RTMemoryImport) {
-        self.memory_storage.insert(import.name.to_owned(), import);
-    }
-
-    fn lookup_memory(&self, name: &str) -> Option<&RTMemoryImport> {
-        self.memory_storage.get(name)
-    }
-
-    pub fn register_external_table(&mut self, import: RTTableImport) {
-        self.table_storage.insert(import.name.to_owned(), import);
-    }
-
-    fn lookup_table(&mut self, name: &str) -> Option<&RTTableImport> {
-        self.table_storage.get(name)
-    }
-
-    pub fn register_external_global(&mut self, import: RTGlobalImport) {
-        self.global_storage.insert(import.name.to_owned(), import);
-    }
-
-    fn lookup_global(&mut self, name: &str) -> Option<&RTGlobalImport> {
-        self.global_storage.get(name)
-    }
-
-    pub fn link(
-        mut self,
-        wasm_module: Rc<WasmModule>,
-        engine: Engine,
-    ) -> Result<WasmModuleInstance, RuntimeError> {
-        let mut module_instance = WasmModuleInstance::new(wasm_module.clone(), engine);
-
-        for import in wasm_module.imports.iter() {
-            let requested_import_name = format!("{}.{}", import.module, import.name);
-            match import.desc {
-                ImportDesc::Func(type_idx) => {
-                    let requested_func_type = wasm_module.function_types[type_idx as usize].clone();
-                    match self.lookup_func_type(requested_import_name.as_str()) {
-                    Some(t) if t == requested_func_type => module_instance.add_func_import(&requested_import_name, self.lookup_func_addr(requested_import_name.as_str()).unwrap()),
-                    Some(t) => {return Err(RuntimeError::InvalidImport(format!("Supplied import signature {:?} does not match declared import signature {:?}.", t, requested_func_type)))},
-                    None => log::warn!("Could not validate import signature for imported function '{}'", requested_import_name)
-                };
-                }
-                ImportDesc::Mem(limits) => {
-                    match self.lookup_memory(requested_import_name.as_str()) {
-                    Some(mem) if mem.limits == limits => {
-                        module_instance.add_memory_import(mem.instance.clone())
-                    },
-                    Some(mem) => return Err(RuntimeError::InvalidImport(format!("Supplied import memory limits {:?} do not match declared import memory limits {:?}.", mem, limits))),
-                    None => return Err(RuntimeError::InvalidImport(format!("Could not find memory import '{}'", requested_import_name)))
-                };
-                }
-                ImportDesc::Global(t) => {
-                    match self.lookup_global(&requested_import_name) {
-                        Some(glob) if glob.r#type == t => {
-                            module_instance.add_global_import(glob.instance.clone())
-                        },
-                        Some(glob) => return Err(RuntimeError::InvalidImport(format!("Supplied import global type {:?} does not match declared import global type {:?}.", glob.r#type, t))),
-                        None => return Err(RuntimeError::InvalidImport(format!("Could not find global import '{}'", requested_import_name)))
-                    }
-                },
-                ImportDesc::Table(t) => {
-                    match self.lookup_table(&requested_import_name) {
-                        Some(table) if table.r#type == t => {
-                            module_instance.add_table_import(table.instance.clone())
-                        },
-                        Some(table) => return Err(RuntimeError::InvalidImport(format!("Supplied import table type {:?} does not match declared import table type {:?}.", table.r#type, t))),
-                        None => return Err(RuntimeError::InvalidImport(format!("Could not find table import '{}'", requested_import_name)))
-                    }
-                }
-            }
-        }
-
-        // add rt helper functions (don't need to be explicitly imported)
-        for (_, import) in collect_available_imports() {
-            module_instance.add_func_import(&import.name, import.callable)
-        }
-
-        Ok(module_instance)
+    pub fn link_wasi(&mut self) {
+        self.host_functions.extend(
+            wasi::collect_available_imports()
+                .into_iter()
+                .map(|(k, v)| (k.into(), v))
+                .collect::<HashMap<_, _>>(),
+        );
     }
 }
 
@@ -148,4 +242,39 @@ fn collect_available_imports() -> HashMap<&'static str, RTFuncImport> {
         },
     );
     imports
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct RTFuncImport {
+    pub(crate) name: String,
+    pub(crate) function_type: FuncType,
+    pub(crate) callable: RawFunctionPtr,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct RTMemoryImport {
+    pub(crate) name: String,
+    pub(crate) datas: Vec<Data>,
+    pub(crate) limits: Limits,
+}
+
+#[derive(Clone)]
+pub(crate) struct RTGlobalImport {
+    pub(crate) name: String,
+    pub(crate) init: Value,
+    pub(crate) r#type: GlobalType,
+}
+
+#[derive(Clone)]
+pub(crate) struct RTTableImport {
+    pub(crate) name: String,
+    pub(crate) r#type: TableType,
+    pub(crate) elements: Vec<Element>,
+}
+
+pub(crate) enum RTImport {
+    Func(RTFuncImport),
+    Memory(RTMemoryImport),
+    Global(RTGlobalImport),
+    Table(RTTableImport),
 }

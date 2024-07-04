@@ -1,14 +1,16 @@
 use crate::error::RuntimeError;
-use crate::helpers::trap;
-use crate::runtime::Runtime;
-use crate::{WASM_PAGE_SIZE, WASM_RESERVED_MEMORY_SIZE};
-use ir::structs::data::DataMode;
-use ir::structs::module::Module;
+use crate::linker::RTImport;
+use crate::module_instance::InstantiationError;
+use crate::{Cluster, WASM_PAGE_SIZE, WASM_RESERVED_MEMORY_SIZE};
+use ir::structs::data::{Data, DataMode};
+use ir::structs::memory::Memory;
+use ir::structs::module::Module as WasmModule;
+use ir::structs::value::{Number, Value};
 use nix::errno::Errno;
 use nix::libc::mprotect;
 use nix::{errno, libc};
-use std::mem::ManuallyDrop;
 use std::ops::Index;
+use std::rc::Rc;
 use wasm_types::DataIdx;
 
 #[repr(transparent)]
@@ -57,21 +59,20 @@ impl MemoryInstance {
 
     pub(crate) fn init(
         &self,
-        rt: *mut Runtime,
         data_source: &[u8],
         src_offset: u32,
         dst_offset: u32,
         size: Option<u32>,
-    ) -> Result<(), RuntimeError> {
+    ) -> Result<(), InstantiationError> {
         unsafe {
             let size = size
                 .map(|s| s as u64)
                 .unwrap_or((data_source.len().saturating_sub(src_offset as usize)) as u64);
             if src_offset as u64 + size > data_source.len() as u64 {
-                return Err(RuntimeError::Msg("Data source too small.".into()));
+                return Err(InstantiationError::DataSourceOOB);
             }
             if dst_offset as u64 + size > self.0.size as u64 * WASM_PAGE_SIZE as u64 {
-                return Err(RuntimeError::Msg("Memory too small.".into()));
+                return Err(InstantiationError::MemoryInitOOB);
             }
             if size == 0 {
                 return Ok(());
@@ -87,16 +88,18 @@ impl MemoryInstance {
 
     pub(crate) fn rt_init(
         &self,
-        rt: *mut Runtime,
+        wasm_module: Rc<WasmModule>,
         data_idx: DataIdx,
         src_offset: u32,
         dst_offset: u32,
         size: u32,
     ) -> Result<(), RuntimeError> {
-        let data_instance = match unsafe { (*rt).module.datas.get(data_idx as usize) } {
+        let data_instance = match wasm_module.datas.get(data_idx as usize) {
             None => {
-                log::error!("Data instance not found: {}", data_idx);
-                trap();
+                return Err(RuntimeError::Msg(format!(
+                    "Data instance not found: {}",
+                    data_idx
+                )));
             }
             Some(data_instance) => data_instance,
         };
@@ -106,7 +109,7 @@ impl MemoryInstance {
                 data_idx
             )));
         }
-        if let Err(e) = self.init(rt, &data_instance.init, src_offset, dst_offset, Some(size)) {
+        if let Err(e) = self.init(&data_instance.init, src_offset, dst_offset, Some(size)) {
             return Err(RuntimeError::Msg(format!(
                 "Failed to initialize memory: {}",
                 e
@@ -134,15 +137,17 @@ impl Drop for MemoryInstance {
     }
 }
 
-pub(crate) struct MemoryStorage(pub(crate) Vec<MemoryInstance>);
+pub(crate) struct MemoryStorage<'a>(pub(crate) &'a mut [MemoryInstance]);
 
-impl MemoryStorage {
-    pub(crate) fn new(
-        wasm_module: &Module,
-        imported_memories: &[runtime_interface::MemoryInstance],
-    ) -> Result<Self, RuntimeError> {
+impl<'a> MemoryStorage<'a> {
+    pub(crate) fn init_on_cluster(
+        cluster: &'a Cluster,
+        memories_meta: &[Memory],
+        data_meta: &[Data],
+        imports: &[RTImport],
+    ) -> Result<&'a mut [MemoryInstance], InstantiationError> {
         let mut memories = Vec::with_capacity(1);
-        for memory_desc in wasm_module.memories.iter() {
+        for memory_desc in memories_meta.iter() {
             let memory_ptr = unsafe {
                 libc::mmap(
                     core::ptr::null_mut::<libc::c_void>(),
@@ -154,7 +159,7 @@ impl MemoryStorage {
                 )
             };
             if memory_ptr == libc::MAP_FAILED {
-                return Err(RuntimeError::AllocationFailure(Errno::last()));
+                return Err(InstantiationError::AllocationFailure(Errno::last()));
             }
 
             if 0 != unsafe {
@@ -164,38 +169,34 @@ impl MemoryStorage {
                     libc::PROT_READ | libc::PROT_WRITE,
                 )
             } {
-                return Err(RuntimeError::AllocationFailure(Errno::last()));
+                return Err(InstantiationError::AllocationFailure(Errno::last()));
             }
             memories.push(MemoryInstance::new(
                 memory_ptr as *mut u8,
                 memory_desc.limits.min,
             ))
         }
-        Ok(Self(memories))
-    }
 
-    pub(crate) fn into_raw_parts(
-        mut self,
-    ) -> (*mut runtime_interface::MemoryInstance, usize, usize) {
-        let length = self.0.len();
-        let capacity = self.0.capacity();
-        let ptr = self.0.as_mut_ptr() as *mut runtime_interface::MemoryInstance;
-        std::mem::forget(self.0);
-        (ptr, length, capacity)
-    }
+        for data in data_meta {
+            if let DataMode::Active { memory, offset } = &data.mode {
+                if *memory != 0 {
+                    return Err(InstantiationError::MemoryIdxNotZero);
+                }
+                let memory = &memories[*memory as usize];
+                let offset = match offset {
+                    Value::Number(Number::I32(offset)) => offset,
+                    _ => return Err(InstantiationError::InvalidDataOffsetType(offset.r#type())),
+                };
+                memory.init(data.init.as_slice(), *offset, 0, None)?;
+                // TODO: drop data
+            }
+        }
 
-    pub(crate) fn from_raw_parts(
-        ptr: *mut runtime_interface::MemoryInstance,
-        len: usize,
-        capacity: usize,
-    ) -> ManuallyDrop<Self> {
-        ManuallyDrop::new(Self(unsafe {
-            Vec::from_raw_parts(ptr as *mut MemoryInstance, len, capacity)
-        }))
+        Ok(cluster.alloc_memories(memories))
     }
 }
 
-impl Index<usize> for MemoryStorage {
+impl Index<usize> for MemoryStorage<'_> {
     type Output = MemoryInstance;
 
     fn index(&self, index: usize) -> &Self::Output {

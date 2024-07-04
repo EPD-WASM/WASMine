@@ -1,10 +1,5 @@
-use ir::{
-    structs::{
-        global::Global,
-        value::{Number, Value},
-    },
-    utils::numeric_transmutes::{Bit32, Bit64},
-};
+use crate::{linker::RTImport, module_instance::InstantiationError, Cluster};
+use ir::structs::global::Global;
 use nix::errno::Errno;
 use runtime_interface::GlobalInstance;
 
@@ -14,7 +9,11 @@ pub struct GlobalStorage {
 }
 
 impl GlobalStorage {
-    pub(crate) fn new(globals_meta: &[Global]) -> GlobalStorage {
+    pub(crate) fn init_on_cluster<'a>(
+        cluster: &'a Cluster,
+        globals_meta: &[Global],
+        imports: &[RTImport],
+    ) -> Result<&'a mut GlobalStorage, InstantiationError> {
         let storage_size = globals_meta.len() * 8;
         let storage = if storage_size > 0 {
             unsafe {
@@ -35,34 +34,37 @@ impl GlobalStorage {
         }
 
         let mut uninitialized_imports = Vec::new();
-        let globals = globals_meta
+        let mut globals = globals_meta
             .iter()
             .enumerate()
             .map(|(idx, global)| {
                 let addr = unsafe { (storage as *mut u64).add(idx) };
                 match global.import {
                     true => uninitialized_imports.push(idx),
-                    false => unsafe {
-                        *addr = match &global.init {
-                            Value::Number(Number::I32(n)) => n.trans_u64(),
-                            Value::Number(Number::I64(n)) => n.trans_u64(),
-                            Value::Number(Number::F32(n)) => n.trans_u64(),
-                            Value::Number(Number::F64(n)) => n.trans_u64(),
-                            _ => unimplemented!(),
-                        }
-                    },
+                    false => unsafe { *addr = global.init.to_generic() },
                 }
                 GlobalInstance { addr }
             })
-            .collect();
+            .collect::<Vec<_>>();
 
-        GlobalStorage {
+        for import in imports.iter().filter(|i| matches!(i, RTImport::Global(_))) {
+            match import {
+                RTImport::Global(instance) => {
+                    let idx = uninitialized_imports.pop().unwrap();
+                    unsafe { *globals[idx].addr = instance.init.to_generic() };
+                }
+                _ => unreachable!(),
+            }
+        }
+
+        let storage = GlobalStorage {
             inner: runtime_interface::GlobalStorage {
                 storage: storage as *mut u8,
                 globals,
             },
             uninitialized_imports: Vec::new(),
-        }
+        };
+        Ok(cluster.alloc_global_storage(storage))
     }
 
     pub(crate) fn import(&mut self, instance: GlobalInstance) {

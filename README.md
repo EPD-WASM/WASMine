@@ -112,3 +112,44 @@ package runtime-system {
 "ELF-Interp-entry" -up-> runtime
 @enduml
 ```
+
+```plantuml
+@startuml
+actor user
+cloud computer
+artifact ".wasm-File"
+node parser
+artifact "ParsedWasmModule"
+artifact "TranslatedWasmModule"
+node linker
+artifact "LinkedWasmModule"
+node loader
+artifact "ExecutableWasmModule"
+
+package "LLVM-Backend" {
+    node translator
+    node executor
+}
+
+user -> ".wasm-File"
+".wasm-File" -> parser
+parser -> ParsedWasmModule
+ParsedWasmModule -down-> translator
+translator -up-> TranslatedWasmModule
+TranslatedWasmModule -> linker
+linker -> LinkedWasmModule
+LinkedWasmModule -> loader
+loader -> ExecutableWasmModule
+ExecutableWasmModule --> executor
+executor --> computer
+computer --> user
+@enduml
+```
+
+Idee:
+ - (optional) Globaler Context wie wasmtime engine, v.a. für globale optimierungen wie Type Interning / String Interning, etc. => zunächst in einer VM
+ - Linker = Conveniance für Registrieren von Objekten, die extern von Wasm sind (e.g. host functions)
+ - BoundLinker = Linker der nur noch auf einem Cluster arbeiten kann => kann auch imports von anderen modulen verarbeiten
+ - Cluster = Bündel an Modulinstanzen die sich gegenseitig inkludieren können = Resource Pool = "Agent Cluster" = Wasmtime Store
+ - Instance = WasmModuleInstance = fertig geladenes, ausführbereits Wasm modul = "Agent"
+ - Engine = Execution Backend, Unique pro Instanz

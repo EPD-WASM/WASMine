@@ -1,4 +1,6 @@
-use std::ffi;
+use cee_scape::SigJmpBuf;
+use ir::structs::module::Module as WasmModule;
+use std::{ffi, rc::Rc};
 use wasm_types::{DataIdx, ElemIdx, MemIdx, TableIdx, TypeIdx};
 
 pub type RawFunctionPtr = *const core::ffi::c_void;
@@ -6,16 +8,23 @@ pub type RawFunctionPtr = *const core::ffi::c_void;
 /// The only top level datastructure always available to the executing WASM code
 #[repr(C)]
 pub struct ExecutionContext {
-    pub id: u32,
+    // runtime-resource slices
+    pub tables_ptr: *mut ffi::c_void,
+    pub tables_len: usize,
 
-    pub runtime: *mut ffi::c_void,
-
-    /// number of current recursion levels, used to prevent stack overflowing
-    pub recursion_size: u32,
+    pub globals_ptr: *mut GlobalStorage,
+    pub globals_len: usize,
 
     pub memories_ptr: *mut MemoryInstance,
     pub memories_len: usize,
-    pub memories_cap: usize,
+
+    pub trap_return: Option<SigJmpBuf>,
+    pub trap_msg: Option<String>,
+
+    pub wasm_module: Rc<WasmModule>,
+
+    /// number of current recursion levels, used to prevent stack overflowing
+    pub recursion_size: u32,
 }
 
 #[derive(Clone, Debug)]

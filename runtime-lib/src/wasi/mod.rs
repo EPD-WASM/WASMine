@@ -1,4 +1,4 @@
-use crate::RTFuncImport;
+use crate::linker::RTFuncImport;
 use runtime_interface::RawFunctionPtr;
 use std::collections::HashMap;
 use wasm_types::{NumType, ValType};

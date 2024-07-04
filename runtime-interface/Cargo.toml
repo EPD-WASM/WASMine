@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 wasm-types = { path = "../wasm-types" }
 ir = { path = "../ir" }
+cee-scape = "0.2.0"

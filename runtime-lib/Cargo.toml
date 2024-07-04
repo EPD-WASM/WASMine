@@ -18,6 +18,8 @@ libc = "0.2.155"
 log = "0.4.21"
 llvm-gen = { path = "../llvm-gen", optional=true }
 runtime-interface = { path = "../runtime-interface" }
+cee-scape = "0.2.0"
+uuid = { version = "1.9.1", features = ["v4"] }
 
 [features]
 default = ["interp"]

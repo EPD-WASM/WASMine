@@ -7,27 +7,30 @@ compile_error!("The \"asm\" engine is not available yet.");
 #[cfg(not(any(feature = "llvm", feature = "interp", feature = "asm")))]
 compile_error!("You need to enable at least one execution backend!");
 
-use error::RuntimeError;
 use ir::{
     structs::value::{Number, Value},
     utils::numeric_transmutes::{Bit32, Bit64},
 };
-use runtime_interface::{GlobalInstance, MemoryInstance, RawFunctionPtr};
 use std::{path, rc::Rc};
-use tables::TableInstance;
-use wasm_types::{FuncType, GlobalType, Limits, NumType, TableType, ValType};
+use wasm_types::{FuncType, NumType, ValType};
 
-pub mod engine;
-pub mod error;
+mod cluster;
+mod engine;
+mod error;
 mod execution_context;
-pub mod globals;
-mod helpers;
-pub mod linker;
+mod globals;
+mod linker;
 mod memory;
-pub mod module_instance;
-pub mod runtime;
+mod module_instance;
+mod segmented_list;
 mod tables;
 mod wasi;
+
+pub use cluster::Cluster;
+pub use engine::Engine;
+pub use error::RuntimeError;
+pub use linker::{BoundLinker, Linker};
+pub use module_instance::InstanceHandle;
 
 pub const WASM_PAGE_SIZE: u32 = 2_u32.pow(16);
 // maximum amount of wasm pages
@@ -38,34 +41,6 @@ pub const WASM_MAX_ADDRESS: u64 = 2_u64.pow(33) + 15;
 pub const WASM_RESERVED_MEMORY_SIZE: u64 = WASM_MAX_ADDRESS.next_multiple_of(INTL_PAGE_SIZE as u64);
 // x86 small page size = 4KiB
 pub const INTL_PAGE_SIZE: u32 = 2_u32.pow(12);
-
-#[derive(Clone, Debug)]
-pub struct RTFuncImport {
-    pub name: String,
-    pub function_type: FuncType,
-    pub callable: RawFunctionPtr,
-}
-
-#[derive(Clone, Debug)]
-pub struct RTMemoryImport {
-    pub name: String,
-    pub instance: MemoryInstance,
-    pub limits: Limits,
-}
-
-#[derive(Clone)]
-pub struct RTGlobalImport {
-    pub name: String,
-    pub instance: GlobalInstance,
-    pub r#type: GlobalType,
-}
-
-#[derive(Clone)]
-pub struct RTTableImport {
-    pub name: String,
-    pub instance: TableInstance,
-    pub r#type: TableType,
-}
 
 fn parse_input_params_for_function(function_type: &FuncType) -> Result<Vec<Value>, RuntimeError> {
     let args = std::env::args().skip(2);
@@ -123,23 +98,36 @@ fn run_internal(path: &str) -> Result<Vec<Value>, RuntimeError> {
     let parser = parser::Parser::default();
     let module = Rc::new(parser.parse(loader).unwrap());
 
-    #[cfg(feature = "interp")]
+    #[cfg(feature = "interpreter")]
     {
-        todo!()
+        interpreter::Interpreter::new(InterpreterContext::new(module)).run(
+            execution_context,
+            start_function,
+            unsafe { (*runtime).config.imports.clone() },
+            unsafe { (*runtime).globals.clone() },
+            input_params,
+        );
     }
     #[cfg(feature = "llvm")]
     {
-        let linker = Linker::new();
-        let engine = Engine::llvm()?;
+        let mut engine = Engine::llvm()?;
+        engine.init(module.clone())?;
 
-        let mut module_instance = linker.link(module, engine)?;
-        module_instance.run_by_name(
+        let cluster = Cluster::new();
+        let mut linker = Linker::new();
+        linker.link_wasi();
+
+        let linker = linker.bind_to(&cluster);
+        let mut module_handle = linker.instantiate_and_link(module.clone(), engine)?;
+        module_handle.run_by_name(
             "_start",
             parse_input_params_for_function(
-                module_instance.get_function_type(module_instance.query_start_function().unwrap()),
+                module_handle
+                    .get_function_type_from_func_idx(module_handle.query_start_function().unwrap()),
             )?,
         )
     }
+    todo!()
 }
 
 pub fn run(path: &str) -> u8 {
