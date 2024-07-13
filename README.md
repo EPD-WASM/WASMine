@@ -113,43 +113,45 @@ package runtime-system {
 @enduml
 ```
 
-```plantuml
-@startuml
-actor user
-cloud computer
-artifact ".wasm-File"
-node parser
-artifact "ParsedWasmModule"
-artifact "TranslatedWasmModule"
-node linker
-artifact "LinkedWasmModule"
-node loader
-artifact "ExecutableWasmModule"
+## Documentation
 
-package "LLVM-Backend" {
-    node translator
-    node executor
-}
+### Runtime Data Structures
 
-user -> ".wasm-File"
-".wasm-File" -> parser
-parser -> ParsedWasmModule
-ParsedWasmModule -down-> translator
-translator -up-> TranslatedWasmModule
-TranslatedWasmModule -> linker
-linker -> LinkedWasmModule
-LinkedWasmModule -> loader
-loader -> ExecutableWasmModule
-ExecutableWasmModule --> executor
-executor --> computer
-computer --> user
-@enduml
+Idea:
+ - optional global context, used for global optimisations like string and type interning. WIP.
+    ~ wasmtime engine
+ - `InstanceHandle` => Bundled "view" on resources ressembling a WebAssembly module. Actual owner of resources is the associated cluster.
+    ~ "Agent" from the threads proposal
+ - `Cluster` => Resource pool that owns all resources associated with module instances.
+    ~ "Agent Cluster" from threads proposal
+    ~ "Store" from wasmtime
+ - `Linker` => Collects and structures imports / dependencies that are not bound to a cluster (e.g. host functions)
+ - `BoundLinker` => Collected and structures imports / dependencies of a specific cluster or unbound (e.g. host functions). Linking is only possible between members of a cluster and / or unbound resources.
+ - `Engine` => Execution backend, unique per `InstanceHandle`, but owned by `Cluster`.
+
+### LLVM Backend Symbol Naming Scheme
+
+Function name mapping:
+ - Function `$func_name` imported from other module with C Calling Convention => `$(func_name)_imported`
+ - Function `$func_name` exported from current module with C Calling Convention => `$(func_name)`
+ - Function with `$func_idx` declared for internal usage with internal calling convention => `$(func_idx)`
+
+Globals:
+ - Regular wasm global with idx `$global_idx` => `global_$(global_idx)`
+ - Reference to execution context of other module `$module_name` for calling of imported functions as closures => `import_$(module_name)_rt_ptr`
+
+### LLVM Calling Conventions and Function Signatures
+
+**All** functions that are accessed from outside the generated code (= exports) use C calling convention with a special signature:
+```rust
+// Returning Void
+fn exported_function(execution_context_ptr: *mut ExecutionContext, parameters_arr_ptr: *const Value) -> ();
+// Returning a single wasm value
+fn exported_function(execution_context_ptr: *mut ExecutionContext, parameters_arr_ptr: *const Value) -> Value;
+// Returning multiple wasm values
+fn exported_function(execution_context_ptr: *mut ExecutionContext, parameters_arr_ptr: *const Value, return_values: *mut Value) -> ();
 ```
 
-Idee:
- - (optional) Globaler Context wie wasmtime engine, v.a. für globale optimierungen wie Type Interning / String Interning, etc. => zunächst in einer VM
- - Linker = Conveniance für Registrieren von Objekten, die extern von Wasm sind (e.g. host functions)
- - BoundLinker = Linker der nur noch auf einem Cluster arbeiten kann => kann auch imports von anderen modulen verarbeiten
- - Cluster = Bündel an Modulinstanzen die sich gegenseitig inkludieren können = Resource Pool = "Agent Cluster" = Wasmtime Store
- - Instance = WasmModuleInstance = fertig geladenes, ausführbereits Wasm modul = "Agent"
- - Engine = Execution Backend, Unique pro Instanz
+All internal function calls use an internal calling convention which might differ from the C calling convention. All parameters are passed as parameters, multiple return values are returned in structs.
+
+Wrapper functions to convert between the different calling conventions and call signatures are automatically generated for all exported and imported functions.

@@ -7,7 +7,7 @@ edition = "2021"
 bench = false
 
 [dependencies]
-nix = "0.28.0"
+nix = { version = "0.28.0", features = ["signal"] }
 thiserror = "1.0.61"
 wasm-types = { path = "../wasm-types" }
 ir = { path = "../ir" }
@@ -20,9 +20,10 @@ llvm-gen = { path = "../llvm-gen", optional=true }
 runtime-interface = { path = "../runtime-interface" }
 cee-scape = "0.2.0"
 uuid = { version = "1.9.1", features = ["v4"] }
+once_cell = "1.19.0"
 
 [features]
-default = ["interp"]
+default = ["llvm", "interp"]
 llvm = ["dep:llvm-gen"]
 interp = ["dep:interpreter"]
 asm = []

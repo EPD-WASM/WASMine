@@ -59,8 +59,8 @@ pub(crate) fn select_generic(
     let val_type = ValType::parse(i)?;
     let select_val = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
 
-    let val1 = ctxt.pop_var_with_type(&val_type);
     let val2 = ctxt.pop_var_with_type(&val_type);
+    let val1 = ctxt.pop_var_with_type(&val_type);
     let out = ctxt.create_var(val_type);
     o.write(SelectInstruction {
         input_vals: [val1.id, val2.id],

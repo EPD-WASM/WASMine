@@ -129,13 +129,6 @@ pub enum VectorInstructionCategory {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ReferenceInstruction {
-    RefNull,
-    RefIsNull,
-    RefFunc,
-}
-
-#[derive(Debug, Clone, PartialEq)]
 pub enum ParametricInstructionType {
     Drop,
     Select,

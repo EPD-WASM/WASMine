@@ -19,18 +19,19 @@ mod engine;
 mod error;
 mod execution_context;
 mod globals;
+mod instance_handle;
 mod linker;
 mod memory;
-mod module_instance;
 mod segmented_list;
+mod signals;
 mod tables;
 mod wasi;
 
 pub use cluster::Cluster;
 pub use engine::Engine;
 pub use error::RuntimeError;
+pub use instance_handle::InstanceHandle;
 pub use linker::{BoundLinker, Linker};
-pub use module_instance::InstanceHandle;
 
 pub const WASM_PAGE_SIZE: u32 = 2_u32.pow(16);
 // maximum amount of wasm pages
@@ -127,7 +128,6 @@ fn run_internal(path: &str) -> Result<Vec<Value>, RuntimeError> {
             )?,
         )
     }
-    todo!()
 }
 
 pub fn run(path: &str) -> u8 {

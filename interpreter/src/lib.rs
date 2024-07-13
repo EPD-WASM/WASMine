@@ -1,9 +1,7 @@
-use std::collections::HashMap;
-
 use ir::function::FunctionSource;
 use runtime_interface::{ExecutionContext, GlobalStorage};
+use std::collections::HashMap;
 use thiserror::Error;
-
 use wasm_types::{FuncIdx, InstructionType};
 use {
     ir::instructions::VariableID,

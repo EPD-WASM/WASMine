@@ -5,6 +5,7 @@ use wasm_types::*;
 pub struct TableSetInstruction {
     pub table_idx: TableIdx,
     pub in1: VariableID,
+    pub idx: VariableID,
     pub input_type: ValType,
 }
 
@@ -14,15 +15,18 @@ impl Instruction for TableSetInstruction {
         o.write_immediate(self.table_idx);
         o.write_value_type(self.input_type);
         o.write_variable(self.in1);
+        o.write_variable(self.idx);
     }
 
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         let table_idx = i.read_immediate()?;
         let input_type = i.read_value_type()?;
-        let in1 = i.read_variable()?;
+        let in1: u32 = i.read_variable()?;
+        let idx: u32 = i.read_variable()?;
         Ok(TableSetInstruction {
             table_idx,
             in1,
+            idx,
             input_type,
         })
     }
@@ -41,6 +45,7 @@ impl Display for TableSetInstruction {
 #[derive(Debug, Clone)]
 pub struct TableGetInstruction {
     pub table_idx: TableIdx,
+    pub idx: VariableID,
     pub out1: VariableID,
 }
 
@@ -48,13 +53,19 @@ impl Instruction for TableGetInstruction {
     fn serialize(self, o: &mut InstructionEncoder) {
         o.write_instruction_type(InstructionType::Table(TableInstructionCategory::Get));
         o.write_immediate(self.table_idx);
+        o.write_variable(self.idx);
         o.write_variable(self.out1);
     }
 
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         let table_idx = i.read_immediate()?;
+        let idx = i.read_variable()?;
         let out1 = i.read_variable()?;
-        Ok(TableGetInstruction { table_idx, out1 })
+        Ok(TableGetInstruction {
+            table_idx,
+            idx,
+            out1,
+        })
     }
 }
 

@@ -758,6 +758,7 @@ dependencies = [
  "loader",
  "log",
  "nix",
+ "once_cell",
  "parser",
  "runtime-interface",
  "thiserror",

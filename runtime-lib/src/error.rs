@@ -1,4 +1,7 @@
-use crate::{engine::EngineError, linker::LinkingError, module_instance::InstantiationError};
+use crate::{
+    engine::EngineError, instance_handle::InstantiationError, linker::LinkingError,
+    memory::MemoryError, tables::TableError,
+};
 use thiserror::Error;
 use wasm_types::ValType;
 
@@ -6,10 +9,6 @@ use wasm_types::ValType;
 pub enum RuntimeError {
     #[error("Runtime Error: {0}")]
     Msg(String),
-    #[error("Table Setup Error: {0}")]
-    TableSetupError(String),
-    #[error("Table Access Out of Bounds")]
-    TableAccessOutOfBounds,
     #[error("Not implemented: {0}")]
     NotImplemented(String),
     #[error("Invalid import: {0}")]
@@ -22,6 +21,8 @@ pub enum RuntimeError {
     InvalidArgumentType(ValType, String),
     #[error("Trap: {0}")]
     Trap(String),
+    #[error("Stack exhausted")]
+    Exhaustion,
 
     #[error("Engine error: {0}")]
     EngineError(#[from] EngineError),
@@ -31,4 +32,10 @@ pub enum RuntimeError {
 
     #[error("Instantiation error: {0}")]
     InstatiationError(#[from] InstantiationError),
+
+    #[error("Table error: {0}")]
+    TableError(#[from] TableError),
+
+    #[error("Memory error: {0}")]
+    MemoryError(#[from] MemoryError),
 }

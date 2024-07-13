@@ -15,7 +15,7 @@ use ir::{
         memory::{MemArg, Memory},
         module::Module,
         table::Table,
-        value::Value,
+        value::ConstantValue,
     },
 };
 use wasm_types::module::{GlobalType, MemType, Name, Section, TableType};
@@ -42,7 +42,7 @@ impl Parse for FuncType {
         }
         let rt1 = ResType::parse(i)?;
         let rt2 = ResType::parse(i)?;
-        Ok((rt1, rt2))
+        Ok(FuncType(rt1, rt2))
     }
 }
 
@@ -98,10 +98,17 @@ impl Parse for Limits {
                 min: i.read_leb128()?,
                 max: None,
             }),
-            0x01 => Ok(Limits {
-                min: i.read_leb128()?,
-                max: Some(i.read_leb128()?),
-            }),
+            0x01 => {
+                let min = i.read_leb128()?;
+                let max = i.read_leb128()?;
+                if max < min {
+                    return Err(ParserError::LimitsMinimumGreaterThanMaximum);
+                }
+                Ok(Limits {
+                    min,
+                    max: Some(max),
+                })
+            }
             _ => Err(ParserError::Msg("invalid limit type prefix".into())),
         }
     }
@@ -142,7 +149,7 @@ impl Parse for ImportDesc {
             0x00 => Ok(ImportDesc::Func(TypeIdx::parse(i)?)),
             0x01 => Ok(ImportDesc::Table(TableType::parse(i)?)),
             0x02 => Ok(ImportDesc::Mem(MemType::parse(i)?)),
-            0x03 => Ok(ImportDesc::Global(GlobalType::parse(i)?)),
+            0x03 => Ok(ImportDesc::Global((GlobalType::parse(i)?, u32::MAX))),
             _ => Err(ParserError::Msg("invalid import description prefix".into())),
         }
     }
@@ -235,7 +242,7 @@ impl ParseWithContext for Element {
                     r.map(|e| e.eval(m).map_err(ParserError::from))
                         .map_err(|_| ParserError::InvalidEncoding)
                 })
-                .collect::<Result<Vec<Value>, ParserError>>()?;
+                .collect::<Result<Vec<ConstantValue>, ParserError>>()?;
             Ok(Element {
                 mode,
                 type_,

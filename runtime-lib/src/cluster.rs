@@ -1,6 +1,6 @@
 use crate::{
     globals::GlobalStorage, memory::MemoryInstance, segmented_list::SegmentedList,
-    tables::TableInstance, Engine,
+    tables::TableItem, Engine,
 };
 use runtime_interface::ExecutionContext;
 use std::sync::Mutex;
@@ -18,7 +18,7 @@ use uuid::Uuid;
 pub struct Cluster {
     pub(crate) uuid: Uuid,
     memories: Mutex<SegmentedList<MemoryInstance>>,
-    tables: Mutex<SegmentedList<TableInstance>>,
+    tables: Mutex<SegmentedList<Vec<TableItem>>>,
     globals: Mutex<SegmentedList<GlobalStorage>>,
     execution_contexts: Mutex<SegmentedList<ExecutionContext>>,
     engines: Mutex<SegmentedList<Engine>>,
@@ -37,10 +37,10 @@ impl Cluster {
     }
 
     // unsafe: extracts mut-ref on cluster.tables without owning cluster.tables
-    pub(crate) fn alloc_tables(&self, tables: Vec<TableInstance>) -> &mut [TableInstance] {
+    pub(crate) fn alloc_table_items(&self) -> &mut Vec<TableItem> {
         let mut tables_lock = self.tables.lock().unwrap();
-        tables_lock.extend(tables);
-        tables_lock.get_last_segments_ref()
+        tables_lock.push(Vec::new());
+        &mut tables_lock.get_last_segments_ref()[0]
     }
 
     // unsafe: extracts mut-ref on cluster.memories without owning cluster.memories
@@ -52,9 +52,10 @@ impl Cluster {
 
     pub(crate) fn alloc_execution_context(
         &self,
-        execution_context: ExecutionContext,
+        mut execution_context: ExecutionContext,
     ) -> &mut ExecutionContext {
         let mut execution_contexts_lock = self.execution_contexts.lock().unwrap();
+        execution_context.id = execution_contexts_lock.len() as u32;
         execution_contexts_lock.push(execution_context);
         &mut execution_contexts_lock.get_last_segments_ref()[0]
     }

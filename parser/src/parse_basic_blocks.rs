@@ -44,9 +44,10 @@ fn get_block_input_signature(ctxt: &Context, block_type: BlockType) -> ResType {
     }
 }
 
-fn validate_and_extract_result_from_stack(
+pub(crate) fn validate_and_extract_result_from_stack(
     ctxt: &mut Context,
     out_params: &ResType,
+    check_empty_stack: bool,
 ) -> Vec<VariableID> {
     let mut return_vars = Vec::new();
     let stack_depth = ctxt.stack.len();
@@ -54,6 +55,16 @@ fn validate_and_extract_result_from_stack(
         return ctxt.poison(ValidationError::Msg(
             "stack underflow in target label".to_string(),
         ));
+    }
+    if check_empty_stack && stack_depth > out_params.len() {
+        return ctxt.poison(ValidationError::Msg(format!(
+            "unexpected stack state at end of function: {:?}, expected {:?}",
+            ctxt.stack.stack[ctxt.stack.stack.len() - stack_depth..]
+                .iter()
+                .map(|var| var.type_)
+                .collect::<Vec<_>>(),
+            out_params
+        )));
     }
     for (i, return_value) in out_params.iter().enumerate() {
         let idx = stack_depth - out_params.len() + i;
@@ -85,9 +96,10 @@ fn parse_until_next_end(
 
     // we can forget parsed basic blocks IFF we didn't parse an else-tag
     if let Some(last_parsed_bb) = trash_builder.current_bb_try_get() {
-        if let BasicBlockGlue::ElseMarker { output_vars } = last_parsed_bb.terminator.clone() {
+        if let BasicBlockGlue::ElseMarker { .. } = last_parsed_bb.terminator.clone() {
             builder.start_bb();
-            builder.terminate_else(output_vars);
+            // we can't use the parsed out_vars as we discard all parsed code => out_vars would be invalid
+            builder.terminate_else(Vec::new());
         }
     }
     Ok(())
@@ -260,7 +272,6 @@ fn parse_terminator(
                 for (var, type_) in block_input_vars
                     .iter()
                     .zip(get_block_input_signature(ctxt, block_type))
-                    .rev()
                 {
                     ctxt.push_var(Variable { id: *var, type_ });
                 }
@@ -298,8 +309,7 @@ fn parse_terminator(
                     cond_var,
                     target_if_true,
                     if_else_exit_bb,
-                    // empty output vars, because this is a jump "inside" of a block and not outside
-                    Vec::new(),
+                    block_input_vars,
                 );
             }
 
@@ -319,7 +329,7 @@ fn parse_terminator(
             }
             let target_label = labels[labels.len() - label_idx as usize - 1].clone();
             let output_vars =
-                validate_and_extract_result_from_stack(ctxt, &target_label.result_type);
+                validate_and_extract_result_from_stack(ctxt, &target_label.result_type, false);
             builder.terminate_jmp(target_label.bb_id, output_vars);
 
             // unconditional branch -> following blocks only need to parsed, but not validated
@@ -331,7 +341,7 @@ fn parse_terminator(
             let target_if_false = BasicBlock::next_id();
             let target_if_true = labels[labels.len() - label_idx as usize - 1].clone();
             let output_vars =
-                validate_and_extract_result_from_stack(ctxt, &target_if_true.result_type);
+                validate_and_extract_result_from_stack(ctxt, &target_if_true.result_type, false);
 
             builder.terminate_jmp_cond(
                 cond_var,
@@ -351,15 +361,18 @@ fn parse_terminator(
                 labels[labels.len() - default_label as usize - 1].clone()
             };
             let default_output_vars =
-                validate_and_extract_result_from_stack(ctxt, &default_bb.result_type);
+                validate_and_extract_result_from_stack(ctxt, &default_bb.result_type, false);
 
             let (targets, targets_output_vars): (Vec<BasicBlockID>, Vec<Vec<VariableID>>) =
                 label_table
                     .into_iter()
                     .map(|label_idx| &labels[labels.len() - label_idx as usize - 1])
                     .map(|target_label| {
-                        let output_vars: Vec<VariableID> =
-                            validate_and_extract_result_from_stack(ctxt, &target_label.result_type);
+                        let output_vars: Vec<VariableID> = validate_and_extract_result_from_stack(
+                            ctxt,
+                            &target_label.result_type,
+                            false,
+                        );
                         (target_label.bb_id, output_vars)
                     })
                     .unzip();
@@ -399,7 +412,7 @@ fn parse_terminator(
                         .cloned()
                 })
                 .unwrap();
-            let call_params = validate_and_extract_result_from_stack(ctxt, &func_type.0);
+            let call_params = validate_and_extract_result_from_stack(ctxt, &func_type.0, false);
             // pop all parameters from the stack
             ctxt.stack
                 .stack
@@ -445,7 +458,7 @@ fn parse_terminator(
 
             let selector_var = ctxt.pop_var_with_type(&ValType::Number(NumType::I32)).id;
             let func_type = ctxt.module.function_types.get(type_idx as usize).unwrap();
-            let call_params = validate_and_extract_result_from_stack(ctxt, &func_type.0);
+            let call_params = validate_and_extract_result_from_stack(ctxt, &func_type.0, false);
             // pop all parameters from the stack
             ctxt.stack
                 .stack
@@ -481,8 +494,11 @@ fn parse_terminator(
                 1 => {
                     // return from function
                     let func_scope_label = labels.last().unwrap();
-                    let return_vars =
-                        validate_and_extract_result_from_stack(ctxt, &func_scope_label.result_type);
+                    let return_vars = validate_and_extract_result_from_stack(
+                        ctxt,
+                        &func_scope_label.result_type,
+                        true,
+                    );
                     builder.terminate_return(return_vars);
                 }
                 0 => {
@@ -499,6 +515,7 @@ fn parse_terminator(
                             .loop_after_result_type
                             .as_ref()
                             .unwrap_or(&last_label.result_type),
+                        true,
                     );
                     builder.terminate_jmp(
                         last_label.loop_after_bb_id.unwrap_or(last_label.bb_id),
@@ -514,7 +531,7 @@ fn parse_terminator(
                 "return instruction outside of function scope".to_string(),
             ))?;
             let return_vars =
-                validate_and_extract_result_from_stack(ctxt, &func_scope_label.result_type);
+                validate_and_extract_result_from_stack(ctxt, &func_scope_label.result_type, false);
             builder.terminate_return(return_vars);
             // parse away the following end instruction and any junk that might follow
             parse_until_next_end(i, ctxt, labels, builder)?;
@@ -523,7 +540,7 @@ fn parse_terminator(
         ControlInstruction::Else => {
             let ifscopelabel = labels.last().unwrap();
             let output_vars =
-                validate_and_extract_result_from_stack(ctxt, &ifscopelabel.result_type);
+                validate_and_extract_result_from_stack(ctxt, &ifscopelabel.result_type, false);
             builder.terminate_else(output_vars);
             // stop parsing here, because the "else" block is parsed in the "if" block
         }

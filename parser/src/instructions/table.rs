@@ -9,16 +9,25 @@ pub(crate) fn table_set(
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     let table_idx = TableIdx::parse(i)?;
+    if table_idx as usize >= ctxt.module.tables.len() {
+        return Ok(ctxt.poison::<()>(ValidationError::Msg(format!(
+            "table with id {} not found",
+            table_idx
+        ))));
+    }
+    let table = &ctxt.module.tables[table_idx as usize];
     let value_to_set = ctxt.pop_var();
     match value_to_set.type_ {
-        ValType::Reference(_) => {}
+        ValType::Reference(rt) if rt == table.r#type.ref_type => {}
         _ => ctxt.poison(ValidationError::Msg(
             "table value to set must be of reference type".into(),
         )),
     }
+    let idx = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
     o.write(TableSetInstruction {
         table_idx,
         in1: value_to_set.id,
+        idx: idx.id,
         input_type: value_to_set.type_,
     });
     Ok(())
@@ -41,10 +50,12 @@ pub(crate) fn table_get(
         }
     };
     let table_ref_type = table.r#type.ref_type;
+    let idx = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
     let out = ctxt.create_var(ValType::Reference(table_ref_type));
     o.write(TableGetInstruction {
         table_idx,
         out1: out.id,
+        idx: idx.id,
     });
     ctxt.push_var(out);
     Ok(())

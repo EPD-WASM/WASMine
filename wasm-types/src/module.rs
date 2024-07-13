@@ -25,7 +25,7 @@ pub enum ImportDesc {
     Func(TypeIdx),
     Table(TableType),
     Mem(Limits),
-    Global(GlobalType),
+    Global((GlobalType, GlobalIdx)),
 }
 
 pub type Name = String;

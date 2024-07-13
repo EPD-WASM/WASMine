@@ -11,11 +11,11 @@ pub(crate) fn local_get(
     let var = match ctxt.func.locals.get(local_idx as usize) {
         Some(v) => v,
         None => {
-            ctxt.poison::<()>(ValidationError::Msg(format!(
+            return Err(ValidationError::Msg(format!(
                 "local variable with index {} not found",
                 local_idx
-            )));
-            return Ok(());
+            ))
+            .into());
         }
     };
 

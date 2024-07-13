@@ -2,7 +2,24 @@ use core::panic;
 use std::{fs, path::PathBuf};
 
 use proc_macro::TokenStream;
-use quote::{format_ident, quote};
+use quote::{format_ident, quote, ToTokens};
+use syn::{parse::Parse, Expr, Token};
+
+struct GenMacroInput {
+    test_function_name: Expr,
+    _comma: Token![,],
+    test_type_name: Expr,
+}
+
+impl Parse for GenMacroInput {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        Ok(Self {
+            test_function_name: input.parse()?,
+            _comma: input.parse()?,
+            test_type_name: input.parse()?,
+        })
+    }
+}
 
 #[proc_macro]
 pub fn generate_spec_test_cases(input: TokenStream) -> TokenStream {
@@ -13,7 +30,7 @@ pub fn generate_spec_test_cases(input: TokenStream) -> TokenStream {
     }
 
     let mut test_cases = quote! {};
-    let test_function = syn::parse_macro_input!(input as syn::Expr);
+    let test_function = syn::parse_macro_input!(input as GenMacroInput);
 
     // Iterate over files in the test directory
     if let Ok(entries) = fs::read_dir(test_dir) {
@@ -27,15 +44,21 @@ pub fn generate_spec_test_cases(input: TokenStream) -> TokenStream {
                         .unwrap_or_default() =>
                 {
                     if let Some(file_name) = entry.file_name().to_str() {
+                        let s = test_function
+                            .test_type_name
+                            .clone()
+                            .into_token_stream()
+                            .to_string();
                         let test_name =
-                            format_ident!("spec_test_{}", file_name.replace(['.', '-'], "_"));
+                            format_ident!("spec_test_{}_{}", s, file_name.replace(['.', '-'], "_"));
                         let file_path = entry.path().to_str().unwrap().to_string();
+                        let test_function_name = &test_function.test_function_name;
                         test_cases = quote! {
                             #test_cases
 
                             #[test]
                             fn #test_name() {
-                                #test_function(#file_path);
+                                #test_function_name(#file_path);
                             }
                         };
                     }

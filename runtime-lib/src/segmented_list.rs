@@ -22,6 +22,10 @@ impl<T> SegmentedList<T> {
         self.segments.push(Box::pin(segments));
     }
 
+    pub(crate) fn len(&self) -> usize {
+        self.segments.iter().map(|s| s.len()).sum()
+    }
+
     pub(crate) fn get_last_segments_ref<'b>(&self) -> &'b mut [T] {
         unsafe {
             slice::from_raw_parts_mut(

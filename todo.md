@@ -21,3 +21,11 @@ TODO:
     - Sightglass -> write adapter for our runtime
     - SpecCPU -> compile
     - Add to criterion benchmarks more runtimes: wasmtime, wasmer, (aWsm), wasm3, wasmedge
+
+
+
+Alexis fragen:
+ - Internal Call conv? Wrapper for exports(internal) -> exports(C) + imports(C) -> imports(internal)?
+ - Where could ORC Symbols be lost?
+ - can be leak function addresses to wasm code? e.g. ref.func -> store to global -> import global in other module -> call to ref
+ - internal call convention fast cc vs c cc

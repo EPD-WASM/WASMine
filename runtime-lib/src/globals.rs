@@ -1,7 +1,11 @@
-use crate::{linker::RTImport, module_instance::InstantiationError, Cluster};
-use ir::structs::global::Global;
+use crate::{instance_handle::InstantiationError, linker::RTGlobalImport, Cluster, Engine};
+use ir::{
+    structs::{global::Global, value::ConstantValue},
+    utils::numeric_transmutes::Bit32,
+};
 use nix::errno::Errno;
 use runtime_interface::GlobalInstance;
+use std::ptr::null_mut;
 
 pub struct GlobalStorage {
     pub(crate) inner: runtime_interface::GlobalStorage,
@@ -12,7 +16,8 @@ impl GlobalStorage {
     pub(crate) fn init_on_cluster<'a>(
         cluster: &'a Cluster,
         globals_meta: &[Global],
-        imports: &[RTImport],
+        imports: &[RTGlobalImport],
+        engine: &mut Engine,
     ) -> Result<&'a mut GlobalStorage, InstantiationError> {
         let storage_size = globals_meta.len() * 8;
         let storage = if storage_size > 0 {
@@ -33,27 +38,30 @@ impl GlobalStorage {
             panic!("Failed to allocate global storage: {}", Errno::last());
         }
 
-        let mut uninitialized_imports = Vec::new();
-        let mut globals = globals_meta
-            .iter()
-            .enumerate()
-            .map(|(idx, global)| {
+        let mut globals = vec![GlobalInstance { addr: null_mut() }; globals_meta.len()];
+        for instance in imports.iter().rev() {
+            globals[instance.idx as usize].addr = instance.addr;
+            engine.register_symbol(
+                &format!("global_{}", instance.idx),
+                globals[instance.idx as usize].addr as _,
+            );
+        }
+        for (idx, global) in globals_meta.iter().enumerate() {
+            if !global.import {
                 let addr = unsafe { (storage as *mut u64).add(idx) };
-                match global.import {
-                    true => uninitialized_imports.push(idx),
-                    false => unsafe { *addr = global.init.to_generic() },
+                globals[idx].addr = addr;
+                engine.register_symbol(&format!("global_{}", idx), addr as _);
+            }
+        }
+        for (idx, global) in globals_meta.iter().enumerate() {
+            if !global.import {
+                unsafe {
+                    *globals[idx].addr = match global.init.clone() {
+                        ConstantValue::V(value) => value.to_generic(),
+                        ConstantValue::Global(glob_idx) => *globals[glob_idx as usize].addr,
+                        ConstantValue::FuncPtr(func_idx) => func_idx.trans_u64(),
+                    }
                 }
-                GlobalInstance { addr }
-            })
-            .collect::<Vec<_>>();
-
-        for import in imports.iter().filter(|i| matches!(i, RTImport::Global(_))) {
-            match import {
-                RTImport::Global(instance) => {
-                    let idx = uninitialized_imports.pop().unwrap();
-                    unsafe { *globals[idx].addr = instance.init.to_generic() };
-                }
-                _ => unreachable!(),
             }
         }
 

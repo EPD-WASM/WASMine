@@ -1,10 +1,10 @@
-use super::value::Value;
+use super::value::ConstantValue;
 use wasm_types::{FuncIdx, RefType, TableIdx};
 
 #[derive(Debug, Clone)]
 pub enum ElementInit {
     Unresolved(Vec<FuncIdx>),
-    Final(Vec<Value>),
+    Final(Vec<ConstantValue>),
 }
 
 #[derive(Debug, Clone)]
@@ -17,6 +17,9 @@ pub struct Element {
 #[derive(Debug, Clone)]
 pub enum ElemMode {
     Passive,
-    Active { table: TableIdx, offset: Value },
+    Active {
+        table: TableIdx,
+        offset: ConstantValue,
+    },
     Declarative,
 }

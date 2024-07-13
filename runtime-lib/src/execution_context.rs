@@ -1,9 +1,18 @@
-use crate::memory::MemoryInstance;
-use crate::WASM_MAX_ADDRESS;
-use crate::{error::RuntimeError, memory::MemoryStorage};
-use cee_scape::siglongjmp;
+use crate::error::RuntimeError;
+use crate::tables::{TableError, TableInstance, TableItem};
+use crate::Engine;
+use cee_scape::SigJmpBuf;
 use core::slice;
-use wasm_types::{DataIdx, MemIdx};
+use runtime_interface::RawFunctionPtr;
+use std::cell::RefCell;
+use std::fmt::Display;
+use std::ptr::null;
+use wasm_types::{TableIdx, TypeIdx};
+
+thread_local! {
+    static TRAP_RETURN: RefCell<SigJmpBuf> = const { RefCell::new(null()) };
+    static TRAP_MSG: RefCell<String> = const { RefCell::new(String::new()) };
+}
 
 #[repr(transparent)]
 pub(crate) struct ExecutionContextWrapper<'a>(
@@ -11,83 +20,72 @@ pub(crate) struct ExecutionContextWrapper<'a>(
 );
 
 impl ExecutionContextWrapper<'_> {
-    pub(crate) fn trap(&mut self, e: RuntimeError) {
-        self.0.trap_msg = Some(e.to_string());
+    pub(crate) fn trap(e: RuntimeError) -> ! {
+        TRAP_MSG.with(|msg| *msg.borrow_mut() = e.to_string());
+        TRAP_RETURN.with(|buf| unsafe { cee_scape::siglongjmp(*buf.as_ptr(), 1) })
+    }
+
+    pub(crate) fn get_tables(&mut self) -> &mut [TableInstance] {
         unsafe {
-            siglongjmp(self.0.trap_return.unwrap(), 1);
+            slice::from_raw_parts_mut(self.0.tables_ptr as *mut TableInstance, self.0.tables_len)
+        }
+    }
+
+    pub(crate) fn set_trap_return_point(buf: SigJmpBuf) {
+        TRAP_RETURN.replace(buf);
+    }
+
+    pub(crate) fn indirect_call(
+        &mut self,
+        table_idx: TableIdx,
+        entry_idx: u32,
+        ty_idx: TypeIdx,
+    ) -> Result<RawFunctionPtr, RuntimeError> {
+        let engine = unsafe { &mut *(self.0.engine as *mut Engine) };
+        let wasm_module = self.0.wasm_module.clone();
+        let tables = self.get_tables();
+        let table = &mut tables[table_idx as usize];
+        if entry_idx >= table.size() {
+            return Err(TableError::TableAccessOutOfBounds.into());
+        }
+        let reference = &mut table.values[entry_idx as usize];
+        match reference {
+            TableItem::FunctionReference {
+                func_ptr,
+                func_idx,
+                func_type,
+            } => {
+                let expected_function_type = &wasm_module.function_types[ty_idx as usize];
+                let actual_function_type = &wasm_module.function_types[*func_type as usize];
+                if expected_function_type != actual_function_type {
+                    return Err(TableError::TableFunctionTypeMismatch {
+                        expected: expected_function_type.clone(),
+                        actual: actual_function_type.clone(),
+                    }
+                    .into());
+                }
+
+                if func_ptr.is_null() {
+                    *func_ptr =
+                        engine.get_raw_function_ptr_by_name(&format!("{}", func_idx))? as *mut _;
+                }
+                Ok(*func_ptr as RawFunctionPtr)
+            }
+            TableItem::ExternReference { func_ptr } => Ok(*func_ptr as RawFunctionPtr),
+            TableItem::Null => Err(TableError::NullDeref.into()),
         }
     }
 }
 
-// implement functions from runtime-interface
-#[no_mangle]
-extern "C" fn memory_grow(
-    ctxt: &runtime_interface::ExecutionContext,
-    memory_idx: usize,
-    grow_by: u32,
-) -> i32 {
-    let memories = MemoryStorage(unsafe {
-        slice::from_raw_parts_mut(ctxt.memories_ptr as *mut MemoryInstance, ctxt.memories_len)
-    });
-    let memory = &mut memories.0[memory_idx];
-    let max_memory_size = ctxt.wasm_module.memories[memory_idx]
-        .limits
-        .max
-        .unwrap_or(WASM_MAX_ADDRESS as u32);
-    memory.grow(grow_by, max_memory_size)
-}
-
-#[no_mangle]
-extern "C" fn memory_fill(
+pub(crate) fn trap_on_err<R, E>(
     ctxt: &mut runtime_interface::ExecutionContext,
-    memory_idx: usize,
-    offset: usize,
-    size: usize,
-    value: u8,
-) {
-    let memories = MemoryStorage(unsafe {
-        slice::from_raw_parts_mut(ctxt.memories_ptr as *mut MemoryInstance, ctxt.memories_len)
-    });
-    let memory = &memories.0[memory_idx];
-    memory.fill(offset, size, value)
-}
-
-#[no_mangle]
-extern "C" fn memory_copy(
-    ctxt: &mut runtime_interface::ExecutionContext,
-    memory_idx: MemIdx,
-    src_offset: usize,
-    dst_offset: usize,
-    size: usize,
-) {
-    let memories = MemoryStorage(unsafe {
-        slice::from_raw_parts_mut(ctxt.memories_ptr as *mut MemoryInstance, ctxt.memories_len)
-    });
-    let memory = &memories.0[memory_idx as usize];
-    memory.copy(src_offset, dst_offset, size)
-}
-
-#[no_mangle]
-extern "C" fn memory_init(
-    ctxt: &mut runtime_interface::ExecutionContext,
-    memory_idx: MemIdx,
-    data_idx: DataIdx,
-    src_offset: u32,
-    dst_offset: u32,
-    size: u32,
-) {
-    let memories = MemoryStorage(unsafe {
-        slice::from_raw_parts_mut(ctxt.memories_ptr as *mut MemoryInstance, ctxt.memories_len)
-    });
-    let memory = &memories.0[memory_idx as usize];
-    if let Err(e) = memory.rt_init(
-        ctxt.wasm_module.clone(),
-        data_idx,
-        src_offset,
-        dst_offset,
-        size,
-    ) {
-        log::error!("Error initializing memory: {:?}", e);
-        ExecutionContextWrapper(ctxt).trap(e);
+    res: Result<R, E>,
+) -> R
+where
+    E: Into<RuntimeError> + Display,
+{
+    match res {
+        Ok(r) => r,
+        Err(e) => ExecutionContextWrapper::trap(e.into()),
     }
 }

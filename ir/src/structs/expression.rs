@@ -1,6 +1,6 @@
 use super::{
     module::Module,
-    value::{Number, Value},
+    value::{ConstantValue, Number, Value},
 };
 use crate::{
     basic_block::BasicBlockStorage,
@@ -10,7 +10,7 @@ use crate::{
 };
 use thiserror::Error;
 use wasm_types::{
-    InstructionType, NumType, NumericInstructionCategory, ReferenceInstructionType,
+    GlobalType, InstructionType, NumType, NumericInstructionCategory, ReferenceInstructionType,
     VariableInstructionType,
 };
 
@@ -28,7 +28,7 @@ pub enum ConstantExpressionError {
 }
 
 impl ConstantExpression {
-    pub fn eval(self, m: &Module) -> Result<Value, ConstantExpressionError> {
+    pub fn eval(self, m: &Module) -> Result<ConstantValue, ConstantExpressionError> {
         debug_assert_eq!(self.expression.instruction_storage.len(), 1);
         let mut decoder = InstructionDecoder::new(self.expression);
         let instr = decoder.read_instruction_type()?;
@@ -48,7 +48,7 @@ impl ConstantExpression {
                     NumType::F32 => Value::Number(Number::F32(f32::from_bits(imm as u32))),
                     NumType::F64 => Value::Number(Number::F64(f64::from_bits(imm))),
                 };
-                Ok(value)
+                Ok(ConstantValue::V(value))
             }
             InstructionType::Variable(VariableInstructionType::GlobalGet) => {
                 let instruction = decoder.read::<GlobalGetInstruction>(instr)?;
@@ -65,10 +65,16 @@ impl ConstantExpression {
                         global_idx
                     )));
                 }
-                Ok(m.globals[global_idx as usize].init.clone())
+                if !matches!(m.globals[global_idx as usize].r#type, GlobalType::Const(_)) {
+                    return Err(ConstantExpressionError::Msg(format!(
+                        "global index {} is not a const global",
+                        global_idx
+                    )));
+                }
+                Ok(ConstantValue::Global(global_idx))
             }
             InstructionType::Reference(ReferenceInstructionType::RefNull) => {
-                Ok(Value::Reference(Reference::Null))
+                Ok(ConstantValue::V(Value::Reference(Reference::Null)))
             }
             InstructionType::Reference(ReferenceInstructionType::RefFunc) => {
                 let instruction = decoder.read::<ReferenceFunctionInstruction>(instr)?;
@@ -78,7 +84,7 @@ impl ConstantExpression {
                         instruction.func_idx
                     )));
                 }
-                Ok(Value::Reference(Reference::Function(instruction.func_idx)))
+                Ok(ConstantValue::FuncPtr(instruction.func_idx))
             }
             _ => Err(ConstantExpressionError::Msg(format!(
                 "invalid constant instruction `{:?}`",

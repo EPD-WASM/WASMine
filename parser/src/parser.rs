@@ -4,19 +4,22 @@ use super::ParseResult;
 use super::{error::ParserError, wasm_stream_reader::WasmStreamReader};
 use crate::context::Context;
 use crate::function_builder::FunctionBuilder;
+use crate::parse_basic_blocks::validate_and_extract_result_from_stack;
 use crate::stack::ParserStack;
 use ir::basic_block::BasicBlock;
 use ir::function::{Function, FunctionImport, FunctionInternal, FunctionSource};
 use ir::instructions::Variable;
 use ir::structs::data::{Data, DataMode};
+use ir::structs::export::ExportDesc;
 use ir::structs::expression::ConstantExpression;
-use ir::structs::value::{Reference, Value};
+use ir::structs::instruction::ControlInstruction;
+use ir::structs::value::ConstantValue;
 use ir::structs::{
     element::Element, export::Export, global::Global, import::Import, memory::Memory,
     module::Module, table::Table,
 };
 use loader::Loader;
-use std::io::BufReader;
+use std::io::{BufReader, Write};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::vec;
 use wasm_types::module::Name;
@@ -38,7 +41,15 @@ impl Parser {
         let mut reader = WasmStreamReader::new(BufReader::new(input));
         match self.parse_module(&mut reader) {
             Err(e) => Err(ParserError::PositionalError(Box::new(e), reader.pos)),
-            _ => Ok(self.module),
+            _ => {
+                #[cfg(debug_assertions)]
+                {
+                    // write parsed module to file as string
+                    let mut f = std::fs::File::create("debug_output.parsed").unwrap();
+                    f.write_all(format!("{}", self.module).as_bytes()).unwrap();
+                }
+                Ok(self.module)
+            }
         }
     }
 
@@ -174,25 +185,33 @@ impl Parser {
         let _ = i.read_leb128::<u32>()?;
         let num_imports = i.read_leb128::<u32>()?;
         for import_idx in 0..num_imports {
-            let import = Import::parse(i)?;
-            match import.desc.clone() {
-                ImportDesc::Func(type_idx) => self.module.ir.functions.push(Function {
-                    type_idx,
-                    src: FunctionSource::Import(FunctionImport { import_idx }),
-                }),
+            let mut import = Import::parse(i)?;
+            match &mut import.desc {
+                ImportDesc::Func(type_idx) => {
+                    if *type_idx as usize >= self.module.function_types.len() {
+                        return Err(ParserError::Msg("function type index out of bounds".into()));
+                    }
+                    self.module.ir.functions.push(Function {
+                        type_idx: *type_idx,
+                        src: FunctionSource::Import(FunctionImport { import_idx }),
+                    })
+                }
                 ImportDesc::Table(r#type) => self.module.tables.push(Table {
-                    r#type,
+                    r#type: *r#type,
                     import: true,
                 }),
                 ImportDesc::Mem(limits) => self.module.memories.push(Memory {
-                    limits,
+                    limits: *limits,
                     import: true,
                 }),
-                ImportDesc::Global(r#type) => self.module.globals.push(Global {
-                    r#type,
-                    import: true,
-                    init: Value::Reference(Reference::Extern(import_idx)),
-                }),
+                ImportDesc::Global((r#type, idx)) => {
+                    *idx = self.module.globals.len() as u32;
+                    self.module.globals.push(Global {
+                        r#type: *r#type,
+                        import: true,
+                        init: ConstantValue::FuncPtr(import_idx),
+                    })
+                }
             }
             self.module.imports.push(import);
         }
@@ -260,6 +279,17 @@ impl Parser {
         let num_exports = i.read_leb128::<u32>()?;
         let mut parsed_exports = (0..num_exports)
             .map(|_| Export::parse(i))
+            .map(|e| {
+                e.and_then(|e| match e.desc {
+                    ExportDesc::Func(func_idx) => {
+                        if func_idx as usize >= self.module.ir.functions.len() {
+                            return Err(ParserError::Msg("function index out of bounds".into()));
+                        }
+                        Ok(e)
+                    }
+                    _ => Ok(e),
+                })
+            })
             .collect::<Result<Vec<Export>, ParserError>>()?;
         self.module.exports.append(&mut parsed_exports);
         Ok(())
@@ -271,6 +301,9 @@ impl Parser {
             return Err(ParserError::Msg("multiple start sections".into()));
         }
         self.module.entry_point = Some(FuncIdx::parse(i)?);
+        if self.module.entry_point.unwrap() as usize >= self.module.ir.functions.len() {
+            return Err(ParserError::StartFunctionDoesNotExist);
+        }
         Ok(())
     }
 
@@ -372,13 +405,19 @@ impl Parser {
                 bb_id: exit_basic_block,
                 loop_after_bb_id: None,
                 loop_after_result_type: None,
-                result_type: function_type.1,
+                result_type: function_type.1.clone(),
             };
             let mut labels = vec![function_scope_label];
             builder.start_bb_with_id(entry_basic_block);
             parse_basic_blocks(i, &mut ctxt, &mut labels, &mut builder)?;
 
             // insert last basic block that always returns from function (jump target for function scope label)
+            if !matches!(
+                builder.current_bb_terminator(),
+                ControlInstruction::Unreachable | ControlInstruction::Return
+            ) {
+                let _ = validate_and_extract_result_from_stack(&mut ctxt, &function_type.1, false);
+            }
             builder.continue_bb(exit_basic_block);
             builder.terminate_return(
                 builder

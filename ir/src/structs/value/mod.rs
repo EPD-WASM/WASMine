@@ -1,10 +1,9 @@
 // https://webassembly.github.io/spec/core/exec/runti`me`.html
 
-use std::fmt::{Display, Formatter};
-
-use wasm_types::{FuncIdx, NumType, RefType, ValType};
-
 use crate::utils::numeric_transmutes::{Bit32, Bit64};
+use core::ffi;
+use std::fmt::{Display, Formatter};
+use wasm_types::{FuncIdx, GlobalIdx, NumType, RefType, ValType};
 
 mod number_impls;
 mod number_ops;
@@ -51,15 +50,15 @@ pub type ExternReference = u32;
 pub enum Reference {
     Null,
     Function(FuncIdx),
-    Extern(u32),
+    Extern(*const ffi::c_void),
 }
 
 impl Display for Reference {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             Reference::Null => write!(f, "null"),
-            Reference::Function(idx) => write!(f, "func[{}]", idx),
-            Reference::Extern(idx) => write!(f, "extern[{}]", idx),
+            Reference::Function(idx) => write!(f, "func[{}]", *idx as u64),
+            Reference::Extern(idx) => write!(f, "extern[{}]", *idx as u64),
         }
     }
 }
@@ -89,10 +88,10 @@ impl Value {
             ValType::Number(NumType::F32) => Value::Number(Number::F32(val.trans_f32())),
             ValType::Number(NumType::F64) => Value::Number(Number::F64(val.trans_f64())),
             ValType::Reference(RefType::ExternReference) => {
-                Value::Reference(Reference::Extern(val.trans_u32()))
+                Value::Reference(Reference::Extern(val as _))
             }
             ValType::Reference(RefType::FunctionReference) => {
-                Value::Reference(Reference::Function(val.trans_u32()))
+                Value::Reference(Reference::Function(val as _))
             }
             ValType::VecType => Value::Vector(val.trans_u64() as u128),
         }
@@ -109,9 +108,9 @@ impl Value {
             Value::Number(Number::F32(n)) => n.trans_u64(),
             Value::Number(Number::F64(n)) => n.trans_u64(),
             Value::Vector(_) => unimplemented!(),
-            Value::Reference(Reference::Function(idx)) => idx.trans_u64(),
-            Value::Reference(Reference::Extern(idx)) => idx.trans_u64(),
-            Value::Reference(Reference::Null) => 0,
+            Value::Reference(Reference::Function(idx)) => *idx as u64,
+            Value::Reference(Reference::Extern(idx)) => *idx as u64,
+            Value::Reference(Reference::Null) => u32::MAX as u64,
         }
     }
 
@@ -133,4 +132,13 @@ impl Value {
             Value::Reference(Reference::Null) => ValType::Reference(RefType::FunctionReference),
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ConstantValue {
+    V(Value),
+    // we can't resolve the value of imported globals at parsing time
+    Global(GlobalIdx),
+    // we can't resolve the function pointer at parsing time
+    FuncPtr(FuncIdx),
 }

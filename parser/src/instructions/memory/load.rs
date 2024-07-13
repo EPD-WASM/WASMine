@@ -8,6 +8,19 @@ fn parse_load(
     operation: LoadOp,
 ) -> ParseResult {
     let memarg = MemArg::parse(i)?;
+    let natural_alignment = match operation {
+        LoadOp::INNLoad | LoadOp::FNNLoad => match out_type {
+            NumType::I32 | NumType::F32 => 4,
+            NumType::I64 | NumType::F64 => 8,
+        },
+        LoadOp::INNLoad8S | LoadOp::INNLoad8U => 1,
+        LoadOp::INNLoad16S | LoadOp::INNLoad16U => 2,
+        LoadOp::INNLoad32S | LoadOp::INNLoad32U => 4,
+    };
+    if 2_u32.pow(memarg.align) > natural_alignment {
+        return Err(ParserError::AlignmentLargerThanNatural);
+    }
+
     let in_ = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
     let out = ctxt.create_var(ValType::Number(out_type));
     o.write(LoadInstruction {

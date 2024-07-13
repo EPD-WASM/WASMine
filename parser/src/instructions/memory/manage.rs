@@ -48,6 +48,9 @@ pub(crate) fn memory_copy(
             "memory copy instruction invalid encoding".into(),
         ));
     }
+    if ctxt.module.memories.is_empty() {
+        return Err(ParserError::Msg("unknown memory 0".into()));
+    }
 
     let n = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
     let s = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
@@ -69,6 +72,9 @@ pub(crate) fn memory_fill(
         return Err(ParserError::Msg(
             "memory fill instruction invalid encoding".into(),
         ));
+    }
+    if ctxt.module.memories.is_empty() {
+        return Err(ParserError::Msg("unknown memory 0".into()));
     }
 
     let n = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));

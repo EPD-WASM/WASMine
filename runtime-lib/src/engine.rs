@@ -4,7 +4,7 @@ use std::{
     ops::{Deref, DerefMut},
     rc::Rc,
 };
-use wasm_types::ResType;
+use wasm_types::{GlobalIdx, ResType};
 
 #[derive(Debug, thiserror::Error)]
 pub enum EngineError {
@@ -27,7 +27,12 @@ pub trait WasmEngine {
     fn init(&mut self, wasm_module: Rc<WasmModule>) -> Result<(), EngineError>;
     fn register_symbol(&mut self, name: &str, address: RawFunctionPtr);
 
-    fn get_raw_function_ptr(&self, function_name: &str) -> Result<RawFunctionPtr, EngineError>;
+    fn get_raw_function_ptr_by_name(
+        &self,
+        function_name: &str,
+    ) -> Result<RawFunctionPtr, EngineError>;
+    fn get_global_value(&self, global_idx: GlobalIdx) -> Result<u64, EngineError>;
+
     fn run(
         &mut self,
         func_name: &str,
@@ -61,6 +66,7 @@ impl DerefMut for Engine {
 #[cfg(feature = "llvm")]
 mod llvm_engine_impl {
     use runtime_interface::ExecutionContext;
+    use wasm_types::GlobalIdx;
 
     use super::*;
 
@@ -95,12 +101,19 @@ mod llvm_engine_impl {
             Ok(())
         }
 
+        fn get_global_value(&self, global_idx: GlobalIdx) -> Result<u64, EngineError> {
+            Ok(self.executor.get_global_value(global_idx)?)
+        }
+
         fn register_symbol(&mut self, name: &str, address: RawFunctionPtr) {
             self.executor.register_symbol(name, address);
         }
 
-        fn get_raw_function_ptr(&self, function_name: &str) -> Result<RawFunctionPtr, EngineError> {
-            Ok(self.executor.get_raw(function_name)?)
+        fn get_raw_function_ptr_by_name(
+            &self,
+            function_name: &str,
+        ) -> Result<RawFunctionPtr, EngineError> {
+            Ok(self.executor.get_raw_by_name(function_name)?)
         }
 
         fn run(

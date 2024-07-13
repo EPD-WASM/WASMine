@@ -1,33 +1,30 @@
 use crate::{
     engine::{Engine, EngineError},
+    execution_context::ExecutionContextWrapper,
     globals::GlobalStorage,
-    linker::RTImport,
-    memory::{MemoryInstance, MemoryStorage},
-    tables::TableInstance,
+    linker::{rt_func_imports, RTImportCollection},
+    memory::{MemoryError, MemoryInstance, MemoryStorage},
+    signals::SignalHandler,
+    tables::{TableError, TableInstance},
     Cluster, RuntimeError,
 };
 use cee_scape::call_with_sigsetjmp;
 use core::{ffi, slice};
 use ir::structs::{export::ExportDesc, module::Module as WasmModule, value::Value};
-use nix::errno::Errno;
-use runtime_interface::{ExecutionContext, RawFunctionPtr};
-use std::{collections::HashMap, rc::Rc};
-use wasm_types::{FuncIdx, FuncType, GlobalIdx, ValType};
+use runtime_interface::{ExecutionContext, GlobalInstance, RawFunctionPtr};
+use std::{collections::HashMap, ptr::null_mut, rc::Rc};
+use wasm_types::{FuncIdx, FuncType, GlobalIdx, MemIdx, TableIdx};
 
 #[derive(thiserror::Error, Debug)]
 pub enum InstantiationError {
     #[error("Module does not contain start function.")]
     NoStartFunction,
-    #[error("Allocation Failure ({0})")]
-    AllocationFailure(Errno),
-    #[error("Encountered reference to memory with index != 0. A maximum of one memory is allowed per wasm module.")]
-    MemoryIdxNotZero,
-    #[error("Offset into data segment was of invalid type '{0:}'")]
-    InvalidDataOffsetType(ValType),
-    #[error("Supplied datasource too small.")]
-    DataSourceOOB,
-    #[error("Memory init data too large for memory.")]
-    MemoryInitOOB,
+    #[error("Error during table initialization: {0}")]
+    TableError(#[from] TableError),
+    #[error("Error during memory initialization: {0}")]
+    MemoryError(#[from] MemoryError),
+    #[error("Function not found: {0}")]
+    FunctionNotFound(String),
 }
 
 pub struct InstanceHandle<'a> {
@@ -41,7 +38,7 @@ pub struct InstanceHandle<'a> {
     global_exports: HashMap<String, GlobalIdx>,
 
     globals: &'a mut GlobalStorage,
-    tables: &'a mut [TableInstance],
+    tables: Vec<TableInstance<'a>>,
     memories: &'a mut [MemoryInstance],
 }
 
@@ -50,25 +47,68 @@ impl<'a> InstanceHandle<'a> {
         cluster: &'a Cluster,
         m: Rc<WasmModule>,
         engine: Engine,
-        imports: Vec<RTImport>,
+        imports: RTImportCollection,
     ) -> Result<Self, InstantiationError> {
-        let globals = GlobalStorage::init_on_cluster(cluster, &m.globals, &imports)?;
-        let tables = Self::init_tables_on_cluster(cluster, &m.tables, &imports)?;
-        let memories = MemoryStorage::init_on_cluster(cluster, &m.memories, &m.datas, &imports)?;
         let engine = cluster.alloc_engine(engine);
         let execution_context = cluster.alloc_execution_context(ExecutionContext {
-            tables_ptr: tables.as_mut_ptr() as *mut ffi::c_void,
-            tables_len: tables.len(),
-            globals_ptr: &mut globals.inner as *mut runtime_interface::GlobalStorage,
-            globals_len: 1,
-            memories_ptr: memories.as_mut_ptr() as *mut runtime_interface::MemoryInstance,
-            memories_len: memories.len(),
+            tables_ptr: null_mut(),
+            tables_len: 0,
+            globals_ptr: null_mut(),
+            globals_len: 0,
+            memories_ptr: null_mut(),
+            memories_len: 0,
             wasm_module: m.clone(),
-            trap_return: None,
+            engine: engine as *mut Engine as *mut ffi::c_void,
             trap_msg: None,
             recursion_size: 0,
+            id: 0,
         });
 
+        for f in imports.functions.iter() {
+            engine.register_symbol(&format!("{}_imported", f.name), f.callable);
+            let rt_ptr = f.execution_context.unwrap_or(execution_context);
+            engine.register_symbol(
+                &format!("import_{}_rt_ptr", f.name.split_once('.').unwrap().0),
+                rt_ptr as RawFunctionPtr,
+            );
+        }
+
+        for import in rt_func_imports() {
+            engine.register_symbol(import.0, import.1.callable)
+        }
+
+        // initialize globals
+        let globals =
+            GlobalStorage::init_on_cluster(cluster, &m.globals, &imports.globals, engine)?;
+        execution_context.globals_ptr = &mut globals.inner as *mut runtime_interface::GlobalStorage;
+        execution_context.globals_len = 1;
+
+        // initialize tables
+        let tables = Self::init_tables_on_cluster(
+            m.as_ref(),
+            engine,
+            cluster,
+            &m.tables,
+            &m.elements,
+            &imports.tables,
+            &globals.inner,
+        )?;
+        execution_context.tables_ptr = tables.as_ptr() as *mut ffi::c_void;
+        execution_context.tables_len = tables.len();
+
+        // initialize memories
+        let memories = MemoryStorage::init_on_cluster(
+            cluster,
+            &m.memories,
+            &m.datas,
+            &imports.memories,
+            &globals.inner,
+        )?;
+        execution_context.memories_ptr =
+            memories.as_mut_ptr() as *mut runtime_interface::MemoryInstance;
+        execution_context.memories_len = memories.len();
+
+        SignalHandler::register_globally();
         Ok(Self {
             function_exports: Self::collect_function_exports(&m),
             global_exports: Self::collect_global_exports(&m),
@@ -106,12 +146,17 @@ impl<'a> InstanceHandle<'a> {
         if let Some(start_func_idx) = self.module.entry_point {
             return Ok(start_func_idx);
         }
-        self.find_func("_start")
-            .or_else(|_| self.find_func("run"))
+        self.find_exported_func_idx("_start")
+            .or_else(|_| self.find_exported_func_idx("run"))
             .or(Err(InstantiationError::NoStartFunction))
     }
 
-    pub fn find_func(&self, name: &str) -> Result<FuncIdx, InstantiationError> {
+    pub fn find_exported_func_idx(&self, name: &str) -> Result<FuncIdx, InstantiationError> {
+        if let Some(entry) = self.module.entry_point {
+            if name == format!("func_{}", entry) {
+                return Ok(entry);
+            }
+        }
         if let Some(f) = self
             .module
             .exports
@@ -124,7 +169,7 @@ impl<'a> InstanceHandle<'a> {
                 _ => unreachable!(),
             };
         }
-        Err(InstantiationError::NoStartFunction)
+        Err(InstantiationError::FunctionNotFound(name.to_string()))
     }
 
     pub fn get_function_type_from_func_idx(&self, func_idx: u32) -> &FuncType {
@@ -138,7 +183,7 @@ impl<'a> InstanceHandle<'a> {
     }
 
     pub fn get_raw_function_ptr(&self, name: &str) -> Result<RawFunctionPtr, EngineError> {
-        self.engine.get_raw_function_ptr(name)
+        self.engine.get_raw_function_ptr_by_name(name)
     }
 
     pub fn wasm_module(&self) -> &Rc<WasmModule> {
@@ -161,14 +206,30 @@ impl<'a> InstanceHandle<'a> {
             .map(|i| self.extract_global_value_by_idx(*i as usize))
     }
 
-    fn init_globals_from_runtime(&mut self) {
-        for (idx, global) in self.globals.inner.globals.iter().enumerate() {
-            if global.addr.is_null() {
-                panic!("missing global initialization")
-            }
-            self.engine
-                .register_symbol(&format!("global_{}", idx), global.addr as RawFunctionPtr);
-        }
+    // fn init_globals_from_runtime(&mut self) {
+    //     for (idx, global) in self.globals.inner.globals.iter().enumerate() {
+    //         if global.addr.is_null() {
+    //             panic!("missing global initialization")
+    //         }
+    //         self.engine
+    //             .register_symbol(&format!("global_{}", idx), global.addr as RawFunctionPtr);
+    //     }
+    // }
+
+    pub(crate) fn memories(&self, mem_idx: MemIdx) -> &MemoryInstance {
+        &self.memories[mem_idx as usize]
+    }
+
+    pub(crate) fn globals(&self, global_idx: GlobalIdx) -> &GlobalInstance {
+        &self.globals.inner.globals[global_idx as usize]
+    }
+
+    pub(crate) fn tables(&self, table_idx: TableIdx) -> &TableInstance {
+        &self.tables[table_idx as usize]
+    }
+
+    pub(crate) fn execution_context(&self) -> *mut ExecutionContext {
+        self.execution_context as *const _ as *mut _
     }
 
     pub fn run_by_name(
@@ -176,22 +237,24 @@ impl<'a> InstanceHandle<'a> {
         func_name: &str,
         input_params: Vec<Value>,
     ) -> Result<Vec<Value>, RuntimeError> {
-        self.init_globals_from_runtime();
+        // self.init_globals_from_runtime();
 
-        let func_idx = self.find_func(func_name)?;
+        let func_idx = self.find_exported_func_idx(func_name)?;
         let function_type = self.get_function_type_from_func_idx(func_idx);
         let res_ty = function_type.1.clone();
 
         let mut res_opt = None;
         let jmp_res = call_with_sigsetjmp(true, |jmp_buf| {
-            self.execution_context.trap_return = Some(jmp_buf);
+            ExecutionContextWrapper::set_trap_return_point(jmp_buf);
+            SignalHandler::set_thread_executing_wasm();
+
             res_opt = Some(self.engine.run(
                 func_name,
                 res_ty,
                 input_params,
                 self.execution_context as *mut ExecutionContext,
             ));
-            self.execution_context.trap_return = None;
+            SignalHandler::unset_thread_executing_wasm();
             0
         });
         if jmp_res != 0 {
@@ -210,6 +273,7 @@ impl<'a> Clone for InstanceHandle<'a> {
     // even though this looks bad, it is merely here to fool the borrow checker again. All the contained references are unsafe and non-owning anyways.
     // Sole owner of all referenced objects is the cluster object with lifetime 'a.
     fn clone(&self) -> Self {
+        SignalHandler::register_globally();
         unsafe {
             Self {
                 module: self.module.clone(),
@@ -223,24 +287,31 @@ impl<'a> Clone for InstanceHandle<'a> {
                     1,
                 )[0],
                 execution_context: &mut slice::from_raw_parts_mut(
-                    self.execution_context as *const runtime_interface::ExecutionContext
-                        as *mut runtime_interface::ExecutionContext,
+                    self.execution_context as *const _ as *mut _,
                     1,
                 )[0],
 
-                globals: &mut slice::from_raw_parts_mut(
-                    self.globals as *const GlobalStorage as *mut crate::globals::GlobalStorage,
-                    1,
-                )[0],
-                tables: slice::from_raw_parts_mut(
-                    self.tables.as_ptr() as *mut TableInstance,
-                    self.tables.len(),
-                ),
+                globals: &mut slice::from_raw_parts_mut(self.globals as *const _ as *mut _, 1)[0],
+                tables: self
+                    .tables
+                    .iter()
+                    .map(|t| TableInstance {
+                        values: &mut slice::from_raw_parts_mut(t.values as *const _ as *mut _, 1)
+                            [0],
+                        ty: t.ty,
+                    })
+                    .collect(),
                 memories: slice::from_raw_parts_mut(
-                    self.memories.as_ptr() as *mut MemoryInstance,
+                    self.memories.as_ptr() as *mut _,
                     self.memories.len(),
                 ),
             }
         }
+    }
+}
+
+impl Drop for InstanceHandle<'_> {
+    fn drop(&mut self) {
+        SignalHandler::deregister_globally();
     }
 }
