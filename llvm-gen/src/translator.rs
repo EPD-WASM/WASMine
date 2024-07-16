@@ -572,13 +572,13 @@ impl Translator {
             locals.push((local, param_llvm_type));
         }
         for i in (func_type.0.len() as u32)..(function.locals.len() as u32) {
-            let local = &function.locals[i as usize];
-            let local_llvm_type = self.builder.valtype2llvm(local.type_);
+            let local_ty = &function.locals[i as usize];
+            let local_llvm_type = self.builder.valtype2llvm(*local_ty);
             let local_llvm_storage = self
                 .builder
                 .build_alloca(local_llvm_type, &format!("local{}", i));
             self.builder
-                .build_store(self.builder.const_zero(local.type_), local_llvm_storage);
+                .build_store(self.builder.const_zero(*local_ty), local_llvm_storage);
             locals.push((local_llvm_storage, local_llvm_type));
         }
         Ok(locals)

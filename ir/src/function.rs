@@ -1,14 +1,11 @@
 use super::basic_block::BasicBlock;
-use crate::{
-    instructions::Variable,
-    structs::{export::Export, module::Module},
-};
+use crate::structs::{export::Export, module::Module};
 use std::vec::Vec;
-use wasm_types::{FuncIdx, TypeIdx};
+use wasm_types::{FuncIdx, TypeIdx, ValType};
 
 #[derive(Debug, Clone)]
 pub struct FunctionInternal {
-    pub locals: Vec<Variable>,
+    pub locals: Vec<ValType>,
     pub bbs: Vec<BasicBlock>,
     pub num_vars: u32,
 }

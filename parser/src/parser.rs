@@ -8,7 +8,6 @@ use crate::parse_basic_blocks::validate_and_extract_result_from_stack;
 use crate::stack::ParserStack;
 use ir::basic_block::BasicBlock;
 use ir::function::{Function, FunctionImport, FunctionInternal, FunctionSource};
-use ir::instructions::Variable;
 use ir::structs::data::{Data, DataMode};
 use ir::structs::export::ExportDesc;
 use ir::structs::expression::ConstantExpression;
@@ -26,7 +25,7 @@ use wasm_types::module::Name;
 use wasm_types::{module::Section, FuncIdx, FuncType, TypeIdx};
 use wasm_types::{ImportDesc, MemIdx, ValType};
 
-const WASM_MODULE_PREAMBLE: &[u8] = &[b'\0', b'a', b's', b'm'];
+const WASM_MODULE_PREAMBLE: &[u8] = b"\0asm";
 const WASM_MODULE_VERSION: u32 = 1;
 
 #[derive(Debug, Default)]
@@ -365,22 +364,13 @@ impl Parser {
             };
             *locals = Vec::with_capacity(input_param_types.len() + num_expanded_locals as usize);
             for param_type in input_param_types {
-                locals.push(Variable {
-                    type_: param_type,
-                    id: var_count.fetch_add(1, Ordering::Relaxed),
-                });
+                locals.push(param_type);
             }
-            let mut expaneded_locals = local_prototypes
+            let mut expanded_locals = local_prototypes
                 .into_iter()
-                .flat_map(|(count, val_type)| {
-                    let id = var_count.fetch_add(count, Ordering::Relaxed);
-                    (0..count).map(move |_| Variable {
-                        type_: val_type,
-                        id,
-                    })
-                })
+                .flat_map(|(count, val_type)| (0..count).map(move |_| val_type))
                 .collect();
-            locals.append(&mut expaneded_locals);
+            locals.append(&mut expanded_locals);
         }
 
         let (num_vars, bbs) = {

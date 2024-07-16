@@ -524,7 +524,7 @@ impl HostFunctionStorage {
     ) {
         self.host_functions
             .entry(module_name.to_string())
-            .or_insert_with(HashMap::new)
+            .or_default()
             .insert(
                 function_name.to_string(),
                 RTFuncImport {

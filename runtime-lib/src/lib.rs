@@ -104,15 +104,15 @@ fn run_internal(path: &str) -> Result<Vec<Value>, RuntimeError> {
     let parser = parser::Parser::default();
     let module = Rc::new(parser.parse(loader).unwrap());
 
-    #[cfg(feature = "interpreter")]
+    #[cfg(feature = "interp")]
     {
-        interpreter::Interpreter::new(InterpreterContext::new(module)).run(
-            execution_context,
-            start_function,
-            unsafe { (*runtime).config.imports.clone() },
-            unsafe { (*runtime).globals.clone() },
-            input_params,
-        );
+        // interpreter::Interpreter::new(InterpreterContext::new(module)).run(
+        //     execution_context,
+        //     start_function,
+        //     unsafe { (*runtime).config.imports.clone() },
+        //     unsafe { (*runtime).globals.clone() },
+        //     input_params,
+        // );
     }
     #[cfg(feature = "llvm")]
     {

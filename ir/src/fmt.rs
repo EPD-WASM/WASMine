@@ -61,7 +61,7 @@ impl<'a> Display for FunctionDisplayContext<'a> {
                 let input_types: Vec<String> = locals
                     .iter()
                     .take(function_type.0.len())
-                    .map(|t| format!("{} %{}", t.type_, t.id))
+                    .map(|t| format!("{}", t))
                     .collect();
                 let input_types_str = input_types.join(", ");
                 writeln!(f, " ({}) {{", input_types_str)?;

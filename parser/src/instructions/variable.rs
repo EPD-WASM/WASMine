@@ -8,8 +8,8 @@ pub(crate) fn local_get(
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     let local_idx = LocalIdx::parse(i)?;
-    let var = match ctxt.func.locals.get(local_idx as usize) {
-        Some(v) => v,
+    let local_ty = match ctxt.func.locals.get(local_idx as usize) {
+        Some(local_ty) => local_ty,
         None => {
             return Err(ValidationError::Msg(format!(
                 "local variable with index {} not found",
@@ -19,7 +19,7 @@ pub(crate) fn local_get(
         }
     };
 
-    let out = ctxt.create_var(var.type_);
+    let out = ctxt.create_var(*local_ty);
     o.write(LocalGetInstruction {
         out1: out.id,
         local_idx,
@@ -64,8 +64,8 @@ pub(crate) fn local_set(
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     let local_idx = LocalIdx::parse(i)?;
-    let var = match ctxt.func.locals.get(local_idx as usize) {
-        Some(v) => v,
+    let local_ty = match ctxt.func.locals.get(local_idx as usize) {
+        Some(local_ty) => local_ty,
         None => {
             ctxt.poison::<()>(ValidationError::Msg(format!(
                 "local variable with index {} not found",
@@ -75,11 +75,11 @@ pub(crate) fn local_set(
         }
     };
 
-    let value = ctxt.pop_var_with_type(&var.type_);
-    if value.type_ != var.type_ {
+    let value = ctxt.pop_var_with_type(local_ty);
+    if value.type_ != *local_ty {
         ctxt.poison(ValidationError::Msg(format!(
             "stack value type does not match local {} type: {:?} vs {:?}",
-            local_idx, value.type_, var.type_
+            local_idx, value.type_, local_ty
         )))
     }
 
@@ -139,8 +139,8 @@ pub(crate) fn local_tee(
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     let local_idx = LocalIdx::parse(i)?;
-    let local_var = match ctxt.func.locals.get(local_idx as usize) {
-        Some(v) => v,
+    let local_ty = match ctxt.func.locals.get(local_idx as usize) {
+        Some(local_ty) => local_ty,
         None => {
             ctxt.poison::<()>(ValidationError::Msg(format!(
                 "local variable with index {} not found",
@@ -150,15 +150,15 @@ pub(crate) fn local_tee(
         }
     };
 
-    let in_stack_var = ctxt.pop_var_with_type(&local_var.type_);
-    if in_stack_var.type_ != local_var.type_ {
+    let in_stack_var = ctxt.pop_var_with_type(local_ty);
+    if in_stack_var.type_ != *local_ty {
         ctxt.poison(ValidationError::Msg(format!(
             "stack value type does not match local {} type: {:?} vs {:?}",
-            local_idx, in_stack_var.type_, local_var.type_
+            local_idx, in_stack_var.type_, local_ty
         )))
     }
 
-    let out_stack_var = ctxt.create_var(local_var.type_);
+    let out_stack_var = ctxt.create_var(*local_ty);
 
     o.write(LocalTeeInstruction {
         local_idx,
