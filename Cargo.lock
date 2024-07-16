@@ -838,6 +838,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "sightglass-connector"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "ir",
+ "runtime-lib",
+]
+
+[[package]]
 name = "simplelog"
 version = "0.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

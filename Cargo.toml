@@ -1,4 +1,4 @@
-workspace = { members = [ "fuzz", "runtime-lib", "interpreter", "ir", "parser", "tests/gen_util", "wasm-types", "loader", "runtime-interface", "llvm-gen"] }
+workspace = { members = [ "fuzz", "runtime-lib", "interpreter", "ir", "parser", "tests/gen_util", "wasm-types", "loader", "runtime-interface", "llvm-gen", "benches/sightglass-connector"] }
 
 [package]
 name = "wasm_rt"
