@@ -142,7 +142,7 @@ impl<'a> InstanceHandle<'a> {
             .collect()
     }
 
-    pub(crate) fn query_start_function(&self) -> Result<FuncIdx, InstantiationError> {
+    pub fn query_start_function(&self) -> Result<FuncIdx, InstantiationError> {
         if let Some(start_func_idx) = self.module.entry_point {
             return Ok(start_func_idx);
         }

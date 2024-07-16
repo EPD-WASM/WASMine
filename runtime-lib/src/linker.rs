@@ -54,6 +54,7 @@ pub enum LinkingError {
 pub struct BoundLinker<'a> {
     registered_modules: HashMap<String, &'a InstanceHandle<'a>>,
     transferred_handles: SegmentedList<InstanceHandle<'a>>,
+    host_functions: HostFunctionStorage,
     cluster: &'a Cluster,
 }
 
@@ -62,6 +63,16 @@ impl<'a> BoundLinker<'a> {
         Self {
             registered_modules: Default::default(),
             transferred_handles: Default::default(),
+            host_functions: HostFunctionStorage::new(),
+            cluster,
+        }
+    }
+
+    fn new_from_linker(cluster: &'a Cluster, host_functions: HostFunctionStorage) -> Self {
+        Self {
+            registered_modules: Default::default(),
+            transferred_handles: Default::default(),
+            host_functions,
             cluster,
         }
     }
@@ -114,6 +125,16 @@ impl<'a> BoundLinker<'a> {
         let mut imports = RTImportCollection::default();
 
         for import in module.imports.iter() {
+            // filter out host function imports early
+            if matches!(import.desc, ImportDesc::Func(_)) {
+                if let Some(host_func_import) =
+                    self.host_functions.get(&import.module, &import.name)
+                {
+                    imports.functions.push(host_func_import.clone());
+                    continue;
+                }
+            }
+
             let exporting_module = match self.registered_modules.get(&import.module) {
                 Some(m) => m,
                 None => {
@@ -270,16 +291,26 @@ impl<'a> BoundLinker<'a> {
         }
         Ok(imports)
     }
+
+    pub fn link_host_function(
+        &mut self,
+        module_name: &str,
+        function_name: &str,
+        callable: RawFunctionPtr,
+    ) {
+        self.host_functions
+            .insert(module_name, function_name, callable);
+    }
 }
 
 #[derive(Default)]
 pub struct Linker {
-    host_functions: HashMap<String, RTFuncImport>,
+    host_functions: HostFunctionStorage,
 }
 
 impl Linker {
     pub fn bind_to<'a>(&self, cluster: &'a Cluster) -> BoundLinker<'a> {
-        BoundLinker::new(cluster)
+        BoundLinker::new_from_linker(cluster, self.host_functions.clone())
     }
 
     pub fn new() -> Self {
@@ -287,12 +318,21 @@ impl Linker {
     }
 
     pub fn link_wasi(&mut self) {
-        self.host_functions.extend(
-            wasi::collect_available_imports()
-                .into_iter()
-                .map(|(k, v)| (k.into(), v))
-                .collect::<HashMap<_, _>>(),
-        );
+        for (name, import) in wasi::collect_available_imports() {
+            let (module_name, function_name) = name.split_once('.').unwrap();
+            self.host_functions
+                .insert(module_name, function_name, import.callable);
+        }
+    }
+
+    pub fn link_host_function(
+        &mut self,
+        module_name: &str,
+        function_name: &str,
+        callable: RawFunctionPtr,
+    ) {
+        self.host_functions
+            .insert(module_name, function_name, callable);
     }
 }
 
@@ -464,4 +504,41 @@ pub(crate) struct RTImportCollection {
     pub(crate) globals: Vec<RTGlobalImport>,
     pub(crate) memories: Vec<RTMemoryImport>,
     pub(crate) tables: Vec<RTTableImport>,
+}
+
+#[derive(Default, Debug, Clone)]
+pub(crate) struct HostFunctionStorage {
+    host_functions: HashMap<String, HashMap<String, RTFuncImport>>,
+}
+
+impl HostFunctionStorage {
+    pub(crate) fn new() -> Self {
+        Self::default()
+    }
+
+    pub(crate) fn insert(
+        &mut self,
+        module_name: &str,
+        function_name: &str,
+        callable: RawFunctionPtr,
+    ) {
+        self.host_functions
+            .entry(module_name.to_string())
+            .or_insert_with(HashMap::new)
+            .insert(
+                function_name.to_string(),
+                RTFuncImport {
+                    name: format!("{}.{}", module_name, function_name),
+                    function_type: FuncType(Vec::new(), Vec::new()),
+                    callable,
+                    execution_context: None,
+                },
+            );
+    }
+
+    pub(crate) fn get(&self, module_name: &str, function_name: &str) -> Option<&RTFuncImport> {
+        self.host_functions
+            .get(module_name)
+            .and_then(|module| module.get(function_name))
+    }
 }

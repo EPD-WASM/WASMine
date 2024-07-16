@@ -8,10 +8,10 @@ mod parse_basic_blocks;
 #[allow(clippy::module_inception)]
 pub mod parser;
 mod stack;
-pub(crate) mod wasm_stream_reader;
 
-pub(crate) use self::error::{ParserError, ValidationError};
+pub(crate) mod wasm_stream_reader;
 
 pub(crate) type ParseResult = Result<(), ParserError>;
 
+pub use error::{ParserError, ValidationError};
 pub use parser::Parser;

@@ -33,6 +33,11 @@ pub use error::RuntimeError;
 pub use instance_handle::InstanceHandle;
 pub use linker::{BoundLinker, Linker};
 
+// reexports
+pub use ir::structs::module::Module as WasmModule;
+pub use loader::Loader;
+pub use parser::{Parser, ParserError, ValidationError};
+
 pub const WASM_PAGE_SIZE: u32 = 2_u32.pow(16);
 // maximum amount of wasm pages
 pub const WASM_PAGE_LIMIT: u32 = 2_u32.pow(16);
