@@ -237,8 +237,6 @@ impl<'a> InstanceHandle<'a> {
         func_name: &str,
         input_params: Vec<Value>,
     ) -> Result<Vec<Value>, RuntimeError> {
-        // self.init_globals_from_runtime();
-
         let func_idx = self.find_exported_func_idx(func_name)?;
         let function_type = self.get_function_type_from_func_idx(func_idx);
         let res_ty = function_type.1.clone();
@@ -248,8 +246,8 @@ impl<'a> InstanceHandle<'a> {
             ExecutionContextWrapper::set_trap_return_point(jmp_buf);
             SignalHandler::set_thread_executing_wasm();
 
-            res_opt = Some(self.engine.run(
-                func_name,
+            res_opt = Some(self.engine.run_by_idx(
+                func_idx,
                 res_ty,
                 input_params,
                 self.execution_context as *mut ExecutionContext,

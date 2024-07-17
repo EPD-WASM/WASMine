@@ -12,9 +12,8 @@ impl Executable for IBinaryInstruction {
         let in1_u64 = stack_frame.vars.get(self.lhs);
         let in2_u64 = stack_frame.vars.get(self.rhs);
 
-        let types = todo!();
-        let in1 = Number::trans_from_u64(in1_u64, &types);
-        let in2 = Number::trans_from_u64(in2_u64, &types);
+        let in1 = Number::trans_from_u64(in1_u64, &self.types);
+        let in2 = Number::trans_from_u64(in2_u64, &self.types);
 
         let res: Number = match self.op {
             IBinaryOp::Add => in1 + in2,
@@ -23,7 +22,7 @@ impl Executable for IBinaryInstruction {
             IBinaryOp::DivS => in1.as_signed() / in2.as_signed(),
             IBinaryOp::DivU => in1.as_unsigned() / in2.as_unsigned(),
             IBinaryOp::RemS => in1.as_signed() % in2.as_signed(),
-            IBinaryOp::RemU => in2.as_unsigned() % in2.as_unsigned(),
+            IBinaryOp::RemU => in1.as_unsigned() % in2.as_unsigned(),
             IBinaryOp::And => in1 & in2,
             IBinaryOp::Or => in1 | in2,
             IBinaryOp::Xor => in1 ^ in2,

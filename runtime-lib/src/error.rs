@@ -15,6 +15,8 @@ pub enum RuntimeError {
     InvalidImport(String),
     #[error("Could not find entry point")]
     NoStartFunction,
+    #[error("Could not find function: {0}")]
+    FunctionNotFound(String),
     #[error("Invalid number of arguments. Required: {0}, provided: {1}")]
     ArgumentNumberMismatch(usize, usize),
     #[error("Invalid argument type. Expected: {0}, provided: {1}")]

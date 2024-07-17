@@ -104,35 +104,32 @@ fn run_internal(path: &str) -> Result<Vec<Value>, RuntimeError> {
     let parser = parser::Parser::default();
     let module = Rc::new(parser.parse(loader).unwrap());
 
+    let mut engine;
+
     #[cfg(feature = "interp")]
     {
-        // interpreter::Interpreter::new(InterpreterContext::new(module)).run(
-        //     execution_context,
-        //     start_function,
-        //     unsafe { (*runtime).config.imports.clone() },
-        //     unsafe { (*runtime).globals.clone() },
-        //     input_params,
-        // );
+        engine = Engine::interpreter()?;
     }
-    #[cfg(feature = "llvm")]
+    #[cfg(all(not(feature = "interp"), feature = "llvm"))]
     {
-        let mut engine = Engine::llvm()?;
-        engine.init(module.clone())?;
-
-        let cluster = Cluster::new();
-        let mut linker = Linker::new();
-        linker.link_wasi();
-
-        let linker = linker.bind_to(&cluster);
-        let mut module_handle = linker.instantiate_and_link(module.clone(), engine)?;
-        module_handle.run_by_name(
-            "_start",
-            parse_input_params_for_function(
-                module_handle
-                    .get_function_type_from_func_idx(module_handle.query_start_function().unwrap()),
-            )?,
-        )
+        engine = Engine::llvm()?;
     }
+
+    engine.init(module.clone())?;
+
+    let cluster = Cluster::new();
+    let mut linker = Linker::new();
+    linker.link_wasi();
+
+    let linker = linker.bind_to(&cluster);
+    let mut module_handle = linker.instantiate_and_link(module.clone(), engine)?;
+    module_handle.run_by_name(
+        "_start",
+        parse_input_params_for_function(
+            module_handle
+                .get_function_type_from_func_idx(module_handle.query_start_function().unwrap()),
+        )?,
+    )
 }
 
 pub fn run(path: &str) -> u8 {

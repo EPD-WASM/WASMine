@@ -1,0 +1,25 @@
+use ir::{instructions::TableCopyInstruction, utils::numeric_transmutes::Bit64};
+
+use crate::{Executable, InterpreterContext, InterpreterError};
+
+impl Executable for TableCopyInstruction {
+    fn execute(&mut self, ctx: &mut InterpreterContext) -> Result<(), InterpreterError> {
+        let stack_frame = ctx.stack.last_mut().unwrap();
+        let len = stack_frame.vars.get(self.n).trans_u32();
+        let src_start = stack_frame.vars.get(self.s).trans_u32();
+        let dst_start = stack_frame.vars.get(self.d).trans_u32();
+
+        unsafe {
+            runtime_interface::table_copy(
+                ctx.exec_ctx,
+                self.table_idx_x,
+                self.table_idx_y,
+                src_start,
+                dst_start,
+                len,
+            )
+        }
+
+        Ok(())
+    }
+}

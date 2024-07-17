@@ -1,7 +1,7 @@
 use std::mem::transmute;
 
-use crate::structs::value::Number;
-use wasm_types::NumType;
+use crate::structs::value::{Number, Reference};
+use wasm_types::{NumType, RefType};
 
 pub trait Bit32 {
     fn trans_u32(&self) -> u32;
@@ -10,6 +10,13 @@ pub trait Bit32 {
 
     fn trans_u64(&self) -> u64 {
         self.trans_u32() as u64
+    }
+
+    fn to_reference(&self, r#type: &RefType) -> Reference {
+        match r#type {
+            RefType::FunctionReference => Reference::Function(self.trans_u32()),
+            RefType::ExternReference => panic!("Cannot create pointer from u32"),
+        }
     }
 }
 pub trait Bit64 {
@@ -40,6 +47,10 @@ pub trait Bit64 {
             NumType::F64 => Number::F64(self.trans_f64()),
         }
     }
+}
+
+pub trait Bit128 {
+    fn trans_u64(&self) -> u64;
 }
 
 impl Bit32 for u32 {
@@ -123,5 +134,19 @@ impl Bit64 for f64 {
 
     fn trans_f64(&self) -> f64 {
         *self
+    }
+}
+
+impl Bit128 for u128 {
+    fn trans_u64(&self) -> u64 {
+        let bytes = self.to_le_bytes();
+        u64::from_le_bytes(bytes[0..8].try_into().unwrap())
+    }
+}
+
+impl Bit128 for i128 {
+    fn trans_u64(&self) -> u64 {
+        let bytes = self.to_le_bytes();
+        u64::from_le_bytes(bytes[0..8].try_into().unwrap())
     }
 }

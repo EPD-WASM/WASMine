@@ -9,6 +9,8 @@ pub enum DecodingError {
     DecodingError(String),
     #[error("Type mismatch")]
     TypeMismatch,
+    #[error("Instruction storage exhausted")]
+    InstructionStorageExhausted,
 }
 
 #[derive(Debug)]
@@ -32,9 +34,7 @@ impl InstructionDecoder {
         self.storage
             .instruction_storage
             .pop_front()
-            .ok_or(DecodingError::DecodingError(
-                "instruction storage exhausted".to_string(),
-            ))
+            .ok_or(DecodingError::InstructionStorageExhausted)
     }
 
     pub fn read_immediate<T: Integer>(&mut self) -> Result<T, DecodingError> {

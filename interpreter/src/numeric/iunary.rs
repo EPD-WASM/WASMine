@@ -26,8 +26,8 @@ fn clz(
     instruction: &mut IUnaryInstruction,
 ) -> Result<(), InterpreterError> {
     let num = stack_frame.vars.get(instruction.in1);
-    let types = todo!();
-    let leading_zeros = match types {
+
+    let leading_zeros = match instruction.types {
         // be careful here, this works for u64 -> u32, but might not work for other types.
         NumType::I32 => u32::leading_zeros(num as u32),
         NumType::I64 => num.leading_zeros(),
@@ -44,8 +44,8 @@ fn ctz(
     instruction: &mut IUnaryInstruction,
 ) -> Result<(), InterpreterError> {
     let num = stack_frame.vars.get(instruction.in1);
-    let types = todo!();
-    let trailing_zeros = match types {
+
+    let trailing_zeros = match instruction.types {
         NumType::I32 => u32::trailing_zeros(num as u32),
         NumType::I64 => num.trailing_zeros(),
         _ => return Err(TypeMismatch),
@@ -63,9 +63,8 @@ fn popcnt(
     instruction: &mut IUnaryInstruction,
 ) -> Result<(), InterpreterError> {
     let num = stack_frame.vars.get(instruction.in1);
-    let types = todo!();
 
-    let pop_count = match types {
+    let pop_count = match instruction.types {
         NumType::I32 => u32::count_ones(num as u32),
         NumType::I64 => num.count_ones(),
         _ => return Err(TypeMismatch),

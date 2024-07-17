@@ -8,7 +8,7 @@ use wasm_types::{FuncIdx, GlobalIdx, NumType, RefType, ValType};
 mod number_impls;
 mod number_ops;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Number {
     I32(u32),
     I64(u64),
@@ -53,6 +53,26 @@ pub enum Reference {
     Extern(*const ffi::c_void),
 }
 
+impl Reference {
+    pub fn as_u64(&self) -> u64 {
+        match *self {
+            Reference::Null => 0,
+            Reference::Function(f) => f as u64,
+            Reference::Extern(e) => e as u64,
+        }
+    }
+
+    pub fn from_u32(n: u32, t: &RefType) -> Self {
+        if n == 0 {
+            return Reference::Null;
+        }
+        match t {
+            RefType::FunctionReference => Reference::Function(n as FunctionReference),
+            RefType::ExternReference => panic!("Cannot create pointer from u32"),
+        }
+    }
+}
+
 impl Display for Reference {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
@@ -68,6 +88,24 @@ pub enum Value {
     Number(Number),
     Vector(Vector),
     Reference(Reference),
+}
+
+impl Value {
+    pub fn trans_to_u64(&self) -> u64 {
+        match self {
+            Value::Number(n) => n.trans_to_u64(),
+            Value::Vector(_) => todo!("Vector to u64 lmao"),
+            Value::Reference(r) => r.as_u64(),
+        }
+    }
+
+    pub fn from_u64(n: u64, t: ValType) -> Self {
+        match t {
+            ValType::Number(t) => Value::Number(Number::trans_from_u64(n, &t)),
+            ValType::Reference(t) => Value::Reference(Reference::from_u32(n as u32, &t)),
+            ValType::VecType => todo!(),
+        }
+    }
 }
 
 impl Display for Value {

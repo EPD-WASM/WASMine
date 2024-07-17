@@ -55,6 +55,7 @@ impl MemoryInstance {
 
         // larger than 2**32 = 4GiB?
         if self.0.size + grow_by > 2_u32.pow(16) {
+            log::debug!("Memory grow failed: larger than 4GiB");
             return -1;
         }
         // larger than memory::limits::max_size?
@@ -72,7 +73,7 @@ impl MemoryInstance {
             )
         };
         if res != 0 {
-            println!("Memory grow failed: {}", errno::Errno::last());
+            log::debug!("Memory grow failed: {}", errno::Errno::last());
             return -1;
         }
         let old_size = self.0.size;
@@ -186,7 +187,7 @@ impl Drop for MemoryInstance {
             )
         } != 0
         {
-            println!(
+            log::error!(
                 "Failed to unmap memory at 0x{:x}: {}",
                 self.0.data as usize,
                 Errno::last()

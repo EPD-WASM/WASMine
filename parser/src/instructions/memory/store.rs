@@ -14,6 +14,7 @@ fn parse_store(
         memarg,
         addr_in: addr_in.id,
         value_in: value_in.id,
+        in_type: input_type,
         operation,
     });
     Ok(())

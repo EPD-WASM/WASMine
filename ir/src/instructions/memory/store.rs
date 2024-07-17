@@ -5,6 +5,7 @@ pub struct StoreInstruction {
     pub memarg: MemArg,
     pub addr_in: VariableID,
     pub value_in: VariableID,
+    pub in_type: NumType,
     pub operation: StoreOp,
 }
 
@@ -17,6 +18,7 @@ impl Instruction for StoreInstruction {
         o.write_immediate(self.memarg.offset);
         o.write_variable(self.addr_in);
         o.write_variable(self.value_in);
+        o.write_value_type(ValType::Number(self.in_type))
     }
 
     fn deserialize(i: &mut InstructionDecoder, t: InstructionType) -> Result<Self, DecodingError> {
@@ -24,6 +26,7 @@ impl Instruction for StoreInstruction {
         let offset = i.read_immediate()?;
         let addr_in = i.read_variable()?;
         let value_in = i.read_variable()?;
+        let in_type = extract_numtype!(i.read_value_type()?);
         let operation = match t {
             InstructionType::Memory(MemoryInstructionCategory::Store(op)) => op,
             _ => return Err(DecodingError::TypeMismatch),
@@ -33,6 +36,7 @@ impl Instruction for StoreInstruction {
             addr_in,
             value_in,
             operation,
+            in_type,
         })
     }
 }

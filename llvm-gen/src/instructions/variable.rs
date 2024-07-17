@@ -47,9 +47,11 @@ impl Translator {
                 };
                 let global_name = format!("global_{}", instr.global_idx);
                 let global = self.module.get_global(&global_name)?;
-                variable_map[instr.out1 as usize] =
-                    self.builder
-                        .build_load(self.builder.valtype2llvm(global_type), global, "global_get")
+                variable_map[instr.out1 as usize] = self.builder.build_load(
+                    self.builder.valtype2llvm(global_type),
+                    global,
+                    "global_get",
+                )
             }
             VariableInstructionType::GlobalSet => {
                 let instr = decoder.read::<GlobalSetInstruction>(instruction)?;

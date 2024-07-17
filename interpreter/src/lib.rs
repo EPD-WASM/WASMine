@@ -1,6 +1,8 @@
+use control_flow::GlueHandler;
 use ir::function::FunctionSource;
-use runtime_interface::{ExecutionContext, GlobalStorage};
-use std::collections::HashMap;
+use runtime_interface::{ExecutionContext, GlobalStorage, RawFunctionPtr};
+use std::{collections::HashMap, rc::Rc};
+use table::execute_table_instruction;
 use thiserror::Error;
 use wasm_types::{FuncIdx, InstructionType};
 use {
@@ -10,7 +12,14 @@ use {
     parser::error::ParserError,
 };
 
+mod control_flow;
+mod memory;
 mod numeric;
+mod parametric;
+mod reference;
+mod table;
+mod util;
+mod variable;
 
 #[derive(Debug, Error)]
 pub enum InterpreterError {
@@ -24,6 +33,10 @@ pub enum InterpreterError {
     DecodingError(#[from] DecodingError),
     #[error("Parser error: {0}")]
     ParserError(#[from] ParserError),
+    #[error("Unreachable instruction reached")]
+    Unreachable,
+    #[error("Index out of bounds")]
+    IdxBounds,
 }
 
 pub(crate) trait Executable {
@@ -31,27 +44,46 @@ pub(crate) trait Executable {
 }
 
 #[derive(Debug)]
-pub(crate) struct LocalVariableStore {
+pub(crate) struct VariableStore {
     vars: Vec<u64>,
 }
 
-impl LocalVariableStore {
-    pub(crate) fn new() -> Self {
-        Self { vars: Vec::new() }
+impl VariableStore {
+    pub(crate) fn new(init: Vec<u64>) -> Self {
+        Self { vars: init }
     }
 
     // TODO bounds check? => if parser is implemented correctly, this should not be necessary (maybe debug assert?)
     pub(crate) fn get(&self, idx: VariableID) -> u64 {
-        debug_assert!((idx as usize) < self.vars.len());
-        self.vars[idx as usize]
+        // println!("getting variable: {}", idx);
+        // println!("vars: {:?}", self.vars);
+        // debug_assert!((idx as usize) < self.vars.len());
+        // self.vars[idx as usize]
+        let res = self.vars.get(idx as usize).copied().unwrap_or_default();
+        // println!("\t = {}", res);
+        // println!("\t = {}", res.trans_f64());
+        res
     }
 
     pub(crate) fn set(&mut self, idx: VariableID, value: u64) {
         // TODO: store highest variable id to avoid resizing the vector all the time
+        // println!("setting idx: {} to value: {}", idx, value);
+        // println!("                        = {}", value.trans_f64());
+
         if idx as usize >= self.vars.len() {
+            // println!("resizing vars to len: {}", idx as usize + 1);
             self.vars.resize(idx as usize + 1, 0);
         }
+        // println!("\tvars: {:?}", self.vars);
         self.vars[idx as usize] = value;
+        // println!("--> \tvars: {:?}", self.vars);
+        // println!(
+        //     " == \tvars: {:?}",
+        //     self.vars
+        //         .iter()
+        //         .map(|n| n.trans_f64())
+        //         .collect::<Vec<f64>>()
+        // );
     }
 }
 
@@ -60,91 +92,182 @@ impl LocalVariableStore {
 struct StackFrame {
     /// function index
     fn_idx: FuncIdx,
+    /// local variables of the function
+    fn_local_vars: VariableStore,
     /// basic block index (within the function)
-    bb_idx: u32,
+    bb_id: u32,
+    last_bb_id: u32,
+    /// indices into which the return values are written in the caller function
+    return_vars: Vec<VariableID>,
     /// the instruction decoder used to read out instructions
     decoder: InstructionDecoder,
-    vars: LocalVariableStore,
+    vars: VariableStore,
 }
 
-pub struct InterpreterContext {
-    module: Module,
-    variables: HashMap<VariableID, Value>,
+#[derive(Debug)]
+pub struct InterpreterContext<'a> {
+    module: Rc<Module>,
     stack: Vec<StackFrame>,
+    exec_ctx: &'a mut ExecutionContext,
 }
 
-impl InterpreterContext {
-    pub fn new(module: Module) -> Self {
+impl<'a> InterpreterContext<'a> {
+    pub fn new(module_rc: Rc<Module>, exec_ctx: &'a mut ExecutionContext) -> Self {
         Self {
-            module,
-            variables: HashMap::new(),
+            module: module_rc,
             stack: Vec::new(),
+            exec_ctx,
         }
     }
 }
 
 pub struct Interpreter {
-    ctx: InterpreterContext,
+    // ctx: InterpreterContext,
+    module: Option<Rc<Module>>,
+    imported_functions: HashMap<String, RawFunctionPtr>,
 }
 
 impl Interpreter {
-    pub fn new(context: InterpreterContext) -> Self {
-        Self { ctx: context }
+    pub fn new() -> Self {
+        Self {
+            module: None,
+            imported_functions: HashMap::new(),
+        }
     }
 
-    pub fn run(
+    pub fn set_module(&mut self, module: Rc<Module>) {
+        self.module = Some(module);
+    }
+
+    pub fn register_symbol(&mut self, name: &str, address: RawFunctionPtr) {
+        self.imported_functions.insert(name.to_string(), address);
+    }
+
+    pub unsafe fn run(
         &mut self,
-        runtime: ExecutionContext,
         function_idx: FuncIdx,
-        globals: GlobalStorage,
         parameters: Vec<Value>,
+        exec_ctx: *mut ExecutionContext,
     ) -> Result<Vec<Value>, InterpreterError> {
-        if self.ctx.stack.is_empty() {
-            let entry_fn = self
-                .ctx
-                .module
-                .ir
-                .functions
-                .get(function_idx as usize)
-                // TODO: make this check only for debug builds. We KNOW that this function exists
-                .expect(format!("Function not found at index {function_idx}").as_str());
+        // println!("Interpreter running function: {}", function_idx);
+        let exec_ctx = unsafe { exec_ctx.as_mut().unwrap() };
 
-            // TODO: store pointer to entry block. This is currently always BB0, but this might change in the future
-            let basic_block = match &entry_fn.src {
-                FunctionSource::Internal(f) => f.bbs.first(),
-                FunctionSource::Import(_) => None,
+        let mut ctx = InterpreterContext::new(self.module.clone().unwrap(), exec_ctx);
+
+        ctx.stack = Vec::new();
+        let entry_fn = ctx
+            .module
+            .ir
+            .functions
+            .get(function_idx as usize)
+            // TODO: make this check only for debug builds. We KNOW that this function exists
+            .unwrap_or_else(|| panic!("Function not found at index {function_idx}"));
+
+        // TODO: store pointer to entry block. This is currently always BB0, but this might change in the future
+        let basic_block = util::get_bbs_from_function(entry_fn).first().unwrap();
+
+        let decoder = InstructionDecoder::new(basic_block.instructions.clone());
+
+        let parameters_u64 = parameters
+            .into_iter()
+            .map(|v| v.trans_to_u64())
+            .collect::<Vec<u64>>();
+
+        ctx.stack.push(StackFrame {
+            fn_idx: function_idx,
+            fn_local_vars: VariableStore::new(parameters_u64),
+            bb_id: basic_block.id,
+            last_bb_id: 0,
+            return_vars: Vec::new(),
+            decoder,
+            vars: VariableStore::new(Vec::new()),
+        });
+
+        let ret_types = ctx.module.function_types[entry_fn.type_idx as usize]
+            .1
+            .clone();
+        // println!("return types: {:?}", ret_types);
+        // println!("decoded instructions: {:#?}", self.ctx.stack.last().unwrap().decoder);
+        // println!("entry_fn: {:#?}", entry_fn);
+
+        let ret_vals = loop {
+            let instruction_type = ctx
+                .stack
+                .last_mut()
+                .unwrap()
+                .decoder
+                .read_instruction_type();
+
+            // println!("{:?}", instruction_type);
+
+            match instruction_type {
+                Ok(instruction_type) => self.execute_instruction(instruction_type, &mut ctx)?,
+                Err(DecodingError::InstructionStorageExhausted) => {
+                    // println!("stack: {:#?}", self.ctx.stack);
+
+                    let current_frame = ctx.stack.last_mut().unwrap();
+                    let func = &ctx.module.ir.functions[current_frame.fn_idx as usize];
+                    let bbs = util::get_bbs_from_function(func);
+                    // println!("func basic blocks: {:#?}", func.basic_blocks);
+
+                    let bb = bbs
+                        .iter()
+                        .find(|bb| bb.id == current_frame.bb_id)
+                        .unwrap_or_else(|| {
+                            panic!("Basic block with ID {} not found", current_frame.bb_id)
+                        });
+
+                    // println!("handling terminator {:?}", bb.terminator);
+
+                    let ret_vals = bb.terminator.to_owned().handle(&mut ctx)?;
+                    if ctx.stack.is_empty() {
+                        break ret_vals.unwrap_or_default();
+                    }
+
+                    // break self.ctx.last_return_values.clone();
+                }
+                Err(e) => return Err(InterpreterError::DecodingError(e)),
             }
-            // TODO: make this check only for debug builds. We KNOW that this basic block exists
-            .expect("Basic block not found at index 0");
+        };
 
-            let decoder = InstructionDecoder::new(basic_block.instructions.clone());
-            self.ctx.stack.push(StackFrame {
-                fn_idx: function_idx,
-                bb_idx: 0,
-                decoder,
-                vars: LocalVariableStore::new(),
-            });
-        }
+        let ret_vals = ret_vals
+            .into_iter()
+            .enumerate()
+            .map(|(i, val)| Value::from_u64(val, ret_types[i]))
+            .collect();
 
-        let current_frame = self.ctx.stack.last_mut().unwrap();
-        let instruction_type = current_frame.decoder.read_instruction_type()?;
+        Ok(ret_vals)
+    }
+
+    fn execute_instruction(
+        &mut self,
+        instruction_type: InstructionType,
+        ctx: &mut InterpreterContext,
+    ) -> Result<(), InterpreterError> {
+        // println!("Interpreting instruction: {:?}", instruction_type);
         match instruction_type.clone() {
-            InstructionType::Numeric(c) => numeric::execute_numeric_instruction(
-                &mut self.ctx,
-                c,
-                // &mut current_frame.decoder,
-                instruction_type,
-            )?,
-            InstructionType::Vector(_) => todo!(),
-            InstructionType::Parametric(_) => todo!(),
-            InstructionType::Variable(_) => todo!(),
-            InstructionType::Table(_) => todo!(),
-            InstructionType::Memory(_) => todo!(),
-            InstructionType::Control(_) => todo!(),
-            InstructionType::Reference(_) => todo!(),
-            InstructionType::Meta(_) => todo!(),
-        }
+            InstructionType::Numeric(c) => {
+                numeric::execute_numeric_instruction(ctx, c, instruction_type)
+            }
+            InstructionType::Variable(c) => {
+                variable::execute_variable_instruction(ctx, c, instruction_type)
+            }
+            InstructionType::Parametric(c) => {
+                parametric::execute_parametric_instruction(ctx, c, instruction_type)
+            }
+            InstructionType::Memory(c) => {
+                memory::execute_memory_instruction(ctx, c, instruction_type)
+            }
+            InstructionType::Meta(c) => unreachable!("No meta instructions exist"),
 
-        todo!()
+            InstructionType::Reference(c) => {
+                reference::execute_reference_instruction(ctx, c, instruction_type)
+            }
+            InstructionType::Table(c) => execute_table_instruction(ctx, c, instruction_type),
+            InstructionType::Control(_) => unreachable!(
+                "Control instructions are not serialized and can therefore not be deserialized."
+            ),
+            InstructionType::Vector(_) => todo!(),
+        }
     }
 }

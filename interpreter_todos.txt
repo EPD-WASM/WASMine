@@ -1,0 +1,45 @@
+TODOs:
+* get memory loads and stores working
+* get tables working
+* pass tests :dogehigh:
+
+=== failing tests ===
+spec_test_interpreter_binary_leb128_wast        # TODO interpreter engine
+spec_test_interpreter_block_wast                # not yet implemented: runtime_interface::indirect_call
+spec_test_interpreter_bulk_wast                 # not yet implemented: runtime-lib memory fill
+spec_test_interpreter_call_indirect_wast        # not yet implemented: runtime_interface::indirect_call
+spec_test_interpreter_call_wast                 # not yet implemented: runtime_interface::indirect_call    
+spec_test_interpreter_data_wast                 # not yet implemented: Import memories
+spec_test_interpreter_elem_wast                 # not yet implemented: Import tables
+spec_test_interpreter_fac_wast                  # TODO two function locals with the same ID?
+spec_test_interpreter_float_exprs_wast          # TODO
+spec_test_interpreter_func_ptrs_wast            # TODO get_raw_function_ptr for interpreter engine
+spec_test_interpreter_func_wast                 # not yet implemented: runtime_interface::indirect_call
+spec_test_interpreter_global_wast               # TODO not sure, imports?
+spec_test_interpreter_if_wast                   # not yet implemented: runtime_interface::indirect_call
+spec_test_interpreter_imports_wast              # TODO get_raw_function_ptr for interpreter engine
+spec_test_interpreter_left_to_right_wast        # not yet implemented: runtime_interface::indirect_call
+spec_test_interpreter_linking_wast              # TODO get_raw_function_ptr for interpreter engine
+spec_test_interpreter_load_wast                 # not yet implemented: runtime_interface::indirect_call
+spec_test_interpreter_local_set_wast            # TODO (maybe check function locals bug from factorial test)
+spec_test_interpreter_local_tee_wast            # TODO "
+spec_test_interpreter_loop_wast                 # not yet implemented: runtime_interface::indirect_call
+spec_test_interpreter_memory_copy_wast          # Failed to link module: Error during instantiation of module: Supplied datasource too small.
+spec_test_interpreter_memory_fill_wast          # not yet implemented: runtime-lib memory fill
+spec_test_interpreter_memory_grow_wast          # memory grow fails due to incorrect memory limits?
+spec_test_interpreter_memory_init_wast          # Failed to link module: Error during instantiation of module: Supplied datasource too small.
+spec_test_interpreter_memory_redundancy_wast    # TODO
+spec_test_interpreter_memory_trap_wast          # Failed to link module: Error during instantiation of module: Supplied datasource too small.
+spec_test_interpreter_ref_func_wast             # TODO get_raw_function_ptr for interpreter engine
+spec_test_interpreter_ref_is_null_wast          # not yet implemented: runtime_interface::table_set
+spec_test_interpreter_select_wast               # not yet implemented: runtime_interface::indirect_call
+spec_test_interpreter_stack_wast                # TODO contains factorial test which fails for same reason as fac test above
+spec_test_interpreter_start_wast                # Instantiation error: Module does not contain start function.
+spec_test_interpreter_table_copy_wast           # tables
+spec_test_interpreter_table_fill_wast           # tables
+spec_test_interpreter_table_get_wast            # tables
+spec_test_interpreter_table_grow_wast           # tables
+spec_test_interpreter_table_init_wast           # tables
+spec_test_interpreter_table_set_wast            # tables
+spec_test_interpreter_table_size_wast           # tables
+spec_test_interpreter_table_wast                # tables

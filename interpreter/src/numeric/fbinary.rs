@@ -10,10 +10,15 @@ impl Executable for FBinaryInstruction {
     fn execute(&mut self, ctx: &mut InterpreterContext) -> Result<(), InterpreterError> {
         let stack_frame = ctx.stack.last_mut().unwrap();
 
-        let types = todo!();
+        let num1 = stack_frame.vars.get(self.lhs).to_number(&self.types);
+        let num2 = stack_frame.vars.get(self.rhs).to_number(&self.types);
 
-        let num1 = stack_frame.vars.get(self.lhs).to_number(&types);
-        let num2 = stack_frame.vars.get(self.rhs).to_number(&types);
+        // https://webassembly.github.io/spec/core/exec/numerics.html#nan-propagation
+        if self.op != FBinaryOp::Copysign && (num1.is_nan() || num2.is_nan()) {
+            let canonical_nan: u64 = Number::nan(&self.types).trans_to_u64();
+            stack_frame.vars.set(self.out1, canonical_nan);
+            return Ok(());
+        }
 
         let res1 = match self.op {
             FBinaryOp::Add => num1 + num2,

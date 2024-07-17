@@ -1,5 +1,5 @@
-use crate::parsable::ParseWithContext;
 use super::*;
+use crate::parsable::ParseWithContext;
 
 pub(crate) fn if_else(
     ctxt: &mut Context,

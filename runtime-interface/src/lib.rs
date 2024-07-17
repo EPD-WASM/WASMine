@@ -5,6 +5,7 @@ use wasm_types::{DataIdx, ElemIdx, MemIdx, TableIdx, TypeIdx};
 pub type RawFunctionPtr = *const core::ffi::c_void;
 
 /// The only top level datastructure always available to the executing WASM code
+#[derive(Debug)]
 #[repr(C)]
 pub struct ExecutionContext {
     // runtime-resource slices
