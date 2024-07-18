@@ -49,6 +49,8 @@ pub struct GlobalInstance {
     pub addr: *mut u64,
 }
 
+// Careful! These function symbols are not mangled and pollute the global namespace!
+// We only declare them here as a kind of interface (rust doesn't support native interfaces yet :/)
 // we are not accessing all members of the execution context from the WASM side
 // => not all members must be repr(C)
 #[allow(improper_ctypes)]

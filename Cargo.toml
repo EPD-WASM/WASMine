@@ -23,9 +23,15 @@ gen_util = { path = "./tests/gen_util" }
 criterion = "0.3"
 wasmparser = "0.207.0"
 test-log = "0.2.16"
+wasmtime = "22.0.0"
+wasmedge-sdk = { version = "0.13.0", default-features = false, features = ["standalone"] }
 
 [[bench]]
 name = "parser_bench"
+harness = false
+
+[[bench]]
+name = "fibonacci_bench"
 harness = false
 
 [[bin]]

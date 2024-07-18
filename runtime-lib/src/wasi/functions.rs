@@ -1,7 +1,6 @@
 use super::types::*;
 
 /// Read command-line argument data.
-#[no_mangle]
 pub extern "C" fn args_get(argv: Ptr<Ptr<u8>>, argv_buf: Ptr<u8>) -> Result<(), Errno> {
     unimplemented!()
 }
@@ -10,7 +9,6 @@ pub extern "C" fn args_get(argv: Ptr<Ptr<u8>>, argv_buf: Ptr<u8>) -> Result<(), 
 ///
 /// #### Results
 /// - `Result<(Size, Size), Errno>`: Returns the number of arguments and the size of the argument string data, or an error.
-#[no_mangle]
 pub extern "C" fn args_sizes_get(out: Ptr<(Size, Size)>) -> Errno {
     unimplemented!()
 }
@@ -25,7 +23,6 @@ pub extern "C" fn args_sizes_get(out: Ptr<(Size, Size)>) -> Errno {
 ///
 /// #### Results
 /// - `Result<(), Errno>`
-#[no_mangle]
 pub extern "C" fn environ_get(environ: Ptr<Ptr<u8>>, environ_buf: Ptr<u8>) -> Result<(), Errno> {
     unimplemented!()
 }
@@ -34,7 +31,6 @@ pub extern "C" fn environ_get(environ: Ptr<Ptr<u8>>, environ_buf: Ptr<u8>) -> Re
 ///
 /// #### Results
 /// - `Result<(Size, Size), Errno>`: Returns the number of environment variable arguments and the size of the environment variable data.
-#[no_mangle]
 pub extern "C" fn environ_sizes_get(out: Ptr<(Size, Size)>) -> Errno {
     unimplemented!()
 }
@@ -50,7 +46,6 @@ pub extern "C" fn environ_sizes_get(out: Ptr<(Size, Size)>) -> Errno {
 /// - `Result<TimeStamp, Errno>`: The resolution of the clock, or an error if one happened.
 ///
 ///
-#[no_mangle]
 pub extern "C" fn clock_res_get(id: ClockID) -> Result<TimeStamp, Errno> {
     unimplemented!()
 }
@@ -64,7 +59,6 @@ pub extern "C" fn clock_res_get(id: ClockID) -> Result<TimeStamp, Errno> {
 ///
 /// #### Results
 /// - `Result<TimeStamp, Errno>`: The time value of the clock.
-#[no_mangle]
 pub extern "C" fn clock_time_get(id: ClockID, precision: TimeStamp) -> Result<TimeStamp, Errno> {
     unimplemented!()
 }
@@ -80,7 +74,6 @@ pub extern "C" fn clock_time_get(id: ClockID, precision: TimeStamp) -> Result<Ti
 ///
 /// #### Results
 /// - `Result<(), Errno>`
-#[no_mangle]
 pub extern "C" fn fd_advise(
     fd: FD,
     offset: FileSize,
@@ -100,7 +93,6 @@ pub extern "C" fn fd_advise(
 ///
 /// #### Results
 /// - `Result<(), Errno>`
-#[no_mangle]
 pub extern "C" fn fd_allocate(fd: FD, offset: FileSize, len: FileSize) -> Result<(), Errno> {
     unimplemented!()
 }
@@ -113,7 +105,6 @@ pub extern "C" fn fd_allocate(fd: FD, offset: FileSize, len: FileSize) -> Result
 ///
 /// #### Results
 /// - `Result<(), Errno>`: Returns `Ok(())` if the file descriptor is closed successfully, or an error if one occurred.
-#[no_mangle]
 pub extern "C" fn fd_close(fd: FD) -> Result<(), Errno> {
     unimplemented!()
 }
@@ -126,7 +117,6 @@ pub extern "C" fn fd_close(fd: FD) -> Result<(), Errno> {
 ///
 /// #### Results
 /// - `Result<(), Errno>`: Returns `Ok(())` if the data is successfully synchronized to disk, or an error if one occurred.
-#[no_mangle]
 pub extern "C" fn fd_datasync(fd: FD) -> Result<(), Errno> {
     unimplemented!()
 }
@@ -139,7 +129,6 @@ pub extern "C" fn fd_datasync(fd: FD) -> Result<(), Errno> {
 ///
 /// #### Results
 /// - `Result<fdstat, Errno>`: Returns the attributes of the file descriptor if successful, or an error if one occurred.
-#[no_mangle]
 pub extern "C" fn fd_fdstat_get(fd: FD, out: Ptr<FdStat>) -> Errno {
     unimplemented!()
 }
@@ -153,7 +142,6 @@ pub extern "C" fn fd_fdstat_get(fd: FD, out: Ptr<FdStat>) -> Errno {
 ///
 /// #### Results
 /// - `Result<(), Errno>`: Returns `Ok(())` if the flags are successfully adjusted, or an error if one occurred.
-#[no_mangle]
 pub extern "C" fn fd_fdstat_set_flags(fd: FD, flags: FdFlags) -> Result<(), Errno> {
     unimplemented!()
 }
@@ -168,7 +156,6 @@ pub extern "C" fn fd_fdstat_set_flags(fd: FD, flags: FdFlags) -> Result<(), Errn
 ///
 /// #### Results
 /// - `Result<(), Errno>`: Returns `Ok(())` if the rights are successfully adjusted, or an error if one occurred.
-#[no_mangle]
 pub extern "C" fn fd_fdstat_set_rights(
     fd: FD,
     fs_rights_base: Rights,
@@ -184,7 +171,6 @@ pub extern "C" fn fd_fdstat_set_rights(
 ///
 /// #### Results
 /// - `Result<filestat, errno>`: Returns the attributes of the file descriptor if successful, or an error if one occurred.
-#[no_mangle]
 pub extern "C" fn fd_filestat_get(fd: FD, out: Ptr<FileStat>) -> Errno {
     unimplemented!()
 }
@@ -198,7 +184,6 @@ pub extern "C" fn fd_filestat_get(fd: FD, out: Ptr<FileStat>) -> Errno {
 ///
 /// #### Results
 /// - `Result<(), errno>`
-#[no_mangle]
 pub extern "C" fn fd_filestat_set_size(fd: FD, size: FileSize) -> Result<(), Errno> {
     unimplemented!()
 }
@@ -214,7 +199,6 @@ pub extern "C" fn fd_filestat_set_size(fd: FD, size: FileSize) -> Result<(), Err
 ///
 /// #### Results
 /// - `Result<(), errno>`
-#[no_mangle]
 pub extern "C" fn fd_filestat_set_times(
     fd: FD,
     atim: TimeStamp,
@@ -233,7 +217,6 @@ pub extern "C" fn fd_filestat_set_times(
 ///
 /// #### Results
 /// - `Result<size, errno>`: Returns the number of bytes read if successful, or an error if one occurred.
-#[no_mangle]
 pub extern "C" fn fd_pread(fd: FD, iovs: IOVecArray, offset: FileSize) -> Result<Size, Errno> {
     unimplemented!()
 }
@@ -245,7 +228,6 @@ pub extern "C" fn fd_pread(fd: FD, iovs: IOVecArray, offset: FileSize) -> Result
 ///
 /// #### Results
 /// - `Result<prestat, errno>`: Returns the description of the preopened file descriptor if successful, or an error if one occurred.
-#[no_mangle]
 pub extern "C" fn fd_prestat_get(fd: FD) -> Result<PreStat, Errno> {
     unimplemented!()
 }
@@ -259,7 +241,6 @@ pub extern "C" fn fd_prestat_get(fd: FD) -> Result<PreStat, Errno> {
 ///
 /// #### Results
 /// - `Result<(), Errno>`: Returns `Ok(())` if the description is successfully written to the buffer, or an error if one occurred.
-#[no_mangle]
 pub extern "C" fn fd_prestat_dir_name(fd: FD, path: Ptr<libc::c_char>, path_len: Size) -> Errno {
     unimplemented!()
 }
@@ -273,7 +254,6 @@ pub extern "C" fn fd_prestat_dir_name(fd: FD, path: Ptr<libc::c_char>, path_len:
 ///
 /// #### Results
 /// - `Result<size, errno>`: Returns the number of bytes written if successful, or an error if one occurred.
-#[no_mangle]
 pub extern "C" fn fd_pwrite(fd: FD, iovs: CIOVecArray, offset: FileSize) -> Result<Size, Errno> {
     unimplemented!()
 }
@@ -287,7 +267,6 @@ pub extern "C" fn fd_pwrite(fd: FD, iovs: CIOVecArray, offset: FileSize) -> Resu
 ///
 /// #### Results
 /// - `Result<size, errno>`: Returns the number of bytes read if successful, or an error if one occurred.
-#[no_mangle]
 pub extern "C" fn fd_read(fd: FD, iovs: IOVecArray) -> Result<Size, Errno> {
     unimplemented!()
 }
@@ -303,7 +282,6 @@ pub extern "C" fn fd_read(fd: FD, iovs: IOVecArray) -> Result<Size, Errno> {
 ///
 /// #### Results
 /// - `Result<FileSize, Errno>`: The new offset of the file descriptor, relative to the start of the file.
-#[no_mangle]
 pub extern "C" fn fd_seek(fd: FD, offset: FileDelta, whence: Whence) -> Result<FileSize, Errno> {
     unimplemented!()
 }
@@ -317,7 +295,6 @@ pub extern "C" fn fd_seek(fd: FD, offset: FileDelta, whence: Whence) -> Result<F
 ///
 /// #### Results
 /// - `Result<size, errno>`: Returns the number of bytes written if successful, or an error if one occurred.
-#[no_mangle]
 pub extern "C" fn fd_write(fd: FD, iovs: CIOVecArray) -> Result<Size, Errno> {
     unimplemented!()
 }
@@ -332,7 +309,6 @@ pub extern "C" fn fd_write(fd: FD, iovs: CIOVecArray) -> Result<Size, Errno> {
 ///
 /// #### Results
 /// - `Result<FileStat, Errno>`: The buffer where the file's attributes are stored.
-#[no_mangle]
 pub extern "C" fn path_filestat_get(
     fd: FD,
     flags: LookupFlags,
@@ -357,7 +333,6 @@ pub extern "C" fn path_filestat_get(
 ///
 /// #### Results
 /// - `Result<FD, Errno>`: The file descriptor of the file that has been opened.
-#[no_mangle]
 pub extern "C" fn path_open(
     fd: FD,
     dirflags: LookupFlags,
@@ -374,7 +349,6 @@ pub extern "C" fn path_open(
 ///
 /// #### Params
 /// - `rval`: `ExitCode`: The exit code returned by the process.
-#[no_mangle]
 pub extern "C" fn proc_exit(rval: ExitCode) {
     unimplemented!()
 }
@@ -384,7 +358,6 @@ pub extern "C" fn proc_exit(rval: ExitCode) {
 ///
 /// #### Results
 /// - `Result<(), Errno>`
-#[no_mangle]
 pub extern "C" fn sched_yield() -> Result<(), Errno> {
     unimplemented!()
 }

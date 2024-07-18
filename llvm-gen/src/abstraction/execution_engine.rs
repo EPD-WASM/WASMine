@@ -178,7 +178,7 @@ impl ExecutionEngine {
                 target_triple,
                 cpu,
                 features,
-                LLVMCodeGenOptLevel::LLVMCodeGenLevelAggressive,
+                LLVMCodeGenOptLevel::LLVMCodeGenLevelDefault,
                 LLVMRelocMode::LLVMRelocDefault,
                 LLVMCodeModel::LLVMCodeModelJITDefault,
             )
