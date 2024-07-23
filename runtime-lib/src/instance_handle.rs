@@ -197,7 +197,7 @@ impl<'a> InstanceHandle<'a> {
             wasm_types::GlobalType::Mut(ty) => ty,
         };
         let global_val = unsafe { *(global_addr) };
-        Value::from_generic(*global_valty, global_val)
+        Value::from_raw(global_val, *global_valty)
     }
 
     pub fn extract_global_value_by_name(&self, name: &str) -> Option<Value> {

@@ -1,11 +1,11 @@
-use ir::InstructionDecoder;
+use ir::{instructions::VariableID, structs::value::ValueRaw, InstructionDecoder};
 
 use crate::{util::get_bbs_from_function, InterpreterContext, InterpreterError};
 
 pub(super) fn handle_return(
     ctx: &mut InterpreterContext,
-    return_vars: &[u32],
-) -> Result<Option<Vec<u64>>, InterpreterError> {
+    return_vars: &[VariableID],
+) -> Result<Option<Vec<ValueRaw>>, InterpreterError> {
     let old_stack_frame = ctx.stack.pop().unwrap();
 
     let mut return_values = Vec::new();

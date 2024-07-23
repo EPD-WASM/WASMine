@@ -7,7 +7,6 @@ use ir::structs::data::{Data, DataMode};
 use ir::structs::memory::Memory;
 use ir::structs::module::Module as WasmModule;
 use ir::structs::value::{ConstantValue, Number, Value};
-use ir::utils::numeric_transmutes::Bit64;
 use nix::errno::Errno;
 use nix::libc::mprotect;
 use nix::{errno, libc};
@@ -257,7 +256,7 @@ impl<'a> MemoryStorage<'a> {
                     ConstantValue::V(Value::Number(Number::I32(offset))) => *offset,
                     ConstantValue::V(v) => return Err(MemoryError::InvalidOffsetType(v.r#type())),
                     ConstantValue::Global(idx) => {
-                        unsafe { *globals.globals[*idx as usize].addr }.trans_u32()
+                        unsafe { *globals.globals[*idx as usize].addr }.as_u32()
                     }
                     ConstantValue::FuncPtr(_) => {
                         unimplemented!()

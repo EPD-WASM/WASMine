@@ -8,7 +8,7 @@ impl Executable for SelectInstruction {
 
         let stack_frame = ctx.stack.last_mut().unwrap();
 
-        let select_var = stack_frame.vars.get(self.select_val) == 0;
+        let select_var = stack_frame.vars.get(self.select_val).as_u64() == 0;
 
         let res = stack_frame.vars.get(self.input_vals[select_var as usize]);
 

@@ -8,7 +8,12 @@ impl Executable for TableSetInstruction {
         let val = stack_frame.vars.get(self.in1);
 
         unsafe {
-            runtime_interface::table_set(ctx.exec_ctx, self.table_idx as usize, val, self.idx);
+            runtime_interface::table_set(
+                ctx.exec_ctx,
+                self.table_idx as usize,
+                val.as_u64(),
+                self.idx,
+            );
         };
 
         Ok(())

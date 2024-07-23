@@ -19,10 +19,7 @@ impl Translator {
         match instr_type {
             ReferenceInstructionType::RefFunc => {
                 let instr = decoder.read::<ReferenceFunctionInstruction>(instruction)?;
-                variable_map[instr.out1 as usize] = self.builder.const_i32(instr.func_idx);
-                if variable_map[instr.out1 as usize].is_null() {
-                    panic!()
-                }
+                variable_map[instr.out1 as usize] = self.builder.const_i64(instr.func_idx as u64);
             }
             ReferenceInstructionType::RefIsNull => {
                 let instr = decoder.read::<ReferenceIsNullInstruction>(instruction)?;
@@ -30,7 +27,7 @@ impl Translator {
                 let val = self.builder.build_icmp(
                     LLVMIntPredicate::LLVMIntEQ,
                     val,
-                    self.builder.const_i32(u32::MAX),
+                    self.builder.const_i64(u64::MAX),
                     "ref_is_null",
                 );
                 variable_map[instr.out1 as usize] =
@@ -39,7 +36,7 @@ impl Translator {
             }
             ReferenceInstructionType::RefNull => {
                 let instr = decoder.read::<ReferenceNullInstruction>(instruction)?;
-                variable_map[instr.out1 as usize] = self.builder.const_i32(u32::MAX);
+                variable_map[instr.out1 as usize] = self.builder.const_i64(u64::MAX);
             }
         }
         Ok(())

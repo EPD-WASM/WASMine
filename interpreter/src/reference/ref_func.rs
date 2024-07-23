@@ -11,7 +11,7 @@ impl Executable for ReferenceFunctionInstruction {
         let reference = Reference::Function(self.func_idx);
         let val = Value::Reference(reference);
 
-        stack_frame.vars.set(self.out1, val.trans_to_u64());
+        stack_frame.vars.set(self.out1, val.into());
 
         Ok(())
     }

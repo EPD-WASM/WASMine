@@ -1,6 +1,7 @@
 use super::module::Module;
 use crate::util::to_c_str;
 use crate::ExecutionError;
+use ir::structs::value::ValueRaw;
 use llvm_sys::error::{LLVMCreateStringError, LLVMErrorRef};
 use llvm_sys::execution_engine::{LLVMCreateGDBRegistrationListener, LLVMLinkInMCJIT};
 use llvm_sys::orc2::ee::{
@@ -343,9 +344,9 @@ impl ExecutionEngine {
         Ok(func)
     }
 
-    pub fn get_global_value(&self, global_name: &str) -> Result<u64, ExecutionError> {
+    pub fn get_global_value(&self, global_name: &str) -> Result<ValueRaw, ExecutionError> {
         let addr = self.find_func_address_by_name(global_name)?;
-        Ok(unsafe { std::ptr::read(addr as *const u64) })
+        Ok(unsafe { std::ptr::read(addr as *const ValueRaw) })
     }
 
     #[allow(dead_code)]

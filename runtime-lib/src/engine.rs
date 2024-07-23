@@ -1,4 +1,7 @@
-use ir::structs::{module::Module as WasmModule, value::Value};
+use ir::structs::{
+    module::Module as WasmModule,
+    value::{Value, ValueRaw},
+};
 use runtime_interface::RawFunctionPtr;
 use std::{
     ops::{Deref, DerefMut},
@@ -38,7 +41,7 @@ pub trait WasmEngine {
         &self,
         function_name: &str,
     ) -> Result<RawFunctionPtr, EngineError>;
-    fn get_global_value(&self, global_idx: GlobalIdx) -> Result<u64, EngineError>;
+    fn get_global_value(&self, global_idx: GlobalIdx) -> Result<ValueRaw, EngineError>;
 
     fn run_by_idx(
         &mut self,
@@ -116,7 +119,7 @@ mod llvm_engine_impl {
             Ok(())
         }
 
-        fn get_global_value(&self, global_idx: GlobalIdx) -> Result<u64, EngineError> {
+        fn get_global_value(&self, global_idx: GlobalIdx) -> Result<ValueRaw, EngineError> {
             Ok(self.executor.get_global_value(global_idx)?)
         }
 
@@ -207,7 +210,7 @@ mod interpreter_engine_impl {
             todo!("Interpreter engine raw pointers")
         }
 
-        fn get_global_value(&self, global_idx: GlobalIdx) -> Result<u64, EngineError> {
+        fn get_global_value(&self, global_idx: GlobalIdx) -> Result<ValueRaw, EngineError> {
             todo!("Interpreter engine global values")
         }
     }

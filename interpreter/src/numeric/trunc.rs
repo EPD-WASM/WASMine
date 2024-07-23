@@ -1,18 +1,16 @@
+use crate::{Executable, InterpreterContext, InterpreterError};
 use ir::{
     instructions::TruncInstruction,
-    structs::value::Number,
-    utils::numeric_transmutes::{Bit128, Bit32, Bit64},
+    structs::value::{Number, ValueRaw},
+    utils::numeric_transmutes::{Bit128, Bit64},
 };
 use wasm_types::NumType;
-
-use crate::{Executable, InterpreterContext, InterpreterError};
 
 impl Executable for TruncInstruction {
     fn execute(&mut self, ctx: &mut InterpreterContext) -> Result<(), InterpreterError> {
         // println!("Executing TruncInstruction: {:?}", self);
         let stack_frame = ctx.stack.last_mut().unwrap();
-        let in1_u64 = stack_frame.vars.get(self.in1);
-        let in1 = Number::trans_from_u64(in1_u64, &self.in1_type);
+        let in1 = stack_frame.vars.get_number(self.in1, self.in1_type);
         let in1_trunc = match in1 {
             Number::F32(n) => n as f64,
             Number::F64(n) => n,
@@ -38,7 +36,7 @@ impl Executable for TruncInstruction {
 
         if in1_trunc.is_nan() || in1_trunc.is_infinite() || in1_trunc < min || in1_trunc > max {
             // undefined
-            stack_frame.vars.set(self.out1, 0);
+            stack_frame.vars.set(self.out1, ValueRaw::u64(0));
             return Ok(());
         }
 
@@ -48,7 +46,7 @@ impl Executable for TruncInstruction {
             a => panic!("Invalid out type for trunc: {}", a),
         };
 
-        stack_frame.vars.set(self.out1, res_u64);
+        stack_frame.vars.set(self.out1, res_u64.into());
 
         Ok(())
     }

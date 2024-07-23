@@ -1,13 +1,12 @@
-use ir::{instructions::TableFillInstruction, utils::numeric_transmutes::Bit64};
-
 use crate::{Executable, InterpreterContext, InterpreterError};
+use ir::instructions::TableFillInstruction;
 
 impl Executable for TableFillInstruction {
     fn execute(&mut self, ctx: &mut InterpreterContext) -> Result<(), InterpreterError> {
         let stack_frame = ctx.stack.last_mut().unwrap();
-        let length = stack_frame.vars.get(self.n).trans_u32();
+        let length = stack_frame.vars.get(self.n).into();
         let val = stack_frame.vars.get(self.ref_value);
-        let start = stack_frame.vars.get(self.i).trans_u32();
+        let start = stack_frame.vars.get(self.i).into();
 
         unsafe {
             runtime_interface::table_fill(
@@ -15,7 +14,7 @@ impl Executable for TableFillInstruction {
                 self.table_idx as usize,
                 start,
                 length,
-                val,
+                val.as_u64(),
             );
         };
 

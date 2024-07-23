@@ -1,10 +1,10 @@
 use control_flow::GlueHandler;
-use ir::function::FunctionSource;
-use runtime_interface::{ExecutionContext, GlobalStorage, RawFunctionPtr};
+use ir::structs::value::{Number, ValueRaw};
+use runtime_interface::{ExecutionContext, RawFunctionPtr};
 use std::{collections::HashMap, rc::Rc};
 use table::execute_table_instruction;
 use thiserror::Error;
-use wasm_types::{FuncIdx, InstructionType};
+use wasm_types::{FuncIdx, InstructionType, NumType, ValType};
 use {
     ir::instructions::VariableID,
     ir::structs::{module::Module, value::Value},
@@ -43,36 +43,39 @@ pub(crate) trait Executable {
     fn execute(&mut self, ctx: &mut InterpreterContext) -> Result<(), InterpreterError>;
 }
 
-#[derive(Debug)]
 pub(crate) struct VariableStore {
-    vars: Vec<u64>,
+    vars: Vec<ValueRaw>,
 }
 
 impl VariableStore {
-    pub(crate) fn new(init: Vec<u64>) -> Self {
+    pub(crate) fn new(init: Vec<ValueRaw>) -> Self {
         Self { vars: init }
     }
 
     // TODO bounds check? => if parser is implemented correctly, this should not be necessary (maybe debug assert?)
-    pub(crate) fn get(&self, idx: VariableID) -> u64 {
-        // println!("getting variable: {}", idx);
-        // println!("vars: {:?}", self.vars);
-        // debug_assert!((idx as usize) < self.vars.len());
-        // self.vars[idx as usize]
-        let res = self.vars.get(idx as usize).copied().unwrap_or_default();
-        // println!("\t = {}", res);
-        // println!("\t = {}", res.trans_f64());
-        res
+    pub(crate) fn get(&self, idx: VariableID) -> ValueRaw {
+        self.vars[idx as usize]
     }
 
-    pub(crate) fn set(&mut self, idx: VariableID, value: u64) {
+    pub(crate) fn get_value(&self, idx: VariableID, val_type: ValType) -> Value {
+        Value::from_raw(self.vars[idx as usize], val_type)
+    }
+
+    pub(crate) fn get_number(&self, idx: VariableID, num_ty: NumType) -> Number {
+        match self.get_value(idx, ValType::Number(num_ty)) {
+            Value::Number(n) => n,
+            _ => unreachable!(),
+        }
+    }
+
+    pub(crate) fn set(&mut self, idx: VariableID, value: ValueRaw) {
         // TODO: store highest variable id to avoid resizing the vector all the time
         // println!("setting idx: {} to value: {}", idx, value);
         // println!("                        = {}", value.trans_f64());
 
         if idx as usize >= self.vars.len() {
             // println!("resizing vars to len: {}", idx as usize + 1);
-            self.vars.resize(idx as usize + 1, 0);
+            self.vars.resize(idx as usize + 1, ValueRaw::i32(0));
         }
         // println!("\tvars: {:?}", self.vars);
         self.vars[idx as usize] = value;
@@ -88,7 +91,6 @@ impl VariableStore {
 }
 
 // (also) stores indices into each of the instruction store's fields
-#[derive(Debug)]
 struct StackFrame {
     /// function index
     fn_idx: FuncIdx,
@@ -104,7 +106,6 @@ struct StackFrame {
     vars: VariableStore,
 }
 
-#[derive(Debug)]
 pub struct InterpreterContext<'a> {
     module: Rc<Module>,
     stack: Vec<StackFrame>,
@@ -168,14 +169,11 @@ impl Interpreter {
 
         let decoder = InstructionDecoder::new(basic_block.instructions.clone());
 
-        let parameters_u64 = parameters
-            .into_iter()
-            .map(|v| v.trans_to_u64())
-            .collect::<Vec<u64>>();
+        let raw_parameters = parameters.into_iter().map(|v| v.into()).collect::<Vec<_>>();
 
         ctx.stack.push(StackFrame {
             fn_idx: function_idx,
-            fn_local_vars: VariableStore::new(parameters_u64),
+            fn_local_vars: VariableStore::new(raw_parameters),
             bb_id: basic_block.id,
             last_bb_id: 0,
             return_vars: Vec::new(),
@@ -233,7 +231,7 @@ impl Interpreter {
         let ret_vals = ret_vals
             .into_iter()
             .enumerate()
-            .map(|(i, val)| Value::from_u64(val, ret_types[i]))
+            .map(|(i, val)| Value::from_raw(val, ret_types[i]))
             .collect();
 
         Ok(ret_vals)
@@ -258,7 +256,7 @@ impl Interpreter {
             InstructionType::Memory(c) => {
                 memory::execute_memory_instruction(ctx, c, instruction_type)
             }
-            InstructionType::Meta(c) => unreachable!("No meta instructions exist"),
+            InstructionType::Meta(_) => unreachable!("No meta instructions exist"),
 
             InstructionType::Reference(c) => {
                 reference::execute_reference_instruction(ctx, c, instruction_type)

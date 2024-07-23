@@ -1,6 +1,5 @@
-use ir::instructions::{ElemDropInstruction, TableSetInstruction};
-
 use crate::{Executable, InterpreterContext, InterpreterError};
+use ir::instructions::ElemDropInstruction;
 
 impl Executable for ElemDropInstruction {
     fn execute(&mut self, ctx: &mut InterpreterContext) -> Result<(), InterpreterError> {

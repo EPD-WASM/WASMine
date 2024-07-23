@@ -29,12 +29,12 @@ fn clz(
 
     let leading_zeros = match instruction.types {
         // be careful here, this works for u64 -> u32, but might not work for other types.
-        NumType::I32 => u32::leading_zeros(num as u32),
-        NumType::I64 => num.leading_zeros(),
+        NumType::I32 => u32::leading_zeros(num.as_u32()),
+        NumType::I64 => num.as_u64().leading_zeros(),
         _ => return Err(TypeMismatch),
-    };
+    } as u64;
 
-    stack_frame.vars.set(instruction.out1, leading_zeros as u64);
+    stack_frame.vars.set(instruction.out1, leading_zeros.into());
 
     Ok(())
 }
@@ -46,14 +46,14 @@ fn ctz(
     let num = stack_frame.vars.get(instruction.in1);
 
     let trailing_zeros = match instruction.types {
-        NumType::I32 => u32::trailing_zeros(num as u32),
-        NumType::I64 => num.trailing_zeros(),
+        NumType::I32 => u32::trailing_zeros(num.as_u32()),
+        NumType::I64 => num.as_u64().trailing_zeros(),
         _ => return Err(TypeMismatch),
-    };
+    } as u64;
 
     stack_frame
         .vars
-        .set(instruction.out1, trailing_zeros as u64);
+        .set(instruction.out1, trailing_zeros.into());
 
     Ok(())
 }
@@ -65,12 +65,12 @@ fn popcnt(
     let num = stack_frame.vars.get(instruction.in1);
 
     let pop_count = match instruction.types {
-        NumType::I32 => u32::count_ones(num as u32),
-        NumType::I64 => num.count_ones(),
+        NumType::I32 => u32::count_ones(num.as_u32()),
+        NumType::I64 => num.as_u32().count_ones(),
         _ => return Err(TypeMismatch),
-    };
+    } as u64;
 
-    stack_frame.vars.set(instruction.out1, pop_count as u64);
+    stack_frame.vars.set(instruction.out1, pop_count.into());
 
     Ok(())
 }

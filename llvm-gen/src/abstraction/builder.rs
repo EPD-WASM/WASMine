@@ -1,5 +1,6 @@
 use super::{context::Context, function::Function, module::Module};
 use crate::util::to_c_str;
+use ir::structs::value::ValueRaw;
 use llvm_sys::{
     core::{
         LLVMAddIncoming, LLVMAppendBasicBlockInContext, LLVMBuildAdd, LLVMBuildAggregateRet,
@@ -11,9 +12,9 @@ use llvm_sys::{
         LLVMConstNull, LLVMConstReal, LLVMCreateBuilderInContext, LLVMDisposeBuilder,
         LLVMDoubleTypeInContext, LLVMFloatTypeInContext, LLVMInt16TypeInContext, LLVMInt1Type,
         LLVMInt32TypeInContext, LLVMInt64TypeInContext, LLVMInt8TypeInContext,
-        LLVMMDStringInContext2, LLVMMetadataAsValue, LLVMMetadataTypeInContext, LLVMPointerType,
-        LLVMPointerTypeInContext, LLVMPositionBuilderAtEnd, LLVMStructTypeInContext, LLVMTypeOf,
-        LLVMVoidTypeInContext,
+        LLVMIntTypeInContext, LLVMMDStringInContext2, LLVMMetadataAsValue,
+        LLVMMetadataTypeInContext, LLVMPointerType, LLVMPointerTypeInContext,
+        LLVMPositionBuilderAtEnd, LLVMStructTypeInContext, LLVMTypeOf, LLVMVoidTypeInContext,
     },
     prelude::{LLVMBasicBlockRef, LLVMBuilderRef, LLVMContextRef, LLVMTypeRef, LLVMValueRef},
     LLVMIntPredicate, LLVMRealPredicate,
@@ -145,6 +146,10 @@ impl Builder {
             .0
     }
 
+    pub(crate) fn value_raw_ty(&self) -> LLVMTypeRef {
+        unsafe { LLVMIntTypeInContext(self.context, (std::mem::size_of::<ValueRaw>() * 8) as u32) }
+    }
+
     pub(crate) fn r#struct(&self, elems: &mut [LLVMTypeRef]) -> LLVMTypeRef {
         unsafe {
             LLVMStructTypeInContext(
@@ -162,7 +167,7 @@ impl Builder {
             ValType::Number(NumType::F64) => self.f64(),
             ValType::Number(NumType::I32) => self.i32(),
             ValType::Number(NumType::I64) => self.i64(),
-            ValType::Reference(_) => self.i32(),
+            ValType::Reference(_) => self.i64(),
             ValType::VecType => self.vec(),
         }
     }

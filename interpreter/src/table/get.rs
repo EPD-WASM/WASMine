@@ -10,7 +10,7 @@ impl Executable for TableGetInstruction {
 
         let stack_frame = ctx.stack.last_mut().unwrap();
 
-        stack_frame.vars.set(self.out1, val);
+        stack_frame.vars.set(self.out1, val.into());
 
         Ok(())
     }

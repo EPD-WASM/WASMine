@@ -1,4 +1,4 @@
-use ir::structs::module::Module as WasmModule;
+use ir::structs::{module::Module as WasmModule, value::ValueRaw};
 use std::{ffi, rc::Rc};
 use wasm_types::{DataIdx, ElemIdx, MemIdx, TableIdx, TypeIdx};
 
@@ -46,13 +46,15 @@ pub struct GlobalStorage {
 
 #[derive(Clone)]
 pub struct GlobalInstance {
-    pub addr: *mut u64,
+    pub addr: *mut ValueRaw,
 }
 
 // Careful! These function symbols are not mangled and pollute the global namespace!
 // We only declare them here as a kind of interface (rust doesn't support native interfaces yet :/)
 // we are not accessing all members of the execution context from the WASM side
 // => not all members must be repr(C)
+//
+// u64 is enough to represent table values since we only ever receive reference types there
 #[allow(improper_ctypes)]
 extern "C" {
     pub fn memory_grow(ctxt: &mut ExecutionContext, memory_idx: usize, grow_by: u32) -> i32;

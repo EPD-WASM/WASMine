@@ -1,3 +1,4 @@
+use ir::structs::value::Value;
 use wasm_types::IBinaryOp;
 use {
     crate::{Executable, InterpreterContext, InterpreterError},
@@ -9,11 +10,8 @@ impl Executable for IBinaryInstruction {
     fn execute(&mut self, ctx: &mut InterpreterContext) -> Result<(), InterpreterError> {
         let stack_frame = ctx.stack.last_mut().unwrap();
 
-        let in1_u64 = stack_frame.vars.get(self.lhs);
-        let in2_u64 = stack_frame.vars.get(self.rhs);
-
-        let in1 = Number::trans_from_u64(in1_u64, &self.types);
-        let in2 = Number::trans_from_u64(in2_u64, &self.types);
+        let in1 = stack_frame.vars.get_number(self.lhs, self.types);
+        let in2 = stack_frame.vars.get_number(self.rhs, self.types);
 
         let res: Number = match self.op {
             IBinaryOp::Add => in1 + in2,
@@ -32,9 +30,7 @@ impl Executable for IBinaryInstruction {
             IBinaryOp::Rotl => in1.rotate_left(in2),
             IBinaryOp::Rotr => in1.rotate_right(in2),
         };
-
-        let res_u64 = res.trans_to_u64();
-        stack_frame.vars.set(self.out1, res_u64);
+        stack_frame.vars.set(self.out1, Value::Number(res).into());
 
         Ok(())
     }

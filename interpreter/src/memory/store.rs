@@ -1,7 +1,6 @@
-use ir::{instructions::StoreInstruction, structs::value, utils::numeric_transmutes::Bit64};
-use wasm_types::{NumType, StoreOp};
-
 use crate::{Executable, InterpreterContext, InterpreterError};
+use ir::{instructions::StoreInstruction, structs::value::ValueRaw};
+use wasm_types::{NumType, StoreOp};
 
 enum StoreSize {
     Byte,
@@ -15,7 +14,7 @@ impl Executable for StoreInstruction {
         // println!("Executing StoreInstruction {:?}", self);
 
         let stack_frame = ctx.stack.last_mut().unwrap();
-        let dyn_addr = stack_frame.vars.get(self.addr_in).trans_u32();
+        let dyn_addr = stack_frame.vars.get(self.addr_in).as_u32() as usize;
         // println!("offset: {:?}", self.memarg.offset);
         // println!("dyn_addr: {:?}", dyn_addr);
         let effective_address = dyn_addr as usize + self.memarg.offset as usize;
@@ -51,7 +50,7 @@ impl Executable for StoreInstruction {
 fn handle_store(
     ctx: &mut InterpreterContext,
     addr: usize,
-    value: u64,
+    value: ValueRaw,
     in_type: NumType,
     size: StoreSize,
 ) {
@@ -84,7 +83,7 @@ fn handle_store(
         (StoreSize::Full, NumType::F64) => 8,
     };
 
-    let val_slice = &value.to_le_bytes()[..num_bytes_to_store];
+    let val_slice = &value.as_v128()[..num_bytes_to_store];
     let dst_slice = &mut memory_data_slice[addr..addr + num_bytes_to_store];
 
     // println!("Storing {} bytes to memory", num_bytes_to_store);

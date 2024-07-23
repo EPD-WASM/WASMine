@@ -1,5 +1,5 @@
 use crate::{Executable, InterpreterContext, InterpreterError};
-use ir::{instructions::MemorySizeInstruction, utils::numeric_transmutes::Bit32};
+use ir::instructions::MemorySizeInstruction;
 
 impl Executable for MemorySizeInstruction {
     fn execute(&mut self, ctx: &mut InterpreterContext) -> Result<(), InterpreterError> {
@@ -7,7 +7,7 @@ impl Executable for MemorySizeInstruction {
         let res = unsafe { runtime_interface::memory_grow(&mut ctx.exec_ctx, 0, 0) };
 
         let stack_frame = ctx.stack.last_mut().unwrap();
-        stack_frame.vars.set(self.out1, res.trans_u64());
+        stack_frame.vars.set(self.out1, res.into());
 
         Ok(())
     }

@@ -1,6 +1,6 @@
 use call::handle_call;
 use call_indirect::handle_call_indirect;
-use ir::basic_block::BasicBlockGlue;
+use ir::{basic_block::BasicBlockGlue, structs::value::ValueRaw};
 use jmp::handle_jmp;
 use jmp_cond::handle_jmp_cond;
 use jmp_table::handle_jmp_table;
@@ -17,11 +17,17 @@ mod r#return;
 mod util;
 
 pub(super) trait GlueHandler {
-    fn handle(&self, ctx: &mut InterpreterContext) -> Result<Option<Vec<u64>>, InterpreterError>;
+    fn handle(
+        &self,
+        ctx: &mut InterpreterContext,
+    ) -> Result<Option<Vec<ValueRaw>>, InterpreterError>;
 }
 
 impl GlueHandler for BasicBlockGlue {
-    fn handle(&self, ctx: &mut InterpreterContext) -> Result<Option<Vec<u64>>, InterpreterError> {
+    fn handle(
+        &self,
+        ctx: &mut InterpreterContext,
+    ) -> Result<Option<Vec<ValueRaw>>, InterpreterError> {
         // println!("Handling basic block glue: {:?}", self);
         let res = match self {
             BasicBlockGlue::Jmp { target, .. } => handle_jmp(ctx, *target),

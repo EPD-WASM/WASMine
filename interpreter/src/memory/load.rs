@@ -1,4 +1,6 @@
-use ir::{instructions::LoadInstruction, utils::numeric_transmutes::Bit64};
+use ir::{
+    instructions::LoadInstruction, structs::value::ValueRaw, utils::numeric_transmutes::Bit64,
+};
 use wasm_types::{LoadOp, NumType};
 
 use crate::{Executable, InterpreterContext, InterpreterError};
@@ -15,7 +17,7 @@ impl Executable for LoadInstruction {
         // println!("Executing LoadInstruction {:?}", self);
 
         let stack_frame = ctx.stack.last_mut().unwrap();
-        let dyn_addr = stack_frame.vars.get(self.addr).trans_u32();
+        let dyn_addr = stack_frame.vars.get(self.addr).as_u32() as usize;
         let effective_address = dyn_addr as usize + self.memarg.offset as usize;
         // let effective_address = self.memarg.offset as usize;
 
@@ -82,7 +84,7 @@ fn handle_load(
     out_type: NumType,
     size: LoadSize,
     signed: Option<bool>,
-) -> u64 {
+) -> ValueRaw {
     let memory_inst_ptr = ctx.exec_ctx.memories_ptr;
     let memory_data_ptr = unsafe { (*memory_inst_ptr).data };
     let src_val_ptr = unsafe { memory_data_ptr.add(addr) };
@@ -119,5 +121,5 @@ fn handle_load(
     };
 
     // println!("Loaded value: {}", res);
-    res
+    ValueRaw::u64(res)
 }

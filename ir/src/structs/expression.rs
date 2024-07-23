@@ -10,7 +10,7 @@ use crate::{
 };
 use thiserror::Error;
 use wasm_types::{
-    GlobalType, InstructionType, NumType, NumericInstructionCategory, ReferenceInstructionType,
+    GlobalType, InstructionType, NumericInstructionCategory, ReferenceInstructionType, ValType,
     VariableInstructionType,
 };
 
@@ -37,17 +37,7 @@ impl ConstantExpression {
             InstructionType::Numeric(NumericInstructionCategory::Constant) => {
                 let constant_instruction = decoder.read::<Constant>(instr)?;
                 let imm = constant_instruction.imm;
-                let value = match constant_instruction.out1_type {
-                    NumType::I32 => Value::Number(Number::I32(imm.try_into().map_err(|_| {
-                        ConstantExpressionError::Msg(format!(
-                            "immediate {} out of bounds of global type i32",
-                            imm
-                        ))
-                    })?)),
-                    NumType::I64 => Value::Number(Number::I64(imm)),
-                    NumType::F32 => Value::Number(Number::F32(f32::from_bits(imm as u32))),
-                    NumType::F64 => Value::Number(Number::F64(f64::from_bits(imm))),
-                };
+                let value = Value::from_raw(imm, ValType::Number(constant_instruction.out1_type));
                 Ok(ConstantValue::V(value))
             }
             InstructionType::Variable(VariableInstructionType::GlobalGet) => {

@@ -1,11 +1,10 @@
+use crate::{Executable, InterpreterContext, InterpreterError};
 use ir::instructions::{
     ElemDropInstruction, Instruction, TableCopyInstruction, TableFillInstruction,
     TableGetInstruction, TableGrowInstruction, TableInitInstruction, TableSetInstruction,
     TableSizeInstruction,
 };
-use wasm_types::{InstructionType, MemoryInstructionCategory, TableInstructionCategory};
-
-use crate::{Executable, InterpreterContext, InterpreterError};
+use wasm_types::{InstructionType, TableInstructionCategory};
 
 mod copy;
 mod elem_drop;

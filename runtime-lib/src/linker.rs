@@ -5,7 +5,7 @@ use crate::{
     tables::TableItem,
     wasi, Cluster,
 };
-use ir::structs::{export::ExportDesc, module::Module as WasmModule};
+use ir::structs::{export::ExportDesc, module::Module as WasmModule, value::ValueRaw};
 use runtime_interface::{ExecutionContext, RawFunctionPtr};
 use std::{collections::HashMap, rc::Rc};
 use wasm_types::{FuncType, GlobalIdx, GlobalType, ImportDesc, Limits, MemType, TableType};
@@ -318,11 +318,12 @@ impl Linker {
     }
 
     pub fn link_wasi(&mut self) {
-        for (name, import) in wasi::collect_available_imports() {
-            let (module_name, function_name) = name.split_once('.').unwrap();
-            self.host_functions
-                .insert(module_name, function_name, import.callable);
-        }
+        todo!()
+        // for (name, import) in wasi::collect_available_imports() {
+        //     let (module_name, function_name) = name.split_once('.').unwrap();
+        //     self.host_functions
+        //         .insert(module_name, function_name, import.callable);
+        // }
     }
 
     pub fn link_host_function(
@@ -486,7 +487,7 @@ pub(crate) struct RTMemoryImport {
 #[derive(Clone)]
 pub(crate) struct RTGlobalImport {
     pub(crate) name: String,
-    pub(crate) addr: *mut u64,
+    pub(crate) addr: *mut ValueRaw,
     pub(crate) r#type: GlobalType,
     pub(crate) idx: GlobalIdx,
 }

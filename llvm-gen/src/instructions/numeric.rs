@@ -2,7 +2,6 @@ use crate::abstraction::function::Function;
 use crate::util::to_c_str;
 use crate::{error::TranslationError, translator::Translator};
 use ir::instructions::*;
-use ir::utils::numeric_transmutes::Bit64;
 use ir::{
     instructions::{FBinaryInstruction, FUnaryInstruction, IBinaryInstruction, IUnaryInstruction},
     InstructionDecoder,
@@ -199,10 +198,10 @@ impl Translator {
             NumericInstructionCategory::Constant => {
                 let instr = decoder.read::<Constant>(instruction)?;
                 variable_map[instr.out1 as usize] = match instr.out1_type {
-                    NumType::I32 => self.builder.const_i32(instr.imm.trans_u32()),
-                    NumType::I64 => self.builder.const_i64(instr.imm),
-                    NumType::F32 => self.builder.const_f32(instr.imm.trans_f32()),
-                    NumType::F64 => self.builder.const_f64(instr.imm.trans_f64()),
+                    NumType::I32 => self.builder.const_i32(instr.imm.into()),
+                    NumType::I64 => self.builder.const_i64(instr.imm.into()),
+                    NumType::F32 => self.builder.const_f32(instr.imm.into()),
+                    NumType::F64 => self.builder.const_f64(instr.imm.into()),
                 };
             }
             NumericInstructionCategory::IRelational(_) => {

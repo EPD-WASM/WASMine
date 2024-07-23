@@ -11,9 +11,9 @@ use ir::{
         element::{ElemMode, Element, ElementInit},
         module::Module as WasmModule,
         table::Table,
-        value::{ConstantValue, Number, Reference, Value},
+        value::{ConstantValue, Number, Reference, Value, ValueRaw},
     },
-    utils::numeric_transmutes::{Bit32, Bit64},
+    utils::numeric_transmutes::Bit32,
 };
 use runtime_interface::{ExecutionContext, GlobalStorage, RawFunctionPtr};
 use std::ptr::null_mut;
@@ -111,7 +111,7 @@ impl InstanceHandle<'_> {
                         return Err(TableError::InvalidOffsetType(v.r#type()).into())
                     }
                     ConstantValue::Global(idx) => unsafe {
-                        *globals.globals[*idx as usize].addr as u32
+                        (*globals.globals[*idx as usize].addr).as_u32()
                     },
                     ConstantValue::FuncPtr(_) => unimplemented!(),
                 };
@@ -133,13 +133,15 @@ impl TableInstance<'_> {
         if idx >= self.values.len() as u32 {
             return Err(TableError::TableIndexOutOfBounds);
         }
-        if value == Value::Reference(Reference::Null).to_generic() {
+        let value = ValueRaw::from(value);
+        if value.as_externref() == ValueRaw::from(Value::Reference(Reference::Null)).as_externref()
+        {
             self.values[idx as usize] = TableItem::Null;
             return Ok(());
         }
         match self.ty.ref_type {
             RefType::FunctionReference => {
-                let func_idx = value.trans_u32();
+                let func_idx = value.as_funcref();
                 debug_assert!(func_idx < wasm_module.ir.functions.len() as u32);
                 self.values[idx as usize] = TableItem::FunctionReference {
                     func_idx,
@@ -149,7 +151,7 @@ impl TableInstance<'_> {
             }
             RefType::ExternReference => {
                 self.values[idx as usize] = TableItem::ExternReference {
-                    func_ptr: value as _,
+                    func_ptr: value.as_externref(),
                 }
             }
         }
@@ -196,18 +198,23 @@ impl TableInstance<'_> {
             log::debug!("Failed to reserve space for table.grow. Ignoring.");
             return Ok(err);
         }
-        if value_to_fill == Value::Reference(Reference::Null).to_generic() {
+
+        let value_to_fill = ValueRaw::from(value_to_fill);
+        if value_to_fill.as_externref()
+            == ValueRaw::from(Value::Reference(Reference::Null)).as_externref()
+        {
             self.values.resize(new_len, TableItem::Null);
             return Ok(old_len as u32);
         } else {
             let table_value_to_fill = match self.ty.ref_type {
                 RefType::FunctionReference => TableItem::FunctionReference {
-                    func_idx: value_to_fill.trans_u32(),
+                    func_idx: value_to_fill.as_funcref(),
                     func_ptr: null_mut(),
-                    func_type: wasm_module.ir.functions[value_to_fill as usize].type_idx,
+                    func_type: wasm_module.ir.functions[value_to_fill.as_funcref() as usize]
+                        .type_idx,
                 },
                 RefType::ExternReference => TableItem::ExternReference {
-                    func_ptr: value_to_fill as _,
+                    func_ptr: value_to_fill.as_externref(),
                 },
             };
             self.values.resize(new_len, table_value_to_fill);
@@ -228,17 +235,21 @@ impl TableInstance<'_> {
         if len == 0 {
             return Ok(());
         }
-        let value_to_fill = if value == Value::Reference(Reference::Null).to_generic() {
+
+        let value = ValueRaw::from(value);
+        let value_to_fill = if value.as_externref()
+            == ValueRaw::from(Value::Reference(Reference::Null)).as_externref()
+        {
             TableItem::Null
         } else {
             match self.ty.ref_type {
                 RefType::FunctionReference => TableItem::FunctionReference {
-                    func_idx: value.trans_u32(),
+                    func_idx: value.as_funcref(),
                     func_ptr: null_mut(),
-                    func_type: wasm_module.ir.functions[value.trans_u32() as usize].type_idx,
+                    func_type: wasm_module.ir.functions[value.as_funcref() as usize].type_idx,
                 },
                 RefType::ExternReference => TableItem::ExternReference {
-                    func_ptr: value as _,
+                    func_ptr: value.as_externref(),
                 },
             }
         };
@@ -305,9 +316,9 @@ impl TableInstance<'_> {
                 {
                     let val = match val {
                         ConstantValue::V(v) => v,
-                        ConstantValue::Global(idx) => Value::from_generic(
-                            wasm_module.globals[idx as usize].val_type(),
+                        ConstantValue::Global(idx) => Value::from_raw(
                             engine.get_global_value(idx)?,
+                            wasm_module.globals[idx as usize].val_type(),
                         ),
                         ConstantValue::FuncPtr(func_idx) => {
                             Value::Reference(Reference::Function(func_idx))
@@ -379,7 +390,7 @@ fn table_get_impl(
     let mut ctxt = ExecutionContextWrapper(ctxt);
     let tables = ctxt.get_tables();
     let table = &tables[table_idx];
-    Ok(table.get(idx)?.to_generic())
+    Ok(ValueRaw::from(table.get(idx)?).as_u64())
 }
 
 fn table_grow_impl(

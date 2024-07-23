@@ -9,9 +9,7 @@ impl Executable for ITestInstruction {
     ) -> Result<(), crate::InterpreterError> {
         let stack_frame = ctx.stack.last_mut().unwrap();
 
-        let in1_u64 = stack_frame.vars.get(self.in1);
-
-        let in1 = Number::trans_from_u64(in1_u64, &self.input_type);
+        let in1 = stack_frame.vars.get_number(self.in1, self.input_type);
         let zero = Number::trans_from_u64(0, &self.input_type);
 
         let res = match self.op {
@@ -20,7 +18,7 @@ impl Executable for ITestInstruction {
 
         let res_u64 = res as u64;
 
-        stack_frame.vars.set(self.out1, res_u64);
+        stack_frame.vars.set(self.out1, res_u64.into());
 
         Ok(())
     }

@@ -41,7 +41,7 @@ impl Display for Number {
     }
 }
 
-pub type Vector = u128;
+pub type Vector = [u8; 16];
 
 pub type FunctionReference = FuncIdx;
 pub type ExternReference = u32;
@@ -51,26 +51,6 @@ pub enum Reference {
     Null,
     Function(FuncIdx),
     Extern(*const ffi::c_void),
-}
-
-impl Reference {
-    pub fn as_u64(&self) -> u64 {
-        match *self {
-            Reference::Null => 0,
-            Reference::Function(f) => f as u64,
-            Reference::Extern(e) => e as u64,
-        }
-    }
-
-    pub fn from_u32(n: u32, t: &RefType) -> Self {
-        if n == 0 {
-            return Reference::Null;
-        }
-        match t {
-            RefType::FunctionReference => Reference::Function(n as FunctionReference),
-            RefType::ExternReference => panic!("Cannot create pointer from u32"),
-        }
-    }
 }
 
 impl Display for Reference {
@@ -90,68 +70,17 @@ pub enum Value {
     Reference(Reference),
 }
 
-impl Value {
-    pub fn trans_to_u64(&self) -> u64 {
-        match self {
-            Value::Number(n) => n.trans_to_u64(),
-            Value::Vector(_) => todo!("Vector to u64 lmao"),
-            Value::Reference(r) => r.as_u64(),
-        }
-    }
-
-    pub fn from_u64(n: u64, t: ValType) -> Self {
-        match t {
-            ValType::Number(t) => Value::Number(Number::trans_from_u64(n, &t)),
-            ValType::Reference(t) => Value::Reference(Reference::from_u32(n as u32, &t)),
-            ValType::VecType => todo!(),
-        }
-    }
-}
-
 impl Display for Value {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             Value::Number(n) => write!(f, "{}", *n),
-            Value::Vector(v) => write!(f, "{}", v),
+            Value::Vector(v) => write!(f, "{:?}", v),
             Value::Reference(r) => write!(f, "{}", *r),
         }
     }
 }
 
 impl Value {
-    pub fn from_generic(val_type: ValType, val: u64) -> Self {
-        match val_type {
-            ValType::Number(NumType::I32) => Value::Number(Number::I32(val.trans_u32())),
-            ValType::Number(NumType::I64) => Value::Number(Number::I64(val)),
-            ValType::Number(NumType::F32) => Value::Number(Number::F32(val.trans_f32())),
-            ValType::Number(NumType::F64) => Value::Number(Number::F64(val.trans_f64())),
-            ValType::Reference(RefType::ExternReference) => {
-                Value::Reference(Reference::Extern(val as _))
-            }
-            ValType::Reference(RefType::FunctionReference) => {
-                Value::Reference(Reference::Function(val as _))
-            }
-            ValType::VecType => Value::Vector(val.trans_u64() as u128),
-        }
-    }
-
-    pub fn to_generic(&self) -> u64 {
-        match self {
-            Value::Number(Number::I32(n)) => n.trans_u64(),
-            Value::Number(Number::I64(n)) => n.trans_u64(),
-            Value::Number(Number::U32(n)) => n.trans_u64(),
-            Value::Number(Number::U64(n)) => n.trans_u64(),
-            Value::Number(Number::S32(n)) => n.trans_u64(),
-            Value::Number(Number::S64(n)) => n.trans_u64(),
-            Value::Number(Number::F32(n)) => n.trans_u64(),
-            Value::Number(Number::F64(n)) => n.trans_u64(),
-            Value::Vector(_) => unimplemented!(),
-            Value::Reference(Reference::Function(idx)) => *idx as u64,
-            Value::Reference(Reference::Extern(idx)) => *idx as u64,
-            Value::Reference(Reference::Null) => u32::MAX as u64,
-        }
-    }
-
     pub fn r#type(&self) -> ValType {
         match self {
             Value::Number(Number::I32(_))
@@ -168,6 +97,268 @@ impl Value {
             }
             Value::Reference(Reference::Extern(_)) => ValType::Reference(RefType::ExternReference),
             Value::Reference(Reference::Null) => ValType::Reference(RefType::FunctionReference),
+        }
+    }
+}
+
+/// Like Value, but without the tag to decrease size and ffi compatible
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub union ValueRaw {
+    i32: u32,
+    i64: u64,
+
+    /// u32 instead of f32 to avoid signalling to non signalling NaN conversion
+    f32: u32,
+    /// u64 instead of f64 to avoid signalling to non signalling NaN conversion
+    f64: u64,
+
+    v128: [u8; 16],
+    funcref: FuncIdx,
+    externref: *const std::ffi::c_void,
+}
+
+impl ValueRaw {
+    #[inline]
+    pub fn i32(value: i32) -> Self {
+        ValueRaw {
+            i32: value.trans_u32(),
+        }
+    }
+
+    #[inline]
+    pub fn i64(value: i64) -> Self {
+        ValueRaw {
+            i64: value.trans_u64(),
+        }
+    }
+
+    #[inline]
+    pub fn u32(value: u32) -> Self {
+        ValueRaw { i32: value }
+    }
+
+    #[inline]
+    pub fn u64(value: u64) -> Self {
+        ValueRaw { i64: value }
+    }
+
+    #[inline]
+    pub fn f32(value: u32) -> Self {
+        ValueRaw { f32: value }
+    }
+
+    #[inline]
+    pub fn f64(value: u64) -> Self {
+        ValueRaw { f64: value }
+    }
+
+    #[inline]
+    pub fn v128(value: [u8; 16]) -> Self {
+        ValueRaw { v128: value }
+    }
+
+    #[inline]
+    pub fn funcref(value: FuncIdx) -> Self {
+        ValueRaw { funcref: value }
+    }
+
+    #[inline]
+    pub fn externref(value: *const std::ffi::c_void) -> Self {
+        ValueRaw { externref: value }
+    }
+
+    #[inline]
+    pub fn as_i32(self) -> i32 {
+        unsafe { self.i32 }.trans_i32()
+    }
+
+    #[inline]
+    pub fn as_i64(self) -> i64 {
+        unsafe { self.i64 }.trans_i64()
+    }
+
+    #[inline]
+    pub fn as_u32(self) -> u32 {
+        unsafe { self.i32 }
+    }
+
+    #[inline]
+    pub fn as_u64(self) -> u64 {
+        unsafe { self.i64 }
+    }
+
+    #[inline]
+    pub fn as_f32(self) -> u32 {
+        unsafe { self.f32 }
+    }
+
+    #[inline]
+    pub fn as_f64(self) -> u64 {
+        unsafe { self.f64 }
+    }
+
+    #[inline]
+    pub fn as_v128(self) -> [u8; 16] {
+        unsafe { self.v128 }
+    }
+
+    #[inline]
+    pub fn as_funcref(self) -> FuncIdx {
+        unsafe { self.funcref }
+    }
+
+    #[inline]
+    pub fn as_externref(self) -> *const std::ffi::c_void {
+        unsafe { self.externref }
+    }
+}
+
+impl PartialEq for ValueRaw {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_v128() == other.as_v128()
+    }
+}
+
+impl From<Value> for ValueRaw {
+    fn from(val: Value) -> ValueRaw {
+        match val {
+            Value::Number(Number::I32(val)) => ValueRaw::u32(val),
+            Value::Number(Number::S32(val)) => ValueRaw::i32(val),
+            Value::Number(Number::U32(val)) => ValueRaw::u32(val),
+            Value::Number(Number::I64(val)) => ValueRaw::u64(val),
+            Value::Number(Number::S64(val)) => ValueRaw::i64(val),
+            Value::Number(Number::U64(val)) => ValueRaw::u64(val),
+            Value::Number(Number::F32(val)) => ValueRaw::f32(val.to_bits()),
+            Value::Number(Number::F64(val)) => ValueRaw::f64(val.to_bits()),
+            Value::Vector(val) => ValueRaw::v128(val),
+            Value::Reference(Reference::Function(val)) => ValueRaw::funcref(val),
+            Value::Reference(Reference::Extern(val)) => ValueRaw::externref(val),
+            Value::Reference(Reference::Null) => ValueRaw::u64(u64::MAX),
+        }
+    }
+}
+
+impl std::fmt::Debug for ValueRaw {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.as_v128())
+    }
+}
+
+impl From<i32> for ValueRaw {
+    fn from(val: i32) -> ValueRaw {
+        ValueRaw::i32(val)
+    }
+}
+
+impl From<i64> for ValueRaw {
+    fn from(val: i64) -> ValueRaw {
+        ValueRaw::i64(val)
+    }
+}
+
+impl From<u32> for ValueRaw {
+    fn from(val: u32) -> ValueRaw {
+        ValueRaw::u32(val)
+    }
+}
+
+impl From<u64> for ValueRaw {
+    fn from(val: u64) -> ValueRaw {
+        ValueRaw::u64(val)
+    }
+}
+
+impl From<f32> for ValueRaw {
+    fn from(val: f32) -> ValueRaw {
+        ValueRaw::f32(val.to_bits())
+    }
+}
+
+impl From<f64> for ValueRaw {
+    fn from(val: f64) -> ValueRaw {
+        ValueRaw::f64(val.to_bits())
+    }
+}
+
+impl From<[u8; 16]> for ValueRaw {
+    fn from(val: [u8; 16]) -> ValueRaw {
+        ValueRaw::v128(val)
+    }
+}
+
+impl From<ValueRaw> for i32 {
+    fn from(val: ValueRaw) -> i32 {
+        val.as_i32()
+    }
+}
+
+impl From<ValueRaw> for i64 {
+    fn from(val: ValueRaw) -> i64 {
+        val.as_i64()
+    }
+}
+
+impl From<ValueRaw> for u32 {
+    fn from(val: ValueRaw) -> u32 {
+        val.as_u32()
+    }
+}
+
+impl From<ValueRaw> for u64 {
+    fn from(val: ValueRaw) -> u64 {
+        val.as_u64()
+    }
+}
+
+impl From<ValueRaw> for f32 {
+    fn from(val: ValueRaw) -> f32 {
+        f32::from_bits(val.as_f32())
+    }
+}
+
+impl From<ValueRaw> for f64 {
+    fn from(val: ValueRaw) -> f64 {
+        f64::from_bits(val.as_f64())
+    }
+}
+
+impl From<ValueRaw> for [u8; 16] {
+    fn from(val: ValueRaw) -> [u8; 16] {
+        val.as_v128()
+    }
+}
+
+impl Value {
+    pub fn from_raw(raw: ValueRaw, val_ty: ValType) -> Self {
+        match val_ty {
+            ValType::Number(NumType::I32) => Value::Number(Number::I32(raw.as_u32())),
+            ValType::Number(NumType::I64) => Value::Number(Number::I64(raw.as_u64())),
+            ValType::Number(NumType::F32) => {
+                Value::Number(Number::F32(f32::from_bits(raw.as_f32())))
+            }
+            ValType::Number(NumType::F64) => {
+                Value::Number(Number::F64(f64::from_bits(raw.as_f64())))
+            }
+            ValType::Reference(RefType::ExternReference) => {
+                if raw.as_externref()
+                    == ValueRaw::from(Value::Reference(Reference::Null)).as_externref()
+                {
+                    Value::Reference(Reference::Null)
+                } else {
+                    Value::Reference(Reference::Extern(raw.as_externref()))
+                }
+            }
+            ValType::Reference(RefType::FunctionReference) => {
+                if raw.as_funcref()
+                    == ValueRaw::from(Value::Reference(Reference::Null)).as_funcref()
+                {
+                    Value::Reference(Reference::Null)
+                } else {
+                    Value::Reference(Reference::Function(raw.as_funcref()))
+                }
+            }
+            ValType::VecType => Value::Vector(raw.as_v128()),
         }
     }
 }

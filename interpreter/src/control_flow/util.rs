@@ -1,13 +1,11 @@
-use ir::InstructionDecoder;
-use wasm_types::LabelIdx;
-
 use crate::{util, InterpreterContext, StackFrame, VariableStore};
+use ir::{basic_block::BasicBlockID, InstructionDecoder};
 
-pub(super) fn break_util(ctx: &mut InterpreterContext, label_idx: LabelIdx) {
+pub(super) fn break_util(ctx: &mut InterpreterContext, target: BasicBlockID) {
     let stack_frame = ctx.stack.last_mut().unwrap();
     let last_bb_idx = stack_frame.bb_id;
 
-    stack_frame.bb_id = label_idx;
+    stack_frame.bb_id = target;
     stack_frame.last_bb_id = last_bb_idx;
 
     let function_idx = stack_frame.fn_idx;
@@ -17,7 +15,7 @@ pub(super) fn break_util(ctx: &mut InterpreterContext, label_idx: LabelIdx) {
 
     let basic_block = util::get_bbs_from_function(&current_fn)
         .iter()
-        .find(|bb| bb.id == label_idx)
+        .find(|bb| bb.id == target)
         .unwrap();
 
     let instrs = basic_block.instructions.clone();

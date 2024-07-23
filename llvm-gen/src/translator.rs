@@ -309,12 +309,17 @@ impl Translator {
         let mut params = vec![import_rt_ptr /* forward imported runtime ptr */];
 
         let param_arr_ptr = self.builder.build_alloca(
-            unsafe { LLVMArrayType2(self.builder.i64(), internal_fn_wasm_type.0.len() as u64) },
+            unsafe {
+                LLVMArrayType2(
+                    self.builder.value_raw_ty(),
+                    internal_fn_wasm_type.0.len() as u64,
+                )
+            },
             "param_arr",
         );
         for (i, _) in internal_fn_wasm_type.0.iter().enumerate() {
             let param_ptr = self.builder.build_gep(
-                self.builder.i64(),
+                self.builder.value_raw_ty(),
                 param_arr_ptr,
                 &mut [self.builder.const_i32(i as u32)],
                 &format!("function param {} ptr calc", i),
@@ -327,7 +332,12 @@ impl Translator {
         if internal_fn_wasm_type.1.len() > 1 {
             // add return parameter pointer
             let return_param_ptr = self.builder.build_alloca(
-                unsafe { LLVMArrayType2(self.builder.i64(), internal_fn_wasm_type.1.len() as u64) },
+                unsafe {
+                    LLVMArrayType2(
+                        self.builder.value_raw_ty(),
+                        internal_fn_wasm_type.1.len() as u64,
+                    )
+                },
                 "return_param_arr",
             );
             params.push(return_param_ptr);
@@ -337,7 +347,7 @@ impl Translator {
             let mut returns = Vec::new();
             for i in 0..internal_fn_wasm_type.1.len() {
                 let ret_val_output_ptr = self.builder.build_gep(
-                    self.builder.i64(),
+                    self.builder.value_raw_ty(),
                     ret_arr_ptr,
                     &mut [self.builder.const_i32(i as u32)],
                     &format!("ret_val_{}_out_ptr", i),
@@ -497,7 +507,7 @@ impl Translator {
         for (i, val_type) in func_type.0.iter().enumerate() {
             let param_llvm_type = self.builder.valtype2llvm(*val_type);
             let param_ptr = self.builder.build_gep(
-                self.builder.i64(),
+                self.builder.value_raw_ty(),
                 param_arr_ptr,
                 &mut [self.builder.const_i32(i as u32)],
                 &format!("function param {} ptr calc", i),
@@ -526,7 +536,7 @@ impl Translator {
                 let ret_arr_ptr = llvm_function.get_param(2);
                 for i in 0..func_type.1.len() {
                     let ret_val_output_ptr = self.builder.build_gep(
-                        self.builder.i64(),
+                        self.builder.value_raw_ty(),
                         ret_arr_ptr,
                         &mut [self.builder.const_i32(i as u32)],
                         &format!("ret_val_{}_out_ptr", i),

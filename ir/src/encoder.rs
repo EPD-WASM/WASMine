@@ -35,7 +35,7 @@ impl InstructionEncoder {
 
     pub fn write_immediate<T: Integer>(&mut self, imm: T) {
         // TODO: align storage for better performance
-        self.storage.immediate_storage.extend(&imm.to_bytes());
+        self.storage.immediate_storage.extend(imm.to_bytes());
     }
 
     pub fn write_variable(&mut self, var: VariableID) {

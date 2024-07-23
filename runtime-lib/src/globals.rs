@@ -1,7 +1,7 @@
 use crate::{instance_handle::InstantiationError, linker::RTGlobalImport, Cluster, Engine};
-use ir::{
-    structs::{global::Global, value::ConstantValue},
-    utils::numeric_transmutes::Bit32,
+use ir::structs::{
+    global::Global,
+    value::{ConstantValue, ValueRaw},
 };
 use nix::errno::Errno;
 use runtime_interface::GlobalInstance;
@@ -48,7 +48,7 @@ impl GlobalStorage {
         }
         for (idx, global) in globals_meta.iter().enumerate() {
             if !global.import {
-                let addr = unsafe { (storage as *mut u64).add(idx) };
+                let addr = unsafe { (storage as *mut ValueRaw).add(idx) };
                 globals[idx].addr = addr;
                 engine.register_symbol(&format!("global_{}", idx), addr as _);
             }
@@ -57,9 +57,9 @@ impl GlobalStorage {
             if !global.import {
                 unsafe {
                     *globals[idx].addr = match global.init.clone() {
-                        ConstantValue::V(value) => value.to_generic(),
+                        ConstantValue::V(value) => value.into(),
                         ConstantValue::Global(glob_idx) => *globals[glob_idx as usize].addr,
-                        ConstantValue::FuncPtr(func_idx) => func_idx.trans_u64(),
+                        ConstantValue::FuncPtr(func_idx) => ValueRaw::funcref(func_idx),
                     }
                 }
             }
