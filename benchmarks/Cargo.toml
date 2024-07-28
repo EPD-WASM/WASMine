@@ -1,0 +1,41 @@
+[package]
+name = "benchmarks"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ir = { version = "0.1.0", path = "../ir" }
+loader = { version = "0.1.0", path = "../loader" }
+parser = { version = "0.1.0", path = "../parser" }
+runtime-lib = { version = "0.1.0", path = "../runtime-lib" }
+criterion = "0.3"
+wasmparser = "0.207.0"
+wasmtime = "22.0.0"
+wasmedge-sdk = { version = "0.13.0", default-features = false, features = ["standalone"] }
+
+[profile.release]
+debug = true
+
+[[bin]]
+name = "benches_dummy_bin"
+path = "./bin/main.rs"
+
+[[bench]]
+name = "wasmine_llvm_bench"
+harness = false
+
+[[bench]]
+name = "wasmine_interp_bench"
+harness = false
+
+[[bench]]
+name = "wasmtime_bench"
+harness = false
+
+[[bench]]
+name = "wasmedge_bench"
+harness = false
+
+[[bench]]
+name = "parser_bench"
+harness = false

@@ -1,4 +1,4 @@
-workspace = { members = [ "fuzz", "runtime-lib", "interpreter", "ir", "parser", "tests/gen_util", "wasm-types", "loader", "runtime-interface", "llvm-gen", "benches/sightglass-connector"] }
+workspace = { members = [ "fuzz", "runtime-lib", "interpreter", "ir", "parser", "tests/gen_util", "wasm-types", "loader", "runtime-interface", "llvm-gen", "sightglass-connector", "benchmarks"] }
 
 [package]
 name = "wasm_rt"
@@ -25,14 +25,6 @@ wasmparser = "0.207.0"
 test-log = "0.2.16"
 wasmtime = "22.0.0"
 wasmedge-sdk = { version = "0.13.0", default-features = false, features = ["standalone"] }
-
-[[bench]]
-name = "parser_bench"
-harness = false
-
-[[bench]]
-name = "fibonacci_bench"
-harness = false
 
 [[bin]]
 name = "wasm_rt"

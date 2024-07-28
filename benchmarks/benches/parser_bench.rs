@@ -14,7 +14,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     for file_name in wasm_files {
         let wasm_bytes = std::fs::read(
             PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("benches/fixtures")
+                .join("fixtures")
                 .join(file_name),
         )
         .unwrap();
