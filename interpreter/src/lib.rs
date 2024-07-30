@@ -1,4 +1,5 @@
 use control_flow::GlueHandler;
+use core::ffi;
 use ir::structs::value::{Number, ValueRaw};
 use runtime_interface::{ExecutionContext, RawFunctionPtr};
 use std::{collections::HashMap, rc::Rc};
@@ -125,7 +126,7 @@ impl<'a> InterpreterContext<'a> {
 pub struct Interpreter {
     // ctx: InterpreterContext,
     module: Option<Rc<Module>>,
-    imported_functions: HashMap<String, RawFunctionPtr>,
+    imported_functions: HashMap<String, *const ffi::c_void>,
 }
 
 impl Interpreter {
@@ -140,7 +141,7 @@ impl Interpreter {
         self.module = Some(module);
     }
 
-    pub fn register_symbol(&mut self, name: &str, address: RawFunctionPtr) {
+    pub fn register_symbol(&mut self, name: &str, address: *const ffi::c_void) {
         self.imported_functions.insert(name.to_string(), address);
     }
 

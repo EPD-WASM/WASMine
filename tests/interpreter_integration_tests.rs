@@ -10,6 +10,7 @@ use ir::{
 };
 use loader::Loader;
 use parser::{error::ParserError, parser::Parser};
+use runtime_interface::RawFunctionPtr;
 use runtime_lib::{BoundLinker, Cluster, Engine, InstanceHandle, Linker, RuntimeError};
 use std::{collections::HashMap, path::PathBuf, rc::Rc};
 use test_log::test;
@@ -27,7 +28,7 @@ type DeclaredModulesMap<'a> = HashMap<
     ),
 >;
 
-generate_spec_test_cases!(test_interpreter, interpreter);
+// generate_spec_test_cases!(test_interpreter, interpreter);
 
 pub fn translate_module<'a>(
     module: Rc<ir::structs::module::Module>,
@@ -62,6 +63,7 @@ fn execute_via_interpreter_backend(
                 FunctionSource::Import(_)
             ) {
                 let fn_name = Function::query_function_name(entry_point, instance.wasm_module())
+                    .map(|s| s.to_owned())
                     .unwrap_or(format!("func_{}", entry_point));
                 instance
                     .run_by_name(&fn_name, Vec::default())
@@ -148,8 +150,6 @@ fn parse_module(module: &mut QuoteWat) -> Result<Module, ParserError> {
 }
 
 pub fn test_interpreter(file_path: &str) {
-    // skip for now on master
-    return;
     log::info!("Parsing spec test file: {:?}", file_path);
 
     let content = std::fs::read_to_string(file_path).unwrap();

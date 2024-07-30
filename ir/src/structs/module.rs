@@ -1,8 +1,8 @@
 use std::fmt::Debug;
 
 use super::{
-    data::Data, element::Element, export::Export, global::Global, import::Import, memory::Memory,
-    table::Table,
+    data::Data, element::Element, export::WasmExports, global::Global, import::Import,
+    memory::Memory, table::Table,
 };
 use crate::IR;
 use wasm_types::{FuncIdx, FuncType};
@@ -40,5 +40,5 @@ pub struct Module {
     pub imports: Vec<Import>,
 
     /// Wasm exports
-    pub exports: Vec<Export>,
+    pub exports: WasmExports,
 }

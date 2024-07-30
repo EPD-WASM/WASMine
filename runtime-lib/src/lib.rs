@@ -18,6 +18,7 @@ mod cluster;
 mod engine;
 mod error;
 mod execution_context;
+mod func;
 mod globals;
 mod instance_handle;
 mod linker;
@@ -25,6 +26,8 @@ mod memory;
 mod segmented_list;
 mod signals;
 mod tables;
+mod types;
+mod utils;
 mod wasi;
 
 pub use cluster::Cluster;

@@ -8,7 +8,7 @@ use ir::{
     function::Function,
     structs::{
         element::{ElemMode, Element, ElementInit},
-        export::{Export, ExportDesc},
+        export::{Export, FuncExport, GlobalExport, MemoryExport, TableExport},
         expression::{ConstantExpression, ConstantExpressionError},
         global::Global,
         import::Import,
@@ -185,18 +185,24 @@ impl Parse for Memory {
 impl Parse for Export {
     fn parse(i: &mut WasmStreamReader) -> Result<Export, ParserError> {
         let name = Name::parse(i)?;
-        let desc = ExportDesc::parse(i)?;
-        Ok(Export { name, desc })
-    }
-}
-
-impl Parse for ExportDesc {
-    fn parse(i: &mut WasmStreamReader) -> Result<ExportDesc, ParserError> {
+        // parse ExportDesc
         match i.read_byte()? {
-            0x00 => Ok(ExportDesc::Func(FuncIdx::parse(i)?)),
-            0x01 => Ok(ExportDesc::Table(TableIdx::parse(i)?)),
-            0x02 => Ok(ExportDesc::Mem(MemIdx::parse(i)?)),
-            0x03 => Ok(ExportDesc::Global(GlobalIdx::parse(i)?)),
+            0x00 => Ok(Export::Func(FuncExport {
+                name,
+                idx: FuncIdx::parse(i)?,
+            })),
+            0x01 => Ok(Export::Table(TableExport {
+                name,
+                idx: TableIdx::parse(i)?,
+            })),
+            0x02 => Ok(Export::Mem(MemoryExport {
+                name,
+                idx: MemIdx::parse(i)?,
+            })),
+            0x03 => Ok(Export::Global(GlobalExport {
+                name,
+                idx: GlobalIdx::parse(i)?,
+            })),
             _ => Err(ParserError::Msg("invalid export description prefix".into())),
         }
     }

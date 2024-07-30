@@ -5,10 +5,9 @@ use crate::util::{build_llvm_function_name, to_c_str};
 use crate::{abstraction::builder::Builder, error::TranslationError};
 use ir::function::{Function as WasmFunction, FunctionSource};
 use ir::function::{FunctionImport, FunctionInternal as WasmFunctionInternal};
-use ir::structs::export::ExportDesc;
 use ir::{basic_block::BasicBlock, structs::module::Module as WasmModule, InstructionDecoder};
 use llvm_sys::analysis::{LLVMVerifierFailureAction, LLVMVerifyFunction, LLVMVerifyModule};
-use llvm_sys::core::{LLVMArrayType2, LLVMBuildExtractValue, LLVMDisposeMessage};
+use llvm_sys::core::{LLVMBuildExtractValue, LLVMDisposeMessage};
 use llvm_sys::prelude::{LLVMBasicBlockRef, LLVMTypeRef, LLVMValueRef};
 use llvm_sys::{LLVMCallConv, LLVMLinkage};
 use std::collections::HashSet;
@@ -155,25 +154,20 @@ impl Translator {
         }
 
         // create entrypoint wrappers for exported functions
-        for export in self.wasm_module.exports.iter() {
-            if let ExportDesc::Func(function_idx) = export.desc {
-                let wasm_function = &self.wasm_module.ir.functions[function_idx as usize];
-                let llvm_function = self.declare_export_wrapper(wasm_function, &export.name)?;
-                self.translate_external_wrapper_function(
-                    wasm_function,
-                    &llvm_function,
-                    function_idx,
-                )?;
-            }
+        for (func_name, func_idx) in self.wasm_module.exports.functions() {
+            let wasm_function = &self.wasm_module.ir.functions[*func_idx as usize];
+            let llvm_function = self.declare_export_wrapper(func_name)?;
+            self.translate_external_wrapper_function(wasm_function, &llvm_function, *func_idx)?;
         }
 
         // add external wrapper for start function
         if let Some(start_func_idx) = self.wasm_module.entry_point {
             let wasm_function = &self.wasm_module.ir.functions[start_func_idx as usize];
-            let llvm_function = self.declare_export_wrapper(
-                wasm_function,
-                &build_llvm_function_name(start_func_idx, &self.wasm_module, true),
-            )?;
+            let llvm_function = self.declare_export_wrapper(&build_llvm_function_name(
+                start_func_idx,
+                &self.wasm_module,
+                true,
+            ))?;
             self.translate_external_wrapper_function(
                 wasm_function,
                 &llvm_function,
@@ -192,26 +186,19 @@ impl Translator {
 
     pub(crate) fn llvm_external_func_type_from_wasm(
         &self,
-        functype_idx: usize,
     ) -> Result<LLVMTypeRef, TranslationError> {
-        let func_type = self.wasm_module.function_types[functype_idx].clone();
         let mut param_types = vec![
             // runtime ptr
             self.builder.ptr(),
             // argument ptr
             self.builder.ptr(),
+            // return parameter pointer
+            self.builder.ptr(),
         ];
-        if func_type.1.len() > 1 {
-            // add return parameter pointer
-            param_types.push(self.builder.ptr());
-        }
-        let return_type = match func_type.1.len() {
-            // optimization for single return values
-            1 => self.builder.valtype2llvm(func_type.1[0]),
-            // either not return value or return via input pointer
-            _ => self.builder.void(),
-        };
-        Ok(Module::create_func_type(return_type, &mut param_types))
+        Ok(Module::create_func_type(
+            self.builder.void(),
+            &mut param_types,
+        ))
     }
 
     pub(crate) fn llvm_internal_func_type_from_wasm(
@@ -264,7 +251,6 @@ impl Translator {
         func_idx: FuncIdx,
         type_idx: TypeIdx,
     ) -> Result<Function, TranslationError> {
-        let fn_type = self.llvm_external_func_type_from_wasm(type_idx as usize)?;
         let internal_fn_type = self.llvm_internal_func_type_from_wasm(type_idx as usize)?;
         let internal_function_name = format!("{}", func_idx);
         if let Some(f) = self
@@ -275,16 +261,16 @@ impl Translator {
         }
 
         // declare imported function symbol
-        let import_func_name = format!("{}_imported", name);
+        let import_func_name = format!("{}_wasm_cc", name);
         let imported_function = self
             .module
-            .find_func(&import_func_name, fn_type)
+            .find_func(&import_func_name, internal_fn_type)
             .unwrap_or_else(|| {
                 self.module.add_function(
                     &import_func_name,
-                    fn_type,
+                    internal_fn_type,
                     LLVMLinkage::LLVMExternalLinkage,
-                    LLVMCallConv::LLVMCCallConv,
+                    LLVMCallConv::LLVMFastCallConv,
                 )
             });
 
@@ -308,75 +294,15 @@ impl Translator {
         ))?;
         let mut params = vec![import_rt_ptr /* forward imported runtime ptr */];
 
-        let param_arr_ptr = self.builder.build_alloca(
-            unsafe {
-                LLVMArrayType2(
-                    self.builder.value_raw_ty(),
-                    internal_fn_wasm_type.0.len() as u64,
-                )
-            },
-            "param_arr",
-        );
         for (i, _) in internal_fn_wasm_type.0.iter().enumerate() {
-            let param_ptr = self.builder.build_gep(
-                self.builder.value_raw_ty(),
-                param_arr_ptr,
-                &mut [self.builder.const_i32(i as u32)],
-                &format!("function param {} ptr calc", i),
-            );
-            self.builder
-                .build_store(internal_function.get_param(i + 1), param_ptr);
+            params.push(internal_function.get_param(i + 1));
         }
-        params.push(param_arr_ptr);
-
-        if internal_fn_wasm_type.1.len() > 1 {
-            // add return parameter pointer
-            let return_param_ptr = self.builder.build_alloca(
-                unsafe {
-                    LLVMArrayType2(
-                        self.builder.value_raw_ty(),
-                        internal_fn_wasm_type.1.len() as u64,
-                    )
-                },
-                "return_param_arr",
-            );
-            params.push(return_param_ptr);
-            self.builder
-                .build_call(&imported_function, params.as_mut_slice(), "");
-            let ret_arr_ptr = internal_function.get_param(2);
-            let mut returns = Vec::new();
-            for i in 0..internal_fn_wasm_type.1.len() {
-                let ret_val_output_ptr = self.builder.build_gep(
-                    self.builder.value_raw_ty(),
-                    ret_arr_ptr,
-                    &mut [self.builder.const_i32(i as u32)],
-                    &format!("ret_val_{}_out_ptr", i),
-                );
-                let ret_val_elem = self.builder.build_load(
-                    self.builder.valtype2llvm(internal_fn_wasm_type.1[i]),
-                    ret_val_output_ptr,
-                    &format!("ret_val_{}_load", i),
-                );
-                returns.push(ret_val_elem);
-            }
-            self.builder.build_aggregate_ret(returns.as_mut_slice())
-        } else {
-            let ret_val = self.builder.build_call(
-                &imported_function,
-                params.as_mut_slice(),
-                if internal_fn_wasm_type.1.is_empty() {
-                    ""
-                } else {
-                    "call_imported_external"
-                },
-            );
-            match internal_fn_wasm_type.1.len() {
-                0 => self.builder.build_ret_void(),
-                1 => self.builder.build_ret(ret_val),
-                _ => {
-                    unreachable!()
-                }
-            }
+        let ret_val = self
+            .builder
+            .build_call(&imported_function, params.as_mut_slice(), "");
+        match internal_fn_wasm_type.1.len() {
+            0 => self.builder.build_ret_void(),
+            _ => self.builder.build_ret(ret_val),
         }
 
         #[cfg(debug_assertions)]
@@ -388,10 +314,9 @@ impl Translator {
 
     pub(crate) fn declare_export_wrapper(
         &self,
-        function: &WasmFunction,
         public_func_name: &str,
     ) -> Result<Function, TranslationError> {
-        let fn_type = self.llvm_external_func_type_from_wasm(function.type_idx as usize)?;
+        let fn_type = self.llvm_external_func_type_from_wasm()?;
         let llvm_function = self.module.add_function(
             public_func_name,
             fn_type,
@@ -530,8 +455,11 @@ impl Translator {
         );
 
         match func_type.1.len() {
-            0 => self.builder.build_ret_void(),
-            1 => self.builder.build_ret(ret_val),
+            0 => (),
+            1 => {
+                let ret_arr_ptr = llvm_function.get_param(2);
+                self.builder.build_store(ret_val, ret_arr_ptr);
+            }
             _ => {
                 let ret_arr_ptr = llvm_function.get_param(2);
                 for i in 0..func_type.1.len() {
@@ -551,9 +479,9 @@ impl Translator {
                     };
                     self.builder.build_store(ret_val_elem, ret_val_output_ptr);
                 }
-                self.builder.build_ret_void()
             }
         }
+        self.builder.build_ret_void();
 
         #[cfg(debug_assertions)]
         self.verify_function(llvm_function, function_idx)?;

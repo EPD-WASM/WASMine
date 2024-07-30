@@ -1,5 +1,5 @@
 use super::basic_block::BasicBlock;
-use crate::structs::{export::Export, module::Module};
+use crate::structs::module::Module;
 use std::vec::Vec;
 use wasm_types::{FuncIdx, TypeIdx, ValType};
 
@@ -28,18 +28,14 @@ pub struct Function {
 }
 
 impl Function {
-    pub fn query_function_name(func_idx: FuncIdx, module: &Module) -> Option<String> {
-        module.exports.iter().find_map(|export| match &export {
-            Export {
-                name,
-                desc: crate::structs::export::ExportDesc::Func(idx),
-            } if *idx == func_idx => Some(name.clone()),
-            _ => None,
-        })
+    pub fn query_function_name(func_idx: FuncIdx, module: &Module) -> Option<&str> {
+        module.exports.find_function_name(func_idx)
     }
 
     pub fn debug_function_name(func_idx: FuncIdx, module: &Module) -> String {
-        Self::query_function_name(func_idx, module).unwrap_or(format!("<anonymous:{}>", func_idx))
+        Self::query_function_name(func_idx, module)
+            .map(|s| s.to_string())
+            .unwrap_or(format!("<anonymous:{}>", func_idx))
     }
 
     pub fn create_empty(type_idx: TypeIdx) -> Self {

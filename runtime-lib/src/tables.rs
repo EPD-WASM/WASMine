@@ -16,7 +16,7 @@ use ir::{
     utils::numeric_transmutes::Bit32,
 };
 use runtime_interface::{ExecutionContext, GlobalStorage, RawFunctionPtr};
-use std::ptr::null_mut;
+use std::ptr::{null_mut, NonNull};
 use wasm_types::{ElemIdx, FuncIdx, FuncType, RefType, TableIdx, TableType, TypeIdx, ValType};
 
 #[derive(Debug, thiserror::Error)]
@@ -47,18 +47,21 @@ pub(crate) enum TableItem {
     FunctionReference {
         func_idx: FuncIdx,
         func_type: TypeIdx,
-        func_ptr: RawFunctionPtr,
+        func_ptr: Option<RawFunctionPtr>,
     },
     ExternReference {
-        func_ptr: RawFunctionPtr,
+        func_ptr: Option<RawFunctionPtr>,
     },
     Null,
 }
 
+#[repr(transparent)]
+pub struct TableObject(pub Vec<TableItem>);
+
 // All other information like the table type, etc. are stored in the config
 pub struct TableInstance<'a> {
     // final, evaluated references
-    pub(crate) values: &'a mut Vec<TableItem>,
+    pub(crate) values: &'a mut TableObject,
     pub(crate) ty: TableType,
 }
 
@@ -85,7 +88,9 @@ impl InstanceHandle<'_> {
                     }
                 } else {
                     let table_items = cluster.alloc_table_items();
-                    table_items.resize(table.r#type.lim.min as usize, TableItem::Null);
+                    table_items
+                        .0
+                        .resize(table.r#type.lim.min as usize, TableItem::Null);
                     table_items
                 };
                 TableInstance {
@@ -130,28 +135,28 @@ impl TableInstance<'_> {
         value: u64,
         idx: u32,
     ) -> Result<(), TableError> {
-        if idx >= self.values.len() as u32 {
+        if idx >= self.values.0.len() as u32 {
             return Err(TableError::TableIndexOutOfBounds);
         }
         let value = ValueRaw::from(value);
         if value.as_externref() == ValueRaw::from(Value::Reference(Reference::Null)).as_externref()
         {
-            self.values[idx as usize] = TableItem::Null;
+            self.values.0[idx as usize] = TableItem::Null;
             return Ok(());
         }
         match self.ty.ref_type {
             RefType::FunctionReference => {
                 let func_idx = value.as_funcref();
                 debug_assert!(func_idx < wasm_module.ir.functions.len() as u32);
-                self.values[idx as usize] = TableItem::FunctionReference {
+                self.values.0[idx as usize] = TableItem::FunctionReference {
                     func_idx,
-                    func_ptr: null_mut(),
+                    func_ptr: None,
                     func_type: wasm_module.ir.functions[func_idx as usize].type_idx,
                 }
             }
             RefType::ExternReference => {
-                self.values[idx as usize] = TableItem::ExternReference {
-                    func_ptr: value.as_externref(),
+                self.values.0[idx as usize] = TableItem::ExternReference {
+                    func_ptr: RawFunctionPtr::new(value.as_externref() as _),
                 }
             }
         }
@@ -159,22 +164,22 @@ impl TableInstance<'_> {
     }
 
     pub(crate) fn get(&self, idx: u32) -> Result<Value, TableError> {
-        if idx >= self.values.len() as u32 {
+        if idx >= self.values.0.len() as u32 {
             return Err(TableError::TableIndexOutOfBounds);
         }
-        match self.values[idx as usize] {
+        match self.values.0[idx as usize] {
             TableItem::FunctionReference { func_idx, .. } => {
                 Ok(Value::Reference(Reference::Function(func_idx)))
             }
-            TableItem::ExternReference { func_ptr } => {
-                Ok(Value::Reference(Reference::Extern(func_ptr)))
-            }
+            TableItem::ExternReference { func_ptr } => Ok(Value::Reference(Reference::Extern(
+                func_ptr.map(NonNull::as_ptr).unwrap_or(null_mut()),
+            ))),
             TableItem::Null => Ok(Value::Reference(Reference::Null)),
         }
     }
 
     pub(crate) fn size(&self) -> u32 {
-        self.values.len() as u32
+        self.values.0.len() as u32
     }
 
     pub(crate) fn grow(
@@ -184,7 +189,7 @@ impl TableInstance<'_> {
         value_to_fill: u64,
     ) -> Result<u32, TableError> {
         let err = (-1_i32).trans_u32();
-        let old_len = self.values.len();
+        let old_len = self.values.0.len();
         if size == 0 {
             return Ok(old_len as u32);
         }
@@ -194,7 +199,7 @@ impl TableInstance<'_> {
             log::debug!("Called table.grow with size > max size. Ignoring.");
             return Ok(err);
         }
-        if self.values.try_reserve_exact(size as usize).is_err() {
+        if self.values.0.try_reserve_exact(size as usize).is_err() {
             log::debug!("Failed to reserve space for table.grow. Ignoring.");
             return Ok(err);
         }
@@ -203,21 +208,21 @@ impl TableInstance<'_> {
         if value_to_fill.as_externref()
             == ValueRaw::from(Value::Reference(Reference::Null)).as_externref()
         {
-            self.values.resize(new_len, TableItem::Null);
+            self.values.0.resize(new_len, TableItem::Null);
             return Ok(old_len as u32);
         } else {
             let table_value_to_fill = match self.ty.ref_type {
                 RefType::FunctionReference => TableItem::FunctionReference {
                     func_idx: value_to_fill.as_funcref(),
-                    func_ptr: null_mut(),
+                    func_ptr: None,
                     func_type: wasm_module.ir.functions[value_to_fill.as_funcref() as usize]
                         .type_idx,
                 },
                 RefType::ExternReference => TableItem::ExternReference {
-                    func_ptr: value_to_fill.as_externref(),
+                    func_ptr: RawFunctionPtr::new(value_to_fill.as_externref() as _),
                 },
             };
-            self.values.resize(new_len, table_value_to_fill);
+            self.values.0.resize(new_len, table_value_to_fill);
         }
         Ok(old_len as u32)
     }
@@ -229,7 +234,7 @@ impl TableInstance<'_> {
         len: u32,
         value: u64,
     ) -> Result<(), TableError> {
-        if start + len > self.values.len() as u32 {
+        if start + len > self.values.0.len() as u32 {
             return Err(TableError::TableAccessOutOfBounds);
         }
         if len == 0 {
@@ -245,15 +250,15 @@ impl TableInstance<'_> {
             match self.ty.ref_type {
                 RefType::FunctionReference => TableItem::FunctionReference {
                     func_idx: value.as_funcref(),
-                    func_ptr: null_mut(),
+                    func_ptr: None,
                     func_type: wasm_module.ir.functions[value.as_funcref() as usize].type_idx,
                 },
                 RefType::ExternReference => TableItem::ExternReference {
-                    func_ptr: value.as_externref(),
+                    func_ptr: RawFunctionPtr::new(value.as_externref() as _),
                 },
             }
         };
-        self.values[start as usize..(start + len) as usize].fill(value_to_fill);
+        self.values.0[start as usize..(start + len) as usize].fill(value_to_fill);
         Ok(())
     }
 
@@ -266,10 +271,10 @@ impl TableInstance<'_> {
         len: u32,
     ) -> Result<(), TableError> {
         let src_table = unsafe { &*src_table };
-        if src_start + len > src_table.values.len() as u32 {
+        if src_start + len > src_table.values.0.len() as u32 {
             return Err(TableError::TableAccessOutOfBounds);
         }
-        if dst_start + len > self.values.len() as u32 {
+        if dst_start + len > self.values.0.len() as u32 {
             return Err(TableError::TableAccessOutOfBounds);
         }
         if len == 0 {
@@ -278,8 +283,8 @@ impl TableInstance<'_> {
         // we use memmove instead of memcpy to prevent any issues resulting from overlapping memory
         unsafe {
             std::ptr::copy(
-                src_table.values.as_ptr().add(src_start as usize),
-                self.values.as_mut_ptr().add(dst_start as usize),
+                src_table.values.0.as_ptr().add(src_start as usize),
+                self.values.0.as_mut_ptr().add(dst_start as usize),
                 len as usize,
             )
         };
@@ -302,7 +307,7 @@ impl TableInstance<'_> {
         if src_offset + len > elem_data_len {
             return Err(TableError::ElemAccessOutOfBounds);
         }
-        if dst_offset + len > self.values.len() as u32 {
+        if dst_offset + len > self.values.0.len() as u32 {
             return Err(TableError::TableAccessOutOfBounds);
         }
         let end_idx = src_offset + len;
@@ -324,17 +329,19 @@ impl TableInstance<'_> {
                             Value::Reference(Reference::Function(func_idx))
                         }
                     };
-                    self.values[(dst_offset as usize) + i] = match val {
+                    self.values.0[(dst_offset as usize) + i] = match val {
                         Value::Number(Number::I32(func_idx))
                         | Value::Reference(Reference::Function(func_idx)) => {
                             TableItem::FunctionReference {
                                 func_idx,
-                                func_ptr: null_mut(),
+                                func_ptr: None,
                                 func_type: wasm_module.ir.functions[func_idx as usize].type_idx,
                             }
                         }
                         Value::Reference(Reference::Extern(func_ptr)) => {
-                            TableItem::ExternReference { func_ptr }
+                            TableItem::ExternReference {
+                                func_ptr: RawFunctionPtr::new(func_ptr as _),
+                            }
                         }
                         Value::Reference(Reference::Null) => TableItem::Null,
                         _ => unreachable!(),
@@ -347,9 +354,9 @@ impl TableInstance<'_> {
                     .cloned()
                     .enumerate()
                 {
-                    self.values[(dst_offset as usize) + i] = TableItem::FunctionReference {
+                    self.values.0[(dst_offset as usize) + i] = TableItem::FunctionReference {
                         func_idx,
-                        func_ptr: null_mut(),
+                        func_ptr: None,
                         func_type: wasm_module.ir.functions[func_idx as usize].type_idx,
                     };
                 }

@@ -1,7 +1,6 @@
 // https://webassembly.github.io/spec/core/exec/runti`me`.html
 
 use crate::utils::numeric_transmutes::{Bit32, Bit64};
-use core::ffi;
 use std::fmt::{Display, Formatter};
 use wasm_types::{FuncIdx, GlobalIdx, NumType, RefType, ValType};
 
@@ -50,7 +49,7 @@ pub type ExternReference = u32;
 pub enum Reference {
     Null,
     Function(FuncIdx),
-    Extern(*const ffi::c_void),
+    Extern(*const core::ffi::c_void),
 }
 
 impl Display for Reference {

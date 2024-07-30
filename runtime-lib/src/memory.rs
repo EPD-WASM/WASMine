@@ -36,9 +36,9 @@ pub enum MemoryError {
 }
 
 #[repr(transparent)]
-pub(crate) struct MemoryInstance(pub(crate) runtime_interface::MemoryInstance);
+pub(crate) struct MemoryObject(pub(crate) runtime_interface::MemoryInstance);
 
-impl MemoryInstance {
+impl MemoryObject {
     pub(crate) fn new(data: *mut u8, size: u32, max_size: u32) -> Self {
         Self(runtime_interface::MemoryInstance {
             data,
@@ -177,7 +177,7 @@ impl MemoryInstance {
     }
 }
 
-impl Drop for MemoryInstance {
+impl Drop for MemoryObject {
     fn drop(&mut self) {
         if unsafe {
             libc::munmap(
@@ -195,7 +195,7 @@ impl Drop for MemoryInstance {
     }
 }
 
-pub(crate) struct MemoryStorage<'a>(pub(crate) &'a mut [MemoryInstance]);
+pub(crate) struct MemoryStorage<'a>(pub(crate) &'a mut [MemoryObject]);
 
 impl<'a> MemoryStorage<'a> {
     pub(crate) fn init_on_cluster(
@@ -204,7 +204,7 @@ impl<'a> MemoryStorage<'a> {
         data_meta: &[Data],
         imports: &[RTMemoryImport],
         globals: &GlobalStorage,
-    ) -> Result<&'a mut [MemoryInstance], MemoryError> {
+    ) -> Result<&'a mut [MemoryObject], MemoryError> {
         let mut memories = Vec::with_capacity(1);
 
         let mut imports_iter = imports.iter();
@@ -239,7 +239,7 @@ impl<'a> MemoryStorage<'a> {
             } {
                 return Err(MemoryError::AllocationFailure(Errno::last()));
             }
-            memories.push(MemoryInstance::new(
+            memories.push(MemoryObject::new(
                 memory_ptr as *mut u8,
                 limits.min,
                 limits.max.unwrap_or(WASM_PAGE_LIMIT),
@@ -272,7 +272,7 @@ impl<'a> MemoryStorage<'a> {
 }
 
 impl Index<usize> for MemoryStorage<'_> {
-    type Output = MemoryInstance;
+    type Output = MemoryObject;
 
     fn index(&self, index: usize) -> &Self::Output {
         &self.0[index]
@@ -286,7 +286,7 @@ extern "C" fn memory_grow(
     grow_by: u32,
 ) -> i32 {
     let memories = MemoryStorage(unsafe {
-        slice::from_raw_parts_mut(ctxt.memories_ptr as *mut MemoryInstance, ctxt.memories_len)
+        slice::from_raw_parts_mut(ctxt.memories_ptr as *mut MemoryObject, ctxt.memories_len)
     });
     let memory = &mut memories.0[memory_idx];
     memory.grow(grow_by)
@@ -299,7 +299,7 @@ fn memory_fill_impl(
     value: u8,
 ) -> Result<(), MemoryError> {
     let memories = MemoryStorage(unsafe {
-        slice::from_raw_parts_mut(ctxt.memories_ptr as *mut MemoryInstance, ctxt.memories_len)
+        slice::from_raw_parts_mut(ctxt.memories_ptr as *mut MemoryObject, ctxt.memories_len)
     });
     let memory = &memories.0[0];
     memory.fill(offset, size, value)
@@ -324,7 +324,7 @@ fn memory_copy_impl(
     size: u32,
 ) -> Result<(), MemoryError> {
     let memories = MemoryStorage(unsafe {
-        slice::from_raw_parts_mut(ctxt.memories_ptr as *mut MemoryInstance, ctxt.memories_len)
+        slice::from_raw_parts_mut(ctxt.memories_ptr as *mut MemoryObject, ctxt.memories_len)
     });
     let memory = &memories.0[0];
     memory.copy(src_offset, dst_offset, size)
@@ -351,7 +351,7 @@ fn memory_init_impl(
     size: u32,
 ) -> Result<(), RuntimeError> {
     let memories = MemoryStorage(unsafe {
-        slice::from_raw_parts_mut(ctxt.memories_ptr as *mut MemoryInstance, ctxt.memories_len)
+        slice::from_raw_parts_mut(ctxt.memories_ptr as *mut MemoryObject, ctxt.memories_len)
     });
     let memory = &memories.0[memory_idx as usize];
     memory.rt_init(

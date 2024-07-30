@@ -7,18 +7,17 @@ use nix::errno::Errno;
 use runtime_interface::GlobalInstance;
 use std::ptr::null_mut;
 
-pub struct GlobalStorage {
+pub struct GlobalsObject {
     pub(crate) inner: runtime_interface::GlobalStorage,
-    uninitialized_imports: Vec<usize>,
 }
 
-impl GlobalStorage {
+impl GlobalsObject {
     pub(crate) fn init_on_cluster<'a>(
         cluster: &'a Cluster,
         globals_meta: &[Global],
         imports: &[RTGlobalImport],
         engine: &mut Engine,
-    ) -> Result<&'a mut GlobalStorage, InstantiationError> {
+    ) -> Result<&'a mut GlobalsObject, InstantiationError> {
         let storage_size = globals_meta.len() * 8;
         let storage = if storage_size > 0 {
             unsafe {
@@ -65,23 +64,17 @@ impl GlobalStorage {
             }
         }
 
-        let storage = GlobalStorage {
+        let storage = GlobalsObject {
             inner: runtime_interface::GlobalStorage {
                 storage: storage as *mut u8,
                 globals,
             },
-            uninitialized_imports: Vec::new(),
         };
         Ok(cluster.alloc_global_storage(storage))
     }
-
-    pub(crate) fn import(&mut self, instance: GlobalInstance) {
-        let idx = self.uninitialized_imports.pop().unwrap();
-        self.inner.globals[idx] = instance;
-    }
 }
 
-impl Drop for GlobalStorage {
+impl Drop for GlobalsObject {
     fn drop(&mut self) {
         if self.inner.storage.is_null() {
             return;

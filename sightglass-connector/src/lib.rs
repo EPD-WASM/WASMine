@@ -5,9 +5,9 @@ use anyhow::{Context, Result};
 use runtime_lib::{
     BoundLinker, Cluster, Engine, InstanceHandle, Linker, Loader, Parser, RuntimeError, WasmModule,
 };
+use std::ffi::c_void;
 use std::rc::Rc;
 use std::slice;
-use std::{ffi::c_void, process::ExitCode};
 
 #[repr(C)]
 pub struct WasmBenchConfig {
@@ -57,7 +57,7 @@ pub struct WasmBenchConfig {
 pub unsafe extern "C" fn wasm_bench_create(
     config: WasmBenchConfig,
     out_bench_ptr: *mut *mut c_void,
-) -> ExitCode {
+) -> u8 {
     // let working_dir = config.working_dir().unwrap();
     // let stdout_path = config.stdout_path().unwrap();
     // let stderr_path = config.stderr_path().unwrap();
@@ -101,7 +101,7 @@ pub unsafe extern "C" fn wasm_bench_compile(
     state: *mut c_void,
     wasm_bytes: *const u8,
     wasm_bytes_length: usize,
-) -> ExitCode {
+) -> u8 {
     let state = unsafe { (state as *mut BenchState).as_mut().unwrap() };
     let wasm_bytes = unsafe { slice::from_raw_parts(wasm_bytes, wasm_bytes_length) };
     let result = state.compile(wasm_bytes).context("failed to compile");
@@ -110,7 +110,7 @@ pub unsafe extern "C" fn wasm_bench_compile(
 
 /// Instantiate the Wasm benchmark module.
 #[no_mangle]
-pub extern "C" fn wasm_bench_instantiate(state: *mut c_void) -> ExitCode {
+pub extern "C" fn wasm_bench_instantiate(state: *mut c_void) -> u8 {
     let state = unsafe { (state as *mut BenchState).as_mut().unwrap() };
     let result = state.instantiate().context("failed to instantiate");
     to_exit_code(result)
@@ -118,18 +118,18 @@ pub extern "C" fn wasm_bench_instantiate(state: *mut c_void) -> ExitCode {
 
 /// Execute the Wasm benchmark module.
 #[no_mangle]
-pub extern "C" fn wasm_bench_execute(state: *mut c_void) -> ExitCode {
+pub extern "C" fn wasm_bench_execute(state: *mut c_void) -> u8 {
     let state = unsafe { (state as *mut BenchState).as_mut().unwrap() };
     let result = state.execute().context("failed to execute");
     to_exit_code(result)
 }
 
-fn to_exit_code<T>(result: impl Into<Result<T>>) -> ExitCode {
+fn to_exit_code<T>(result: impl Into<Result<T>>) -> u8 {
     match result.into() {
-        Ok(_) => ExitCode::SUCCESS,
+        Ok(_) => 0,
         Err(error) => {
             eprintln!("{:?}", error);
-            ExitCode::FAILURE
+            1
         }
     }
 }
@@ -170,23 +170,12 @@ impl<'a> BenchState<'a> {
         let mut linker = Linker::new();
         let cluster = Cluster::new();
 
-        let exec_start_fun = move || {
+        linker.link_host_function("bench", "start", move || {
             execution_start(execution_timer);
-        };
-        linker.link_host_function(
-            "bench",
-            "start",
-            Box::into_raw(Box::new(exec_start_fun)) as *const c_void,
-        );
-
-        let exec_end_fun = move || {
+        });
+        linker.link_host_function("bench", "end", move || {
             execution_end(execution_timer);
-        };
-        linker.link_host_function(
-            "bench",
-            "end",
-            Box::into_raw(Box::new(exec_end_fun)) as *const c_void,
-        );
+        });
 
         // we need to "ausdribblen" the lifetime checker, because we build a self-referencial struct
         // still safe, because we deallocate the cluster last (last struct member)

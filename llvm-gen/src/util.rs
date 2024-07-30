@@ -28,6 +28,7 @@ pub(crate) fn build_llvm_function_name(
     if is_export {
         // make actual function name available to the public
         ir::function::Function::query_function_name(function_idx, wasm_module)
+            .map(|s| s.to_string())
             .unwrap_or_else(|| format!("func_{}", function_idx))
     } else {
         // internally, we simply use the func_idx as the function name (unique-per-module)

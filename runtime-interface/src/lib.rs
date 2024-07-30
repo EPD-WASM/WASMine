@@ -1,8 +1,8 @@
 use ir::structs::{module::Module as WasmModule, value::ValueRaw};
-use std::{ffi, rc::Rc};
+use std::{ffi, ptr::NonNull, rc::Rc};
 use wasm_types::{DataIdx, ElemIdx, MemIdx, TableIdx, TypeIdx};
 
-pub type RawFunctionPtr = *const core::ffi::c_void;
+pub type RawFunctionPtr = NonNull<core::ffi::c_void>;
 
 /// The only top level datastructure always available to the executing WASM code
 #[derive(Debug)]

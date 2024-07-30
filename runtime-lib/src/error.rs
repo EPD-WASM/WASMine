@@ -1,6 +1,6 @@
 use crate::{
-    engine::EngineError, instance_handle::InstantiationError, linker::LinkingError,
-    memory::MemoryError, tables::TableError,
+    engine::EngineError, func::FunctionError, instance_handle::InstantiationError,
+    linker::LinkingError, memory::MemoryError, tables::TableError,
 };
 use thiserror::Error;
 use wasm_types::ValType;
@@ -40,4 +40,7 @@ pub enum RuntimeError {
 
     #[error("Memory error: {0}")]
     MemoryError(#[from] MemoryError),
+
+    #[error("Function error: {0}")]
+    FunctionError(#[from] FunctionError),
 }

@@ -62,6 +62,7 @@ fn execute_via_llvm_backend(
                 FunctionSource::Import(_)
             ) {
                 let fn_name = Function::query_function_name(entry_point, instance.wasm_module())
+                    .map(|s| s.to_owned())
                     .unwrap_or(format!("func_{}", entry_point));
                 instance
                     .run_by_name(&fn_name, Vec::default())

@@ -2,7 +2,7 @@ use crate::{
     instructions::{PhiNode, VariableID},
     structs::instruction::ControlInstruction,
 };
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use std::{
     collections::VecDeque,
     fmt::Debug,
@@ -10,9 +10,7 @@ use std::{
 };
 use wasm_types::*;
 
-lazy_static! {
-    pub static ref BASIC_BLOCK_ID: AtomicU32 = AtomicU32::new(0);
-}
+static BASIC_BLOCK_ID: Lazy<AtomicU32> = Lazy::new(|| AtomicU32::new(0));
 
 pub type BasicBlockID = u32;
 

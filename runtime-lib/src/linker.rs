@@ -1,11 +1,13 @@
 use crate::{
     engine::{Engine, EngineError},
+    func::{Function, IntoFunc},
     instance_handle::{InstanceHandle, InstantiationError},
     segmented_list::SegmentedList,
-    tables::TableItem,
-    wasi, Cluster,
+    tables::TableObject,
+    Cluster,
 };
-use ir::structs::{export::ExportDesc, module::Module as WasmModule, value::ValueRaw};
+use ir::structs::{module::Module as WasmModule, value::ValueRaw};
+use once_cell::sync::Lazy;
 use runtime_interface::{ExecutionContext, RawFunctionPtr};
 use std::{collections::HashMap, rc::Rc};
 use wasm_types::{FuncType, GlobalIdx, GlobalType, ImportDesc, Limits, MemType, TableType};
@@ -121,8 +123,8 @@ impl<'a> BoundLinker<'a> {
     fn collect_imports_for_module(
         &self,
         module: &WasmModule,
-    ) -> Result<RTImportCollection, LinkingError> {
-        let mut imports = RTImportCollection::default();
+    ) -> Result<DependencyStore, LinkingError> {
+        let mut imports = DependencyStore::default();
 
         for import in module.imports.iter() {
             // filter out host function imports early
@@ -130,7 +132,13 @@ impl<'a> BoundLinker<'a> {
                 if let Some(host_func_import) =
                     self.host_functions.get(&import.module, &import.name)
                 {
-                    imports.functions.push(host_func_import.clone());
+                    imports.functions.push(FunctionDependency {
+                        name: DependencyName {
+                            module: import.module.clone(),
+                            name: import.name.clone(),
+                        },
+                        func: host_func_import,
+                    });
                     continue;
                 }
             }
@@ -163,22 +171,34 @@ impl<'a> BoundLinker<'a> {
                             actual: actual_function_type.clone(),
                         });
                     }
-                    imports.functions.push(RTFuncImport {
-                        name: format!("{}.{}", import.module, import.name),
-                        function_type: requested_function_type,
-                        callable: exporting_module.get_raw_function_ptr(&import.name)?,
-                        execution_context: Some(exporting_module.execution_context()),
+
+                    let import_func_idx = exporting_module
+                        .wasm_module()
+                        .exports
+                        .find_function_idx(&import.name)
+                        .unwrap();
+                    imports.functions.push(FunctionDependency {
+                        name: DependencyName {
+                            module: import.module.clone(),
+                            name: import.name.clone(),
+                        },
+                        func: match exporting_module.get_function(&import.name) {
+                            Ok(f) => f,
+                            Err(e) => {
+                                return Err(LinkingError::FunctionNotFound {
+                                    module_name: import.module.clone(),
+                                    name: import.name.clone(),
+                                });
+                            }
+                        },
                     });
                 }
                 ImportDesc::Global((requested_type, idx)) => {
                     let exported_global_idx = match exporting_module
                         .wasm_module()
                         .exports
-                        .iter()
-                        .find_map(|export| match &export.desc {
-                            ExportDesc::Global(idx) if export.name == import.name => Some(idx),
-                            _ => None,
-                        }) {
+                        .find_global_idx(&import.name)
+                    {
                         Some(idx) => idx,
                         None => {
                             return Err(LinkingError::GlobalNotFound {
@@ -188,7 +208,7 @@ impl<'a> BoundLinker<'a> {
                         }
                     };
                     let exported_global =
-                        &exporting_module.wasm_module().globals[*exported_global_idx as usize];
+                        &exporting_module.wasm_module().globals[exported_global_idx as usize];
                     let actual_type = &exported_global.r#type;
                     if requested_type != actual_type {
                         return Err(LinkingError::GlobalTypeMismatch {
@@ -197,8 +217,7 @@ impl<'a> BoundLinker<'a> {
                         });
                     }
                     imports.globals.push(RTGlobalImport {
-                        name: import.name.clone(),
-                        addr: exporting_module.globals(*exported_global_idx).addr,
+                        addr: exporting_module.globals(exported_global_idx).addr,
                         r#type: *requested_type,
                         idx: *idx,
                     });
@@ -207,11 +226,8 @@ impl<'a> BoundLinker<'a> {
                     let exported_memory_idx = match exporting_module
                         .wasm_module()
                         .exports
-                        .iter()
-                        .find_map(|export| match &export.desc {
-                            ExportDesc::Mem(idx) if export.name == import.name => Some(idx),
-                            _ => None,
-                        }) {
+                        .find_memory_idx(&import.name)
+                    {
                         Some(idx) => idx,
                         None => {
                             return Err(LinkingError::MemoryNotFound {
@@ -221,12 +237,12 @@ impl<'a> BoundLinker<'a> {
                         }
                     };
                     let exported_memory =
-                        &exporting_module.wasm_module().memories[*exported_memory_idx as usize];
+                        &exporting_module.wasm_module().memories[exported_memory_idx as usize];
 
                     let mut actual_limits = exported_memory.limits;
                     actual_limits.min = actual_limits
                         .min
-                        .max(exporting_module.memories(*exported_memory_idx).0.size);
+                        .max(exporting_module.memories(exported_memory_idx).0.size);
 
                     let max_actual_len = actual_limits.max.unwrap_or(u32::MAX);
                     let max_expected_len = expected_limits.max.unwrap_or(u32::MAX);
@@ -249,11 +265,8 @@ impl<'a> BoundLinker<'a> {
                     let exported_table_idx = match exporting_module
                         .wasm_module()
                         .exports
-                        .iter()
-                        .find_map(|export| match &export.desc {
-                            ExportDesc::Table(idx) if export.name == import.name => Some(idx),
-                            _ => None,
-                        }) {
+                        .find_table_idx(&import.name)
+                    {
                         Some(idx) => idx,
                         None => {
                             return Err(LinkingError::GlobalNotFound {
@@ -263,7 +276,7 @@ impl<'a> BoundLinker<'a> {
                         }
                     };
                     let exported_table =
-                        &exporting_module.wasm_module().tables[*exported_table_idx as usize];
+                        &exporting_module.wasm_module().tables[exported_table_idx as usize];
                     let actual_type = &exported_table.r#type;
 
                     let max_expected_len = expected_type.lim.max.unwrap_or(u32::MAX);
@@ -279,7 +292,7 @@ impl<'a> BoundLinker<'a> {
                             actual: *actual_type,
                         });
                     }
-                    let vals = &exporting_module.tables(*exported_table_idx).values;
+                    let vals = &exporting_module.tables(exported_table_idx).values;
                     let vals_ref = *vals as *const _ as *mut _;
                     imports.tables.push(RTTableImport {
                         name: import.name.clone(),
@@ -292,12 +305,14 @@ impl<'a> BoundLinker<'a> {
         Ok(imports)
     }
 
-    pub fn link_host_function(
+    pub fn link_host_function<F, Params, Returns>(
         &mut self,
         module_name: &str,
         function_name: &str,
-        callable: RawFunctionPtr,
-    ) {
+        callable: F,
+    ) where
+        F: IntoFunc<Params, Returns>,
+    {
         self.host_functions
             .insert(module_name, function_name, callable);
     }
@@ -326,156 +341,233 @@ impl Linker {
         // }
     }
 
-    pub fn link_host_function(
+    pub fn link_host_function<F, Params, Returns>(
         &mut self,
         module_name: &str,
         function_name: &str,
-        callable: RawFunctionPtr,
-    ) {
+        callable: F,
+    ) where
+        F: IntoFunc<Params, Returns>,
+    {
         self.host_functions
             .insert(module_name, function_name, callable);
     }
 }
 
+static MEMORY_GROW_RT_FUNC: Lazy<Function> = Lazy::new(|| {
+    Function::from_runtime_func(FuncType(Vec::new(), Vec::new()), unsafe {
+        RawFunctionPtr::new_unchecked(runtime_interface::memory_grow as _)
+    })
+});
+
+static MEMORY_COPY_RT_FUNC: Lazy<Function> = Lazy::new(|| {
+    Function::from_runtime_func(FuncType(Vec::new(), Vec::new()), unsafe {
+        RawFunctionPtr::new_unchecked(runtime_interface::memory_copy as _)
+    })
+});
+
+static MEMORY_INIT_RT_FUNC: Lazy<Function> = Lazy::new(|| {
+    Function::from_runtime_func(FuncType(Vec::new(), Vec::new()), unsafe {
+        RawFunctionPtr::new_unchecked(runtime_interface::memory_init as _)
+    })
+});
+
+static MEMORY_FILL_RT_FUNC: Lazy<Function> = Lazy::new(|| {
+    Function::from_runtime_func(FuncType(Vec::new(), Vec::new()), unsafe {
+        RawFunctionPtr::new_unchecked(runtime_interface::memory_fill as _)
+    })
+});
+
+static DATA_DROP_RT_FUNC: Lazy<Function> = Lazy::new(|| {
+    Function::from_runtime_func(FuncType(Vec::new(), Vec::new()), unsafe {
+        RawFunctionPtr::new_unchecked(runtime_interface::data_drop as _)
+    })
+});
+
+static INDIRECT_CALL_RT_FUNC: Lazy<Function> = Lazy::new(|| {
+    Function::from_runtime_func(FuncType(Vec::new(), Vec::new()), unsafe {
+        RawFunctionPtr::new_unchecked(runtime_interface::indirect_call as _)
+    })
+});
+
+static TABLE_SET_RT_FUNC: Lazy<Function> = Lazy::new(|| {
+    Function::from_runtime_func(FuncType(Vec::new(), Vec::new()), unsafe {
+        RawFunctionPtr::new_unchecked(runtime_interface::table_set as _)
+    })
+});
+
+static TABLE_GET_RT_FUNC: Lazy<Function> = Lazy::new(|| {
+    Function::from_runtime_func(FuncType(Vec::new(), Vec::new()), unsafe {
+        RawFunctionPtr::new_unchecked(runtime_interface::table_get as _)
+    })
+});
+
+static TABLE_GROW_RT_FUNC: Lazy<Function> = Lazy::new(|| {
+    Function::from_runtime_func(FuncType(Vec::new(), Vec::new()), unsafe {
+        RawFunctionPtr::new_unchecked(runtime_interface::table_grow as _)
+    })
+});
+
+static TABLE_SIZE_RT_FUNC: Lazy<Function> = Lazy::new(|| {
+    Function::from_runtime_func(FuncType(Vec::new(), Vec::new()), unsafe {
+        RawFunctionPtr::new_unchecked(runtime_interface::table_size as _)
+    })
+});
+
+static TABLE_FILL_RT_FUNC: Lazy<Function> = Lazy::new(|| {
+    Function::from_runtime_func(FuncType(Vec::new(), Vec::new()), unsafe {
+        RawFunctionPtr::new_unchecked(runtime_interface::table_fill as _)
+    })
+});
+
+static TABLE_COPY_RT_FUNC: Lazy<Function> = Lazy::new(|| {
+    Function::from_runtime_func(FuncType(Vec::new(), Vec::new()), unsafe {
+        RawFunctionPtr::new_unchecked(runtime_interface::table_copy as _)
+    })
+});
+
+static TABLE_INIT_RT_FUNC: Lazy<Function> = Lazy::new(|| {
+    Function::from_runtime_func(FuncType(Vec::new(), Vec::new()), unsafe {
+        RawFunctionPtr::new_unchecked(runtime_interface::table_init as _)
+    })
+});
+
+static ELEM_DROP_RT_FUNC: Lazy<Function> = Lazy::new(|| {
+    Function::from_runtime_func(FuncType(Vec::new(), Vec::new()), unsafe {
+        RawFunctionPtr::new_unchecked(runtime_interface::elem_drop as _)
+    })
+});
+
 #[allow(clippy::fn_to_numeric_cast)]
-pub(crate) fn rt_func_imports() -> HashMap<&'static str, RTFuncImport> {
-    let mut imports = HashMap::new();
-    imports.insert(
-        "memory_grow",
-        RTFuncImport {
-            name: "memory_grow".into(),
-            function_type: FuncType(Vec::new(), Vec::new()),
-            callable: runtime_interface::memory_grow as RawFunctionPtr,
-            execution_context: None,
+pub(crate) fn rt_func_imports(
+    execution_context: *mut ExecutionContext,
+) -> Vec<FunctionDependency<'static>> {
+    let module_name = "__wasmine_runtime".to_string();
+    vec![
+        FunctionDependency {
+            name: DependencyName {
+                module: module_name.clone(),
+                name: "memory_fill".to_string(),
+            },
+            func: &MEMORY_FILL_RT_FUNC,
         },
-    );
-    imports.insert(
-        "memory_fill",
-        RTFuncImport {
-            name: "memory_fill".into(),
-            function_type: FuncType(Vec::new(), Vec::new()),
-            callable: runtime_interface::memory_fill as RawFunctionPtr,
-            execution_context: None,
+        FunctionDependency {
+            name: DependencyName {
+                module: module_name.clone(),
+                name: "memory_copy".to_string(),
+            },
+            func: &MEMORY_COPY_RT_FUNC,
         },
-    );
-    imports.insert(
-        "memory_copy",
-        RTFuncImport {
-            name: "memory_copy".into(),
-            function_type: FuncType(Vec::new(), Vec::new()),
-            callable: runtime_interface::memory_copy as RawFunctionPtr,
-            execution_context: None,
+        FunctionDependency {
+            name: DependencyName {
+                module: module_name.clone(),
+                name: "memory_init".to_string(),
+            },
+            func: &MEMORY_INIT_RT_FUNC,
         },
-    );
-    imports.insert(
-        "memory_init",
-        RTFuncImport {
-            name: "memory_init".into(),
-            function_type: FuncType(Vec::new(), Vec::new()),
-            callable: runtime_interface::memory_init as RawFunctionPtr,
-            execution_context: None,
+        FunctionDependency {
+            name: DependencyName {
+                module: module_name.clone(),
+                name: "memory_grow".to_string(),
+            },
+            func: &MEMORY_GROW_RT_FUNC,
         },
-    );
-    imports.insert(
-        "data_drop",
-        RTFuncImport {
-            name: "data_drop".into(),
-            function_type: FuncType(Vec::new(), Vec::new()),
-            callable: runtime_interface::data_drop as RawFunctionPtr,
-            execution_context: None,
+        FunctionDependency {
+            name: DependencyName {
+                module: module_name.clone(),
+                name: "data_drop".to_string(),
+            },
+            func: &DATA_DROP_RT_FUNC,
         },
-    );
-    imports.insert(
-        "indirect_call",
-        RTFuncImport {
-            name: "indirect_call".into(),
-            function_type: FuncType(Vec::new(), Vec::new()),
-            callable: runtime_interface::indirect_call as RawFunctionPtr,
-            execution_context: None,
+        FunctionDependency {
+            name: DependencyName {
+                module: module_name.clone(),
+                name: "indirect_call".to_string(),
+            },
+            func: &INDIRECT_CALL_RT_FUNC,
         },
-    );
-    imports.insert(
-        "table_set",
-        RTFuncImport {
-            name: "table_set".into(),
-            function_type: FuncType(Vec::new(), Vec::new()),
-            callable: runtime_interface::table_set as RawFunctionPtr,
-            execution_context: None,
+        FunctionDependency {
+            name: DependencyName {
+                module: module_name.clone(),
+                name: "table_set".to_string(),
+            },
+            func: &TABLE_SET_RT_FUNC,
         },
-    );
-    imports.insert(
-        "table_get",
-        RTFuncImport {
-            name: "table_get".into(),
-            function_type: FuncType(Vec::new(), Vec::new()),
-            callable: runtime_interface::table_get as RawFunctionPtr,
-            execution_context: None,
+        FunctionDependency {
+            name: DependencyName {
+                module: module_name.clone(),
+                name: "table_get".to_string(),
+            },
+            func: &TABLE_GET_RT_FUNC,
         },
-    );
-    imports.insert(
-        "table_grow",
-        RTFuncImport {
-            name: "table_grow".into(),
-            function_type: FuncType(Vec::new(), Vec::new()),
-            callable: runtime_interface::table_grow as RawFunctionPtr,
-            execution_context: None,
+        FunctionDependency {
+            name: DependencyName {
+                module: module_name.clone(),
+                name: "table_grow".to_string(),
+            },
+            func: &TABLE_GROW_RT_FUNC,
         },
-    );
-    imports.insert(
-        "table_size",
-        RTFuncImport {
-            name: "table_size".into(),
-            function_type: FuncType(Vec::new(), Vec::new()),
-            callable: runtime_interface::table_size as RawFunctionPtr,
-            execution_context: None,
+        FunctionDependency {
+            name: DependencyName {
+                module: module_name.clone(),
+                name: "table_size".to_string(),
+            },
+            func: &TABLE_SIZE_RT_FUNC,
         },
-    );
-    imports.insert(
-        "table_fill",
-        RTFuncImport {
-            name: "table_fill".into(),
-            function_type: FuncType(Vec::new(), Vec::new()),
-            callable: runtime_interface::table_fill as RawFunctionPtr,
-            execution_context: None,
+        FunctionDependency {
+            name: DependencyName {
+                module: module_name.clone(),
+                name: "table_fill".to_string(),
+            },
+            func: &TABLE_FILL_RT_FUNC,
         },
-    );
-    imports.insert(
-        "table_copy",
-        RTFuncImport {
-            name: "table_copy".into(),
-            function_type: FuncType(Vec::new(), Vec::new()),
-            callable: runtime_interface::table_copy as RawFunctionPtr,
-            execution_context: None,
+        FunctionDependency {
+            name: DependencyName {
+                module: module_name.clone(),
+                name: "table_copy".to_string(),
+            },
+            func: &TABLE_COPY_RT_FUNC,
         },
-    );
-    imports.insert(
-        "table_init",
-        RTFuncImport {
-            name: "table_init".into(),
-            function_type: FuncType(Vec::new(), Vec::new()),
-            callable: runtime_interface::table_init as RawFunctionPtr,
-            execution_context: None,
+        FunctionDependency {
+            name: DependencyName {
+                module: module_name.clone(),
+                name: "table_init".to_string(),
+            },
+            func: &TABLE_INIT_RT_FUNC,
         },
-    );
-    imports.insert(
-        "elem_drop",
-        RTFuncImport {
-            name: "elem_drop".into(),
-            function_type: FuncType(Vec::new(), Vec::new()),
-            callable: runtime_interface::elem_drop as RawFunctionPtr,
-            execution_context: None,
+        FunctionDependency {
+            name: DependencyName {
+                module: module_name.clone(),
+                name: "elem_drop".to_string(),
+            },
+            func: &ELEM_DROP_RT_FUNC,
         },
-    );
-    imports
+    ]
 }
 
-#[derive(Clone, Debug)]
-pub(crate) struct RTFuncImport {
+#[derive(Clone)]
+pub(crate) struct DependencyName {
+    pub(crate) module: String,
     pub(crate) name: String,
-    pub(crate) function_type: FuncType,
-    pub(crate) callable: RawFunctionPtr,
-    // required, because function imports are basically closures over all module state. This is not provided by host functions.
-    pub(crate) execution_context: Option<*mut ExecutionContext>,
+}
+
+#[derive(Default)]
+pub(crate) struct DependencyStore<'a> {
+    pub(crate) functions: Vec<FunctionDependency<'a>>,
+    pub(crate) globals: Vec<RTGlobalImport>,
+    pub(crate) tables: Vec<RTTableImport>,
+    pub(crate) memories: Vec<RTMemoryImport>,
+}
+
+pub(crate) struct FunctionDependency<'a> {
+    pub(crate) name: DependencyName,
+    pub(crate) func: &'a Function,
+}
+
+impl DependencyName {
+    pub(crate) fn symbol_name(&self) -> String {
+        format!("{}.{}", self.module, self.name)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -486,7 +578,6 @@ pub(crate) struct RTMemoryImport {
 
 #[derive(Clone)]
 pub(crate) struct RTGlobalImport {
-    pub(crate) name: String,
     pub(crate) addr: *mut ValueRaw,
     pub(crate) r#type: GlobalType,
     pub(crate) idx: GlobalIdx,
@@ -495,21 +586,13 @@ pub(crate) struct RTGlobalImport {
 #[derive(Clone)]
 pub(crate) struct RTTableImport {
     pub(crate) name: String,
-    pub(crate) instance_ref: *mut Vec<TableItem>,
+    pub(crate) instance_ref: *mut TableObject,
     pub(crate) r#type: TableType,
 }
 
-#[derive(Default)]
-pub(crate) struct RTImportCollection {
-    pub(crate) functions: Vec<RTFuncImport>,
-    pub(crate) globals: Vec<RTGlobalImport>,
-    pub(crate) memories: Vec<RTMemoryImport>,
-    pub(crate) tables: Vec<RTTableImport>,
-}
-
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Clone)]
 pub(crate) struct HostFunctionStorage {
-    host_functions: HashMap<String, HashMap<String, RTFuncImport>>,
+    host_functions: HashMap<String, HashMap<String, Function>>,
 }
 
 impl HostFunctionStorage {
@@ -517,27 +600,21 @@ impl HostFunctionStorage {
         Self::default()
     }
 
-    pub(crate) fn insert(
+    pub(crate) fn insert<F, Params, Returns>(
         &mut self,
         module_name: &str,
         function_name: &str,
-        callable: RawFunctionPtr,
-    ) {
+        callable: F,
+    ) where
+        F: IntoFunc<Params, Returns>,
+    {
         self.host_functions
             .entry(module_name.to_string())
             .or_default()
-            .insert(
-                function_name.to_string(),
-                RTFuncImport {
-                    name: format!("{}.{}", module_name, function_name),
-                    function_type: FuncType(Vec::new(), Vec::new()),
-                    callable,
-                    execution_context: None,
-                },
-            );
+            .insert(function_name.to_string(), callable.into_func());
     }
 
-    pub(crate) fn get(&self, module_name: &str, function_name: &str) -> Option<&RTFuncImport> {
+    pub(crate) fn get(&self, module_name: &str, function_name: &str) -> Option<&Function> {
         self.host_functions
             .get(module_name)
             .and_then(|module| module.get(function_name))

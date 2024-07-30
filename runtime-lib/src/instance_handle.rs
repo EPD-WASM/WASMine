@@ -1,18 +1,18 @@
 use crate::{
-    engine::{Engine, EngineError},
-    execution_context::ExecutionContextWrapper,
-    globals::GlobalStorage,
-    linker::{rt_func_imports, RTImportCollection},
-    memory::{MemoryError, MemoryInstance, MemoryStorage},
+    engine::Engine,
+    func::{Function, FunctionKind},
+    globals::GlobalsObject,
+    linker::{rt_func_imports, DependencyStore},
+    memory::{MemoryError, MemoryObject, MemoryStorage},
     signals::SignalHandler,
     tables::{TableError, TableInstance},
+    utils::Either,
     Cluster, RuntimeError,
 };
-use cee_scape::call_with_sigsetjmp;
 use core::{ffi, slice};
-use ir::structs::{export::ExportDesc, module::Module as WasmModule, value::Value};
-use runtime_interface::{ExecutionContext, GlobalInstance, RawFunctionPtr};
-use std::{collections::HashMap, ptr::null_mut, rc::Rc};
+use ir::structs::{module::Module as WasmModule, value::Value};
+use runtime_interface::{ExecutionContext, GlobalInstance};
+use std::{collections::HashMap, ptr::null_mut, rc::Rc, sync::Mutex};
 use wasm_types::{FuncIdx, FuncType, GlobalIdx, MemIdx, TableIdx};
 
 #[derive(thiserror::Error, Debug)]
@@ -34,12 +34,11 @@ pub struct InstanceHandle<'a> {
     engine: &'a mut Engine,
     execution_context: &'a mut ExecutionContext,
 
-    function_exports: HashMap<String, FuncIdx>,
-    global_exports: HashMap<String, GlobalIdx>,
-
-    globals: &'a mut GlobalStorage,
+    globals: &'a mut GlobalsObject,
     tables: Vec<TableInstance<'a>>,
-    memories: &'a mut [MemoryInstance],
+    memories: &'a mut [MemoryObject],
+
+    exported_functions: Mutex<HashMap<String, Either<&'a Function, FuncIdx>>>,
 }
 
 impl<'a> InstanceHandle<'a> {
@@ -47,7 +46,7 @@ impl<'a> InstanceHandle<'a> {
         cluster: &'a Cluster,
         m: Rc<WasmModule>,
         engine: Engine,
-        imports: RTImportCollection,
+        imports: DependencyStore,
     ) -> Result<Self, InstantiationError> {
         let engine = cluster.alloc_engine(engine);
         let execution_context = cluster.alloc_execution_context(ExecutionContext {
@@ -65,21 +64,34 @@ impl<'a> InstanceHandle<'a> {
         });
 
         for f in imports.functions.iter() {
-            engine.register_symbol(&format!("{}_imported", f.name), f.callable);
-            let rt_ptr = f.execution_context.unwrap_or(execution_context);
-            engine.register_symbol(
-                &format!("import_{}_rt_ptr", f.name.split_once('.').unwrap().0),
-                rt_ptr as RawFunctionPtr,
-            );
+            let (ptr, ctxt) = match f.func.kind {
+                FunctionKind::Host(ptr, ctxt) => (ptr, ctxt),
+                FunctionKind::Wasm(ptr, wasm_func_ptr, ctxt) => {
+                    engine.register_symbol(
+                        &(f.name.symbol_name() + "_wasm_cc"),
+                        wasm_func_ptr.as_ptr(),
+                    );
+                    (ptr, ctxt)
+                }
+                _ => panic!("unexpected function kind"),
+            };
+            engine.register_symbol(&f.name.symbol_name(), ptr as _);
+            engine.register_symbol(&format!("import_{}_rt_ptr", f.name.module), unsafe {
+                ctxt.execution_context as _
+            });
         }
 
-        for import in rt_func_imports() {
-            engine.register_symbol(import.0, import.1.callable)
+        for import in rt_func_imports(execution_context as _) {
+            let ptr = match import.func.kind {
+                FunctionKind::Runtime(ptr) => ptr,
+                _ => panic!("unexpected function kind"),
+            };
+            engine.register_symbol(&import.name.symbol_name(), ptr.as_ptr())
         }
 
         // initialize globals
         let globals =
-            GlobalStorage::init_on_cluster(cluster, &m.globals, &imports.globals, engine)?;
+            GlobalsObject::init_on_cluster(cluster, &m.globals, &imports.globals, engine)?;
         execution_context.globals_ptr = &mut globals.inner as *mut runtime_interface::GlobalStorage;
         execution_context.globals_len = 1;
 
@@ -108,10 +120,15 @@ impl<'a> InstanceHandle<'a> {
             memories.as_mut_ptr() as *mut runtime_interface::MemoryInstance;
         execution_context.memories_len = memories.len();
 
+        let exported_functions = Mutex::new(
+            m.exports
+                .functions()
+                .map(|(name, idx)| (name.clone(), Either::Right(*idx)))
+                .collect(),
+        );
+
         SignalHandler::register_globally();
         Ok(Self {
-            function_exports: Self::collect_function_exports(&m),
-            global_exports: Self::collect_global_exports(&m),
             module: m.clone(),
             engine,
             execution_context,
@@ -119,27 +136,8 @@ impl<'a> InstanceHandle<'a> {
             tables,
             memories,
             cluster,
+            exported_functions,
         })
-    }
-
-    fn collect_function_exports(m: &Rc<WasmModule>) -> HashMap<String, FuncIdx> {
-        m.exports
-            .iter()
-            .filter_map(|e| match e.desc {
-                ExportDesc::Func(idx) => Some((e.name.clone(), idx)),
-                _ => None,
-            })
-            .collect()
-    }
-
-    fn collect_global_exports(m: &Rc<WasmModule>) -> HashMap<String, GlobalIdx> {
-        m.exports
-            .iter()
-            .filter_map(|e| match e.desc {
-                ExportDesc::Global(idx) => Some((e.name.clone(), idx)),
-                _ => None,
-            })
-            .collect()
     }
 
     pub fn query_start_function(&self) -> Result<FuncIdx, InstantiationError> {
@@ -157,19 +155,10 @@ impl<'a> InstanceHandle<'a> {
                 return Ok(entry);
             }
         }
-        if let Some(f) = self
-            .module
+        self.module
             .exports
-            .iter()
-            .filter(|e| matches!(e.desc, ExportDesc::Func(_)))
-            .find(|e| e.name == name)
-        {
-            return match f.desc {
-                ExportDesc::Func(idx) => Ok(idx),
-                _ => unreachable!(),
-            };
-        }
-        Err(InstantiationError::FunctionNotFound(name.to_string()))
+            .find_function_idx(name)
+            .ok_or(InstantiationError::FunctionNotFound(name.to_string()))
     }
 
     pub fn get_function_type_from_func_idx(&self, func_idx: u32) -> &FuncType {
@@ -177,15 +166,37 @@ impl<'a> InstanceHandle<'a> {
     }
 
     pub fn get_function_type_from_name(&self, name: &str) -> Option<&FuncType> {
-        self.function_exports.get(name).map(|&idx| {
+        self.module.exports.find_function_idx(name).map(|idx| {
             &self.module.function_types[self.module.ir.functions[idx as usize].type_idx as usize]
         })
     }
 
-    pub fn get_raw_function_ptr(&self, name: &str) -> Result<RawFunctionPtr, EngineError> {
-        self.engine.get_raw_function_ptr_by_name(name)
+    pub fn get_function(&self, name: &str) -> Result<&Function, RuntimeError> {
+        let mut locked_exported_functions = self.exported_functions.lock().unwrap();
+        if let Some(function_entry) = locked_exported_functions.get(name) {
+            match function_entry {
+                Either::Left(func) => return Ok(*func),
+                Either::Right(func_idx) => {
+                    let idx = match self.wasm_module().exports.find_function_idx(name) {
+                        Some(idx) => idx,
+                        None => return Err(RuntimeError::FunctionNotFound(name.to_string())),
+                    };
+                    let func = Function::from_wasm_func(
+                        self.execution_context_ptr(),
+                        self.get_function_type_from_func_idx(*func_idx).clone(),
+                        self.engine.get_external_function_ptr(idx)?,
+                        self.engine.get_internal_function_ptr(idx)?,
+                    );
+                    let func_ref = self.cluster.alloc_function(func);
+                    locked_exported_functions.insert(name.to_string(), Either::Left(func_ref));
+                    return Ok(func_ref);
+                }
+            }
+        }
+        Err(RuntimeError::FunctionNotFound(name.to_string()))
     }
 
+    #[inline]
     pub fn wasm_module(&self) -> &Rc<WasmModule> {
         &self.module
     }
@@ -201,22 +212,13 @@ impl<'a> InstanceHandle<'a> {
     }
 
     pub fn extract_global_value_by_name(&self, name: &str) -> Option<Value> {
-        self.global_exports
-            .get(name)
-            .map(|i| self.extract_global_value_by_idx(*i as usize))
+        self.module
+            .exports
+            .find_global_idx(name)
+            .map(|i| self.extract_global_value_by_idx(i as usize))
     }
 
-    // fn init_globals_from_runtime(&mut self) {
-    //     for (idx, global) in self.globals.inner.globals.iter().enumerate() {
-    //         if global.addr.is_null() {
-    //             panic!("missing global initialization")
-    //         }
-    //         self.engine
-    //             .register_symbol(&format!("global_{}", idx), global.addr as RawFunctionPtr);
-    //     }
-    // }
-
-    pub(crate) fn memories(&self, mem_idx: MemIdx) -> &MemoryInstance {
+    pub(crate) fn memories(&self, mem_idx: MemIdx) -> &MemoryObject {
         &self.memories[mem_idx as usize]
     }
 
@@ -228,8 +230,16 @@ impl<'a> InstanceHandle<'a> {
         &self.tables[table_idx as usize]
     }
 
-    pub(crate) fn execution_context(&self) -> *mut ExecutionContext {
+    pub(crate) fn execution_context_ref(&self) -> &ExecutionContext {
+        self.execution_context
+    }
+
+    pub(crate) fn execution_context_ptr(&self) -> *mut ExecutionContext {
         self.execution_context as *const _ as *mut _
+    }
+
+    pub(crate) fn engine(&mut self) -> &mut Engine {
+        self.engine
     }
 
     pub fn run_by_name(
@@ -237,33 +247,8 @@ impl<'a> InstanceHandle<'a> {
         func_name: &str,
         input_params: Vec<Value>,
     ) -> Result<Vec<Value>, RuntimeError> {
-        let func_idx = self.find_exported_func_idx(func_name)?;
-        let function_type = self.get_function_type_from_func_idx(func_idx);
-        let res_ty = function_type.1.clone();
-
-        let mut res_opt = None;
-        let jmp_res = call_with_sigsetjmp(true, |jmp_buf| {
-            ExecutionContextWrapper::set_trap_return_point(jmp_buf);
-            SignalHandler::set_thread_executing_wasm();
-
-            res_opt = Some(self.engine.run_by_idx(
-                func_idx,
-                res_ty,
-                input_params,
-                self.execution_context as *mut ExecutionContext,
-            ));
-            SignalHandler::unset_thread_executing_wasm();
-            0
-        });
-        if jmp_res != 0 {
-            return Err(RuntimeError::Trap(
-                self.execution_context
-                    .trap_msg
-                    .clone()
-                    .unwrap_or("<no msg>".to_string()),
-            ));
-        }
-        Ok(res_opt.unwrap()?)
+        let func: &Function = self.get_function(func_name)?;
+        func.call(&input_params)
     }
 }
 
@@ -275,9 +260,6 @@ impl<'a> Clone for InstanceHandle<'a> {
         unsafe {
             Self {
                 module: self.module.clone(),
-                function_exports: self.function_exports.clone(),
-                global_exports: self.global_exports.clone(),
-
                 cluster: &slice::from_raw_parts(self.cluster as *const Cluster, 1)[0],
 
                 engine: &mut slice::from_raw_parts_mut(
@@ -303,6 +285,8 @@ impl<'a> Clone for InstanceHandle<'a> {
                     self.memories.as_ptr() as *mut _,
                     self.memories.len(),
                 ),
+
+                exported_functions: Mutex::new(self.exported_functions.lock().unwrap().clone()),
             }
         }
     }

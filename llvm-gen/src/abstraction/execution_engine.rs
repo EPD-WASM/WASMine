@@ -46,14 +46,14 @@ static TARGET_LOCK: Lazy<RwLock<()>> = Lazy::new(|| RwLock::new(()));
 
 struct DynamicSymbolResolverContext {
     execution_session: LLVMOrcExecutionSessionRef,
-    external_syms: Rc<RefCell<HashMap<String, RawFunctionPtr>>>,
+    external_syms: Rc<RefCell<HashMap<String, *const core::ffi::c_void>>>,
 }
 
 pub(crate) struct ExecutionEngine {
     jit: LLVMOrcLLJITRef,
 
     // imported symbols
-    external_syms: Rc<RefCell<HashMap<String, RawFunctionPtr>>>,
+    external_syms: Rc<RefCell<HashMap<String, *const core::ffi::c_void>>>,
 
     // keep modules alive until the engine is dropped
     _modules: Vec<Rc<Module>>,
@@ -220,7 +220,7 @@ impl ExecutionEngine {
         Ok(())
     }
 
-    pub(crate) fn register_symbol(&mut self, name: &str, addr: RawFunctionPtr) {
+    pub(crate) fn register_symbol(&mut self, name: &str, addr: *const core::ffi::c_void) {
         self.external_syms.borrow_mut().insert(name.into(), addr);
     }
 
@@ -332,21 +332,12 @@ impl ExecutionEngine {
             return Err(ExecutionError::from(error));
         }
         let address = unsafe { address.assume_init() };
-        if address == 0 {
-            return Err(ExecutionError::FunctionNotFound);
-        }
-        Ok(address as RawFunctionPtr)
-    }
-
-    pub fn find_func_by_name<T>(&self, fn_name: &str) -> Result<T, ExecutionError> {
-        let address = self.find_func_address_by_name(fn_name)?;
-        let func: T = unsafe { std::mem::transmute_copy::<RawFunctionPtr, T>(&address) };
-        Ok(func)
+        RawFunctionPtr::new(address as *mut _).ok_or(ExecutionError::FunctionNotFound)
     }
 
     pub fn get_global_value(&self, global_name: &str) -> Result<ValueRaw, ExecutionError> {
         let addr = self.find_func_address_by_name(global_name)?;
-        Ok(unsafe { std::ptr::read(addr as *const ValueRaw) })
+        Ok(unsafe { std::ptr::read(addr.cast().as_ptr()) })
     }
 
     #[allow(dead_code)]
@@ -390,7 +381,12 @@ impl OrcSymbolMap {
         Self { inner: Vec::new() }
     }
 
-    fn insert(&mut self, name: &CStr, addr: RawFunctionPtr, es: LLVMOrcExecutionSessionRef) {
+    fn insert(
+        &mut self,
+        name: &CStr,
+        addr: *const core::ffi::c_void,
+        es: LLVMOrcExecutionSessionRef,
+    ) {
         self.inner.push(LLVMOrcCSymbolMapPair {
             Name: unsafe { LLVMOrcExecutionSessionIntern(es, name.as_ptr()) },
             Sym: LLVMJITEvaluatedSymbol {

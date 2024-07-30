@@ -102,7 +102,7 @@ impl Translator {
             self.builder.i32(),
             &mut [self.builder.ptr(), self.builder.i32(), self.builder.i32()],
         );
-        let memory_grow_fn = self.get_rt_func("memory_grow", func_type);
+        let memory_grow_fn = self.get_rt_func("__wasmine_runtime.memory_grow", func_type);
         self.builder.build_call(
             &memory_grow_fn,
             &mut [ctxt, self.builder.const_i32(memory_idx as u32), grow_by],
@@ -128,7 +128,7 @@ impl Translator {
                 self.builder.i8(),
             ],
         );
-        let memory_fill_fn = self.get_rt_func("memory_fill", func_type);
+        let memory_fill_fn = self.get_rt_func("__wasmine_runtime.memory_fill", func_type);
         self.builder.build_call(
             &memory_fill_fn,
             &mut [
@@ -160,7 +160,7 @@ impl Translator {
                 self.builder.i32(),
             ],
         );
-        let memory_copy_fn = self.get_rt_func("memory_copy", func_type);
+        let memory_copy_fn = self.get_rt_func("__wasmine_runtime.memory_copy", func_type);
         self.builder.build_call(
             &memory_copy_fn,
             &mut [
@@ -179,7 +179,7 @@ impl Translator {
             self.builder.void(),
             &mut [self.builder.ptr(), self.builder.i32()],
         );
-        let data_drop_fn = self.get_rt_func("data_drop", func_type);
+        let data_drop_fn = self.get_rt_func("__wasmine_runtime.data_drop", func_type);
         self.builder.build_call(
             &data_drop_fn,
             &mut [ctxt, self.builder.const_i32(data_idx)],
@@ -207,7 +207,7 @@ impl Translator {
                 self.builder.i32(),
             ],
         );
-        let memory_init_fn = self.get_rt_func("memory_init", func_type);
+        let memory_init_fn = self.get_rt_func("__wasmine_runtime.memory_init", func_type);
         self.builder.build_call(
             &memory_init_fn,
             &mut [
@@ -242,7 +242,7 @@ impl Translator {
                 self.builder.i32(),
             ],
         );
-        let table_init_fn = self.get_rt_func("table_init", func_type);
+        let table_init_fn = self.get_rt_func("__wasmine_runtime.table_init", func_type);
         self.builder.build_call(
             &table_init_fn,
             &mut [
@@ -273,7 +273,7 @@ impl Translator {
                 self.builder.i32(),
             ],
         );
-        let indirect_call_fn = self.get_rt_func("indirect_call", func_type);
+        let indirect_call_fn = self.get_rt_func("__wasmine_runtime.indirect_call", func_type);
         self.builder.build_call(
             &indirect_call_fn,
             &mut [
@@ -291,7 +291,7 @@ impl Translator {
             self.builder.i32(),
             &mut [self.builder.ptr(), self.builder.i32()],
         );
-        let table_size_fn = self.get_rt_func("table_size", func_type);
+        let table_size_fn = self.get_rt_func("__wasmine_runtime.table_size", func_type);
         self.builder.build_call(
             &table_size_fn,
             &mut [ctxt, self.builder.const_i32(table_idx)],
@@ -319,7 +319,7 @@ impl Translator {
                 self.builder.i32(),
             ],
         );
-        let table_copy_fn = self.get_rt_func("table_copy", func_type);
+        let table_copy_fn = self.get_rt_func("__wasmine_runtime.table_copy", func_type);
         self.builder.build_call(
             &table_copy_fn,
             &mut [
@@ -353,7 +353,7 @@ impl Translator {
                     .valtype2llvm(ValType::Reference(RefType::FunctionReference)),
             ],
         );
-        let table_fill_fn = self.get_rt_func("table_fill", func_type);
+        let table_fill_fn = self.get_rt_func("__wasmine_runtime.table_fill", func_type);
         self.builder.build_call(
             &table_fill_fn,
             &mut [ctxt, self.builder.const_i32(table_idx), start, len, value],
@@ -373,7 +373,7 @@ impl Translator {
                 .valtype2llvm(ValType::Reference(RefType::FunctionReference)),
             &mut [self.builder.ptr(), self.builder.i32(), self.builder.i32()],
         );
-        let table_get_fn = self.get_rt_func("table_get", func_type);
+        let table_get_fn = self.get_rt_func("__wasmine_runtime.table_get", func_type);
         self.builder.build_call(
             &table_get_fn,
             &mut [ctxt, self.builder.const_i32(table_idx), idx],
@@ -398,7 +398,7 @@ impl Translator {
                 self.builder.i32(),
             ],
         );
-        let table_set_fn = self.get_rt_func("table_set", func_type);
+        let table_set_fn = self.get_rt_func("__wasmine_runtime.table_set", func_type);
         self.builder.build_call(
             &table_set_fn,
             &mut [ctxt, self.builder.const_i32(table_idx), value, idx],
@@ -436,7 +436,7 @@ impl Translator {
                     .valtype2llvm(ValType::Reference(RefType::FunctionReference)),
             ],
         );
-        let table_grow_fn = self.get_rt_func("table_grow", func_type);
+        let table_grow_fn = self.get_rt_func("__wasmine_runtime.table_grow", func_type);
         self.builder.build_call(
             &table_grow_fn,
             &mut [ctxt, self.builder.const_i32(table_idx), size, value_to_fill],

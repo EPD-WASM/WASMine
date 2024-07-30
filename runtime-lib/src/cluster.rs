@@ -1,6 +1,6 @@
 use crate::{
-    globals::GlobalStorage, memory::MemoryInstance, segmented_list::SegmentedList,
-    tables::TableItem, Engine,
+    func::Function, globals::GlobalsObject, memory::MemoryObject, segmented_list::SegmentedList,
+    tables::TableObject, Engine,
 };
 use runtime_interface::ExecutionContext;
 use std::sync::Mutex;
@@ -17,11 +17,12 @@ use uuid::Uuid;
 /// Instance Handles are mere references to the resources and are therefore non-owning.
 pub struct Cluster {
     pub(crate) uuid: Uuid,
-    memories: Mutex<SegmentedList<MemoryInstance>>,
-    tables: Mutex<SegmentedList<Vec<TableItem>>>,
-    globals: Mutex<SegmentedList<GlobalStorage>>,
+    memories: Mutex<SegmentedList<MemoryObject>>,
+    tables: Mutex<SegmentedList<TableObject>>,
+    globals: Mutex<SegmentedList<GlobalsObject>>,
     execution_contexts: Mutex<SegmentedList<ExecutionContext>>,
     engines: Mutex<SegmentedList<Engine>>,
+    functions: Mutex<SegmentedList<Function>>,
 }
 
 impl Cluster {
@@ -30,21 +31,21 @@ impl Cluster {
     }
 
     // unsafe: extracts mut-ref on cluster.globals without owning cluster.globals
-    pub(crate) fn alloc_global_storage(&self, storage: GlobalStorage) -> &mut GlobalStorage {
+    pub(crate) fn alloc_global_storage(&self, storage: GlobalsObject) -> &mut GlobalsObject {
         let mut globals_lock = self.globals.lock().unwrap();
         globals_lock.push(storage);
         &mut globals_lock.get_last_segments_ref()[0]
     }
 
     // unsafe: extracts mut-ref on cluster.tables without owning cluster.tables
-    pub(crate) fn alloc_table_items(&self) -> &mut Vec<TableItem> {
+    pub(crate) fn alloc_table_items(&self) -> &mut TableObject {
         let mut tables_lock = self.tables.lock().unwrap();
-        tables_lock.push(Vec::new());
+        tables_lock.push(TableObject(Vec::new()));
         &mut tables_lock.get_last_segments_ref()[0]
     }
 
     // unsafe: extracts mut-ref on cluster.memories without owning cluster.memories
-    pub(crate) fn alloc_memories(&self, memories: Vec<MemoryInstance>) -> &mut [MemoryInstance] {
+    pub(crate) fn alloc_memories(&self, memories: Vec<MemoryObject>) -> &mut [MemoryObject] {
         let mut memories_lock = self.memories.lock().unwrap();
         memories_lock.extend(memories);
         memories_lock.get_last_segments_ref()
@@ -65,6 +66,12 @@ impl Cluster {
         engines_lock.push(engine);
         &mut engines_lock.get_last_segments_ref()[0]
     }
+
+    pub(crate) fn alloc_function(&self, function: Function) -> &mut Function {
+        let mut functions_lock = self.functions.lock().unwrap();
+        functions_lock.push(function);
+        &mut functions_lock.get_last_segments_ref()[0]
+    }
 }
 
 impl PartialEq for Cluster {
@@ -82,6 +89,7 @@ impl Default for Cluster {
             globals: Mutex::new(SegmentedList::new()),
             execution_contexts: Mutex::new(SegmentedList::new()),
             engines: Mutex::new(SegmentedList::new()),
+            functions: Mutex::new(SegmentedList::new()),
         }
     }
 }

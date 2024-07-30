@@ -25,6 +25,10 @@ impl ExecutionContextWrapper<'_> {
         TRAP_RETURN.with(|buf| unsafe { cee_scape::siglongjmp(*buf.as_ptr(), 1) })
     }
 
+    pub(crate) fn take_trap_msg() -> String {
+        TRAP_MSG.take()
+    }
+
     pub(crate) fn get_tables(&mut self) -> &mut [TableInstance] {
         unsafe {
             slice::from_raw_parts_mut(self.0.tables_ptr as *mut TableInstance, self.0.tables_len)
@@ -48,7 +52,7 @@ impl ExecutionContextWrapper<'_> {
         if entry_idx >= table.size() {
             return Err(TableError::TableAccessOutOfBounds.into());
         }
-        let reference = &mut table.values[entry_idx as usize];
+        let reference = &mut table.values.0[entry_idx as usize];
         match reference {
             TableItem::FunctionReference {
                 func_ptr,
@@ -65,13 +69,12 @@ impl ExecutionContextWrapper<'_> {
                     .into());
                 }
 
-                if func_ptr.is_null() {
-                    *func_ptr =
-                        engine.get_raw_function_ptr_by_name(&format!("{}", func_idx))? as *mut _;
+                if func_ptr.is_none() {
+                    *func_ptr = Some(engine.get_internal_function_ptr(*func_idx)?);
                 }
-                Ok(*func_ptr as RawFunctionPtr)
+                Ok(func_ptr.unwrap())
             }
-            TableItem::ExternReference { func_ptr } => Ok(*func_ptr as RawFunctionPtr),
+            TableItem::ExternReference { func_ptr } => Ok(func_ptr.unwrap()),
             TableItem::Null => Err(TableError::NullDeref.into()),
         }
     }

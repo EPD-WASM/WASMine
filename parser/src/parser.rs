@@ -9,7 +9,7 @@ use crate::stack::ParserStack;
 use ir::basic_block::BasicBlock;
 use ir::function::{Function, FunctionImport, FunctionInternal, FunctionSource};
 use ir::structs::data::{Data, DataMode};
-use ir::structs::export::ExportDesc;
+use ir::structs::export::WasmExports;
 use ir::structs::expression::ConstantExpression;
 use ir::structs::instruction::ControlInstruction;
 use ir::structs::value::ConstantValue;
@@ -32,6 +32,7 @@ const WASM_MODULE_VERSION: u32 = 1;
 pub struct Parser {
     pub(crate) module: Module,
     pub(crate) is_complete: bool,
+    pub(crate) next_empty_function: FuncIdx,
 }
 
 impl Parser {
@@ -122,35 +123,10 @@ impl Parser {
                 Section::Custom => unreachable!(),
             }
         }
-        if self
-            .module
-            .ir
-            .functions
-            .iter()
-            .filter_map(|f| {
-                if let FunctionSource::Internal(FunctionInternal { bbs, .. }) = &f.src {
-                    Some(bbs)
-                } else {
-                    None
-                }
-            })
-            .any(Vec::is_empty)
-        {
+        if self.module.ir.functions.iter().skip(self.next_empty_function as usize).any(|f| matches!(&f.src, FunctionSource::Internal(FunctionInternal { bbs, .. }) if bbs.is_empty())) {
             return Err(ParserError::Msg("function without code".into()));
         }
         self.is_complete = true;
-
-        // #[cfg(debug_assertions)]
-        // {
-        //     use ir::fmt::IRDisplayContext;
-        //     log::debug!(
-        //         "WASMine IR: -------------------------\n{}-------------------------",
-        //         IRDisplayContext {
-        //             module: &self.module,
-        //             ir: &self.module.ir
-        //         }
-        //     );
-        // }
         Ok(())
     }
 
@@ -276,21 +252,22 @@ impl Parser {
             return Ok(());
         }
         let num_exports = i.read_leb128::<u32>()?;
-        let mut parsed_exports = (0..num_exports)
-            .map(|_| Export::parse(i))
-            .map(|e| {
-                e.and_then(|e| match e.desc {
-                    ExportDesc::Func(func_idx) => {
-                        if func_idx as usize >= self.module.ir.functions.len() {
-                            return Err(ParserError::Msg("function index out of bounds".into()));
-                        }
-                        Ok(e)
+        let mut parsed_exports = WasmExports::default();
+        for _ in 0..num_exports {
+            let export = Export::parse(i)?;
+            match export {
+                Export::Func(e) => {
+                    if e.idx as usize >= self.module.ir.functions.len() {
+                        return Err(ParserError::Msg("function index out of bounds".into()));
                     }
-                    _ => Ok(e),
-                })
-            })
-            .collect::<Result<Vec<Export>, ParserError>>()?;
-        self.module.exports.append(&mut parsed_exports);
+                    parsed_exports.add_function_export(e)
+                }
+                Export::Table(e) => parsed_exports.add_table_export(e),
+                Export::Mem(e) => parsed_exports.add_memory_export(e),
+                Export::Global(e) => parsed_exports.add_global_export(e),
+            }
+        }
+        self.module.exports.append(parsed_exports);
         Ok(())
     }
 
@@ -436,7 +413,7 @@ impl Parser {
 
     fn parse_code_section(&mut self, i: &mut WasmStreamReader) -> ParseResult {
         let _ = i.read_leb128::<u32>()?;
-        let mut num_remaining_function_defs = i.read_leb128::<u32>()?;
+        let num_remaining_function_defs = i.read_leb128::<u32>()?;
         if num_remaining_function_defs > self.module.ir.functions.len() as u32 {
             return Err(ParserError::Msg(format!(
                 "code section size {} larger than function count {}",
@@ -444,35 +421,30 @@ impl Parser {
                 self.module.ir.functions.len()
             )));
         }
-
-        let mut function_idx = 0 as FuncIdx;
-        while num_remaining_function_defs > 0 {
-            let next_free_function_idx = self
-                .module
-                .ir
-                .functions
-                .iter()
-                .enumerate()
-                .skip(function_idx as usize)
-                .filter(|(_, f)| match &f.src {
-                    FunctionSource::Internal(FunctionInternal { bbs, .. }) => bbs.is_empty(),
-                    _ => false,
-                })
-                .map(|(i, _)| i as FuncIdx)
-                .next();
-
-            if next_free_function_idx.is_none() {
-                return Err(ParserError::Msg(
-                    "multiple code sections for a single function definition".into(),
-                ));
-            }
-
-            function_idx = next_free_function_idx.unwrap();
-
-            let mut function_parse_result = self.parse_function(i, function_idx);
+        // we unsafely enable parallel access to self.module.ir.functions.
+        // This is safe because we never invalidate the iterator in the following loop.
+        let functions_to_parse = unsafe { &*(self as *const Self) }
+            .module
+            .ir
+            .functions
+            .iter()
+            .enumerate()
+            .skip(self.next_empty_function as usize)
+            .filter_map(|(idx, f)| {
+                if let FunctionSource::Internal(FunctionInternal { bbs, .. }) = &f.src {
+                    if bbs.is_empty() {
+                        return Some(idx as FuncIdx);
+                    }
+                }
+                None
+            })
+            .take(num_remaining_function_defs as usize);
+        for func_idx in functions_to_parse {
+            let mut function_parse_result = self.parse_function(i, func_idx);
             #[cfg(debug_assertions)]
             {
-                let function_name = Function::debug_function_name(function_idx, &self.module);
+                let function_name =
+                    Function::debug_function_name(self.next_empty_function, &self.module);
                 function_parse_result = function_parse_result.map_err(|e| {
                     ParserError::Msg(format!(
                         "Error during parsing of function `{}`: {}",
@@ -481,8 +453,7 @@ impl Parser {
                 })
             }
             function_parse_result?;
-
-            num_remaining_function_defs -= 1;
+            self.next_empty_function = func_idx + 1;
         }
         Ok(())
     }

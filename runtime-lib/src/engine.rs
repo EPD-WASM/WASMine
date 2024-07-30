@@ -1,13 +1,13 @@
-use ir::structs::{
-    module::Module as WasmModule,
-    value::{Value, ValueRaw},
-};
+use core::ffi;
+use ir::structs::{module::Module as WasmModule, value::ValueRaw};
 use runtime_interface::RawFunctionPtr;
 use std::{
     ops::{Deref, DerefMut},
     rc::Rc,
 };
-use wasm_types::{FuncIdx, GlobalIdx, ResType};
+use wasm_types::{FuncIdx, GlobalIdx};
+
+use crate::func::BoundaryCCFuncTy;
 
 #[derive(Debug, thiserror::Error)]
 pub enum EngineError {
@@ -35,21 +35,21 @@ pub struct Engine(Box<dyn WasmEngine>);
 
 pub trait WasmEngine {
     fn init(&mut self, wasm_module: Rc<WasmModule>) -> Result<(), EngineError>;
-    fn register_symbol(&mut self, name: &str, address: RawFunctionPtr);
+    fn register_symbol(&mut self, name: &str, address: *const ffi::c_void);
 
-    fn get_raw_function_ptr_by_name(
+    /// Get a raw function pointer that follows the engine backend's internal calling convention
+    fn get_internal_function_ptr(
         &self,
-        function_name: &str,
+        function_idx: FuncIdx,
     ) -> Result<RawFunctionPtr, EngineError>;
-    fn get_global_value(&self, global_idx: GlobalIdx) -> Result<ValueRaw, EngineError>;
 
-    fn run_by_idx(
-        &mut self,
-        func_idx: u32,
-        func_ret_type: ResType,
-        parameters: Vec<Value>,
-        exec_ctxt: *mut runtime_interface::ExecutionContext,
-    ) -> Result<Vec<Value>, EngineError>;
+    /// Get a typed function pointer that follows the Boundary calling convention
+    fn get_external_function_ptr(
+        &self,
+        function_idx: FuncIdx,
+    ) -> Result<BoundaryCCFuncTy, EngineError>;
+
+    fn get_global_value(&self, global_idx: GlobalIdx) -> Result<ValueRaw, EngineError>;
 }
 
 impl Engine {
@@ -81,11 +81,8 @@ impl DerefMut for Engine {
 
 #[cfg(feature = "llvm")]
 mod llvm_engine_impl {
-    use ir::function::Function;
-    use runtime_interface::ExecutionContext;
-    use wasm_types::{FuncIdx, GlobalIdx};
-
     use super::*;
+    use wasm_types::GlobalIdx;
 
     pub(crate) struct LLVMEngine {
         context: Rc<llvm_gen::Context>,
@@ -123,40 +120,29 @@ mod llvm_engine_impl {
             Ok(self.executor.get_global_value(global_idx)?)
         }
 
-        fn register_symbol(&mut self, name: &str, address: RawFunctionPtr) {
+        fn register_symbol(&mut self, name: &str, address: *const ffi::c_void) {
             self.executor.register_symbol(name, address);
         }
 
-        fn get_raw_function_ptr_by_name(
+        fn get_external_function_ptr(
             &self,
-            function_name: &str,
-        ) -> Result<RawFunctionPtr, EngineError> {
-            Ok(self.executor.get_raw_by_name(function_name)?)
+            function_idx: FuncIdx,
+        ) -> Result<BoundaryCCFuncTy, EngineError> {
+            let func_name = self
+                .wasm_module
+                .as_ref()
+                .ok_or(EngineError::EngineUninitialized)?
+                .exports
+                .find_function_name(function_idx)
+                .ok_or(EngineError::FunctionNotFound(function_idx))?;
+            Ok(unsafe { std::mem::transmute_copy(&self.executor.get_raw_by_name(func_name)?) })
         }
 
-        fn run_by_idx(
-            &mut self,
-            func_idx: FuncIdx,
-            func_ret_type: ResType,
-            parameters: Vec<Value>,
-            exec_ctxt: *mut ExecutionContext,
-        ) -> Result<Vec<Value>, EngineError> {
-            if !self.module_already_translated {
-                return Err(EngineError::EngineUninitialized);
-            }
-            Ok(unsafe {
-                let func_name = match Function::query_function_name(
-                    func_idx,
-                    self.wasm_module
-                        .as_ref()
-                        .expect("already checked initialization"),
-                ) {
-                    Some(name) => name,
-                    None => return Err(EngineError::FunctionNotFound(func_idx)),
-                };
-                self.executor
-                    .run(func_name.as_str(), func_ret_type, parameters, exec_ctxt)?
-            })
+        fn get_internal_function_ptr(
+            &self,
+            function_idx: FuncIdx,
+        ) -> Result<RawFunctionPtr, EngineError> {
+            Ok(self.executor.get_raw_by_name(&function_idx.to_string())?)
         }
     }
 }
@@ -185,29 +171,22 @@ mod interpreter_engine_impl {
             Ok(())
         }
 
-        fn register_symbol(&mut self, name: &str, address: RawFunctionPtr) {
+        fn register_symbol(&mut self, name: &str, address: *const ffi::c_void) {
             self.interpreter.register_symbol(name, address)
         }
 
-        fn run_by_idx(
-            &mut self,
-            func_idx: u32,
-            func_ret_type: ResType,
-            parameters: Vec<Value>,
-            exec_ctx: *mut runtime_interface::ExecutionContext,
-        ) -> Result<Vec<Value>, EngineError> {
-            unsafe {
-                self.interpreter
-                    .run(func_idx, parameters, exec_ctx)
-                    .map_err(|e| e.into())
-            }
+        fn get_external_function_ptr(
+            &self,
+            function_idx: FuncIdx,
+        ) -> Result<BoundaryCCFuncTy, EngineError> {
+            todo!("Interpreter engine external function pointers")
         }
 
-        fn get_raw_function_ptr_by_name(
+        fn get_internal_function_ptr(
             &self,
-            function_name: &str,
+            function_idx: FuncIdx,
         ) -> Result<RawFunctionPtr, EngineError> {
-            todo!("Interpreter engine raw pointers")
+            todo!("Interpreter engine internal function pointers")
         }
 
         fn get_global_value(&self, global_idx: GlobalIdx) -> Result<ValueRaw, EngineError> {
