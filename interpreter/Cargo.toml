@@ -9,3 +9,6 @@ wasm-types = { path = "../wasm-types" }
 parser = { path = "../parser" }
 ir = { path = "../ir" }
 runtime-interface = { path = "../runtime-interface" }
+
+[profile.release]
+lto = "fat"

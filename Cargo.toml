@@ -7,15 +7,14 @@ edition = "2021"
 
 [dependencies]
 runtime-lib = { path = "runtime-lib" }
-simplelog = "0.12.2"
 wasm-types = { path = "./wasm-types" }
 parser = { path = "./parser" }
 loader = { path = "./loader" }
 interpreter = { path = "./interpreter" }
 llvm-gen = { path = "./llvm-gen" }
 ir = { path = "./ir" }
-log = "0.4.21"
 runtime-interface = { version = "0.1.0", path = "runtime-interface" }
+log = "0.4.22"
 
 [dev-dependencies]
 wast = "206.0.0"
@@ -32,3 +31,4 @@ path = "./bin/main.rs"
 
 [profile.release]
 debug = true
+lto = "fat"

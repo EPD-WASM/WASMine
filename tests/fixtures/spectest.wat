@@ -1,9 +1,9 @@
 ;; WebAssembly spec test default module: https://github.com/WebAssembly/spec/blob/d73ac324e6ace2a190bf9a1af4ebd1638dd26d48/interpreter/README.md?plain=1#L433
 (module
-  (global (export "global_i32") i32 (i32.const 666))
-  (global (export "global_i64") i64 (i64.const 666))
-  (global (export "global_f32") f32 (f32.const 666.6))
-  (global (export "global_f64") f64 (f64.const 666.6))
+  (global (export "__wasmine_global__i32") i32 (i32.const 666))
+  (global (export "__wasmine_global__i64") i64 (i64.const 666))
+  (global (export "__wasmine_global__f32") f32 (f32.const 666.6))
+  (global (export "__wasmine_global__f64") f64 (f64.const 666.6))
 
   (table (export "table") 10 20 funcref)
 

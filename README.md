@@ -132,13 +132,13 @@ Idea:
 ### LLVM Backend Symbol Naming Scheme
 
 Function name mapping:
- - Function `$func_name` imported from other module with C Calling Convention => `$(func_name)_imported`
+ - Function `$func_name` imported with C Calling Convention => `__import_wrapper__$(func_name)`
  - Function `$func_name` exported from current module with C Calling Convention => `$(func_name)`
  - Function with `$func_idx` declared for internal usage with internal calling convention => `$(func_idx)`
 
 Globals:
- - Regular wasm global with idx `$global_idx` => `global_$(global_idx)`
- - Reference to execution context of other module `$module_name` for calling of imported functions as closures => `import_$(module_name)_rt_ptr`
+ - Regular wasm global with idx `$global_idx` => `__wasmine_global__$(global_idx)`
+ - Reference to execution context of other module `$module_name` for calling of imported functions as closures => `__import_ctxt__$(module_name)`
 
 ### LLVM Calling Conventions and Function Signatures
 

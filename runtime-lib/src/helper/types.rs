@@ -1,8 +1,7 @@
+use super::utils::macro_invoke_for_each_function_signature;
 use ir::structs::value::ValueRaw;
 use std::mem::MaybeUninit;
 use wasm_types::{FuncType, NumType, ValType};
-
-use crate::utils::macro_invoke_for_each_function_signature;
 
 pub(crate) trait WasmType {
     fn valtype() -> ValType;

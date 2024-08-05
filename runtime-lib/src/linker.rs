@@ -1,10 +1,13 @@
 use crate::{
-    engine::{Engine, EngineError},
-    func::{Function, IntoFunc},
-    instance_handle::{InstanceHandle, InstantiationError},
-    segmented_list::SegmentedList,
-    tables::TableObject,
-    Cluster,
+    helper::segmented_list::SegmentedList,
+    objects::{
+        engine::EngineError,
+        functions::{Function, IntoFunc},
+        instance_handle::{InstanceHandle, InstantiationError},
+        tables::TableObject,
+    },
+    wasi::{WasiContext, WASI_FUNCS},
+    Cluster, Engine,
 };
 use ir::structs::{module::Module as WasmModule, value::ValueRaw};
 use once_cell::sync::Lazy;
@@ -16,8 +19,6 @@ use wasm_types::{FuncType, GlobalIdx, GlobalType, ImportDesc, Limits, MemType, T
 pub enum LinkingError {
     #[error("Module cluster mismatch. Bound linker received module from foreign cluster.")]
     ClusterMismatch,
-    #[error("Missing required module '{module_name}'.")]
-    ModuleNotFound { module_name: String },
     #[error("Function type mismatch. Requested: {requested}, Actual: {actual}.")]
     FunctionTypeMismatch {
         requested: FuncType,
@@ -47,7 +48,7 @@ pub enum LinkingError {
     },
     #[error("Encountered error during call to execution engine: {0}")]
     EngineError(#[from] EngineError),
-    #[error("Function '{name}' not found in module '{module_name}'.")]
+    #[error("Function '{name}' not found from module '{module_name}'.")]
     FunctionNotFound { module_name: String, name: String },
     #[error("Error during instantiation of module: {0}")]
     InstantiationError(#[from] InstantiationError),
@@ -127,16 +128,29 @@ impl<'a> BoundLinker<'a> {
         let mut imports = DependencyStore::default();
 
         for import in module.imports.iter() {
-            // filter out host function imports early
+            let name = DependencyName {
+                module: import.module.clone(),
+                name: import.name.clone(),
+            };
+
+            // filter out host & wasi function imports early
             if matches!(import.desc, ImportDesc::Func(_)) {
+                #[allow(clippy::borrow_interior_mutable_const)]
+                if WASI_FUNCS.contains(&(import.module.as_str(), import.name.as_str())) {
+                    imports.functions.push(FunctionDependency {
+                        name,
+                        func: self.cluster.alloc_function(WasiContext::get_func_by_name(
+                            &import.module,
+                            &import.name,
+                        )),
+                    });
+                    continue;
+                }
                 if let Some(host_func_import) =
                     self.host_functions.get(&import.module, &import.name)
                 {
                     imports.functions.push(FunctionDependency {
-                        name: DependencyName {
-                            module: import.module.clone(),
-                            name: import.name.clone(),
-                        },
+                        name,
                         func: host_func_import,
                     });
                     continue;
@@ -146,8 +160,9 @@ impl<'a> BoundLinker<'a> {
             let exporting_module = match self.registered_modules.get(&import.module) {
                 Some(m) => m,
                 None => {
-                    return Err(LinkingError::ModuleNotFound {
+                    return Err(LinkingError::FunctionNotFound {
                         module_name: import.module.clone(),
+                        name: import.name.clone(),
                     })
                 }
             };
@@ -178,10 +193,7 @@ impl<'a> BoundLinker<'a> {
                         .find_function_idx(&import.name)
                         .unwrap();
                     imports.functions.push(FunctionDependency {
-                        name: DependencyName {
-                            module: import.module.clone(),
-                            name: import.name.clone(),
-                        },
+                        name,
                         func: match exporting_module.get_function(&import.name) {
                             Ok(f) => f,
                             Err(e) => {
@@ -332,15 +344,6 @@ impl Linker {
         Self::default()
     }
 
-    pub fn link_wasi(&mut self) {
-        todo!()
-        // for (name, import) in wasi::collect_available_imports() {
-        //     let (module_name, function_name) = name.split_once('.').unwrap();
-        //     self.host_functions
-        //         .insert(module_name, function_name, import.callable);
-        // }
-    }
-
     pub fn link_host_function<F, Params, Returns>(
         &mut self,
         module_name: &str,
@@ -355,85 +358,85 @@ impl Linker {
 }
 
 static MEMORY_GROW_RT_FUNC: Lazy<Function> = Lazy::new(|| {
-    Function::from_runtime_func(FuncType(Vec::new(), Vec::new()), unsafe {
+    Function::from_runtime_func(unsafe {
         RawFunctionPtr::new_unchecked(runtime_interface::memory_grow as _)
     })
 });
 
 static MEMORY_COPY_RT_FUNC: Lazy<Function> = Lazy::new(|| {
-    Function::from_runtime_func(FuncType(Vec::new(), Vec::new()), unsafe {
+    Function::from_runtime_func(unsafe {
         RawFunctionPtr::new_unchecked(runtime_interface::memory_copy as _)
     })
 });
 
 static MEMORY_INIT_RT_FUNC: Lazy<Function> = Lazy::new(|| {
-    Function::from_runtime_func(FuncType(Vec::new(), Vec::new()), unsafe {
+    Function::from_runtime_func(unsafe {
         RawFunctionPtr::new_unchecked(runtime_interface::memory_init as _)
     })
 });
 
 static MEMORY_FILL_RT_FUNC: Lazy<Function> = Lazy::new(|| {
-    Function::from_runtime_func(FuncType(Vec::new(), Vec::new()), unsafe {
+    Function::from_runtime_func(unsafe {
         RawFunctionPtr::new_unchecked(runtime_interface::memory_fill as _)
     })
 });
 
 static DATA_DROP_RT_FUNC: Lazy<Function> = Lazy::new(|| {
-    Function::from_runtime_func(FuncType(Vec::new(), Vec::new()), unsafe {
+    Function::from_runtime_func(unsafe {
         RawFunctionPtr::new_unchecked(runtime_interface::data_drop as _)
     })
 });
 
 static INDIRECT_CALL_RT_FUNC: Lazy<Function> = Lazy::new(|| {
-    Function::from_runtime_func(FuncType(Vec::new(), Vec::new()), unsafe {
+    Function::from_runtime_func(unsafe {
         RawFunctionPtr::new_unchecked(runtime_interface::indirect_call as _)
     })
 });
 
 static TABLE_SET_RT_FUNC: Lazy<Function> = Lazy::new(|| {
-    Function::from_runtime_func(FuncType(Vec::new(), Vec::new()), unsafe {
+    Function::from_runtime_func(unsafe {
         RawFunctionPtr::new_unchecked(runtime_interface::table_set as _)
     })
 });
 
 static TABLE_GET_RT_FUNC: Lazy<Function> = Lazy::new(|| {
-    Function::from_runtime_func(FuncType(Vec::new(), Vec::new()), unsafe {
+    Function::from_runtime_func(unsafe {
         RawFunctionPtr::new_unchecked(runtime_interface::table_get as _)
     })
 });
 
 static TABLE_GROW_RT_FUNC: Lazy<Function> = Lazy::new(|| {
-    Function::from_runtime_func(FuncType(Vec::new(), Vec::new()), unsafe {
+    Function::from_runtime_func(unsafe {
         RawFunctionPtr::new_unchecked(runtime_interface::table_grow as _)
     })
 });
 
 static TABLE_SIZE_RT_FUNC: Lazy<Function> = Lazy::new(|| {
-    Function::from_runtime_func(FuncType(Vec::new(), Vec::new()), unsafe {
+    Function::from_runtime_func(unsafe {
         RawFunctionPtr::new_unchecked(runtime_interface::table_size as _)
     })
 });
 
 static TABLE_FILL_RT_FUNC: Lazy<Function> = Lazy::new(|| {
-    Function::from_runtime_func(FuncType(Vec::new(), Vec::new()), unsafe {
+    Function::from_runtime_func(unsafe {
         RawFunctionPtr::new_unchecked(runtime_interface::table_fill as _)
     })
 });
 
 static TABLE_COPY_RT_FUNC: Lazy<Function> = Lazy::new(|| {
-    Function::from_runtime_func(FuncType(Vec::new(), Vec::new()), unsafe {
+    Function::from_runtime_func(unsafe {
         RawFunctionPtr::new_unchecked(runtime_interface::table_copy as _)
     })
 });
 
 static TABLE_INIT_RT_FUNC: Lazy<Function> = Lazy::new(|| {
-    Function::from_runtime_func(FuncType(Vec::new(), Vec::new()), unsafe {
+    Function::from_runtime_func(unsafe {
         RawFunctionPtr::new_unchecked(runtime_interface::table_init as _)
     })
 });
 
 static ELEM_DROP_RT_FUNC: Lazy<Function> = Lazy::new(|| {
-    Function::from_runtime_func(FuncType(Vec::new(), Vec::new()), unsafe {
+    Function::from_runtime_func(unsafe {
         RawFunctionPtr::new_unchecked(runtime_interface::elem_drop as _)
     })
 });

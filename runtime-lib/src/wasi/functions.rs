@@ -1,942 +1,853 @@
-use super::types::*;
+use core::str;
+use ir::structs::value::ValueRaw;
+use std::path::Path;
 
-/// Read command-line argument data.
-pub extern "C" fn args_get(argv: Ptr<Ptr<u8>>, argv_buf: Ptr<u8>) -> Result<(), Errno> {
-    unimplemented!()
+use crate::objects::functions::CalleeCtxt;
+
+use super::{types::*, utils::errno, FileDescriptor, WasiContext};
+
+impl WasiContext {
+    #[inline]
+    fn check_fd(&self, fd: FD) -> Result<(), Errno> {
+        if fd as usize >= self.open_fds.len() || fd.is_negative() {
+            return Err(Errno::Badf);
+        }
+        Ok(())
+    }
+    #[inline]
+    fn get_fd(&self, fd: FD) -> Result<&FileDescriptor, Errno> {
+        self.check_fd(fd)?;
+        Ok(&self.open_fds[fd as usize])
+    }
+    #[inline]
+    fn get_fd_mut(&mut self, fd: FD) -> Result<&mut FileDescriptor, Errno> {
+        self.check_fd(fd)?;
+        Ok(&mut self.open_fds[fd as usize])
+    }
+
+    /// Read command-line argument data.
+    #[inline]
+    fn args_get_internal(&self, argv: Ptr<u32>, argv_buf: Ptr<u8>) -> Result<(), Errno> {
+        log::debug!("wasi::args_get() -> [{}]", self.args.join(","));
+        let arg_count = self.args.len();
+        let args_contiguous_size = self
+            .args
+            .iter()
+            .map(|arg| arg.len() + /* null terminator */ 1)
+            .sum::<usize>();
+
+        let args_heads = self.get_memory_slice(argv, arg_count)?;
+        let args_storage = self.get_memory_slice(argv_buf, args_contiguous_size)?;
+
+        let mut args_storage_offset = 0;
+        for (i, arg) in self.args.iter().enumerate() {
+            let arg_bytes = arg.as_bytes();
+            let arg_len = arg_bytes.len();
+
+            args_heads[i] = argv_buf.offset(args_storage_offset as u32).get();
+
+            args_storage[args_storage_offset..args_storage_offset + arg_len]
+                .copy_from_slice(arg_bytes);
+            args_storage_offset += arg_len;
+            args_storage[args_storage_offset] = b'\0';
+            args_storage_offset += 1;
+        }
+        Ok(())
+    }
+    pub(super) unsafe extern "C" fn args_get(
+        ctxt: CalleeCtxt,
+        params: *const ValueRaw,
+        returns: *mut ValueRaw,
+    ) {
+        let argv = (*params.offset(0)).into();
+        let argv_buf = (*params.offset(1)).into();
+        *returns = errno((*ctxt.wasi_context).args_get_internal(argv, argv_buf)).into();
+    }
+
+    /// Reads command-line
+    ///
+    /// #### Results
+    /// - `Result<(Size, Size), Errno>`: Returns the number of arguments and the size of the argument string data, or an error.
+    #[inline]
+    fn args_sizes_get_internal(
+        &self,
+        num_args_out: Ptr<u32>,
+        size_args_out: Ptr<u32>,
+    ) -> Result<(), Errno> {
+        log::debug!("wasi::args_sizes_get()");
+        let num_args_out = self.get_memory_slice(num_args_out, 1)?;
+        num_args_out[0] = self.args.len() as u32;
+
+        let size_args_out = self.get_memory_slice(size_args_out, 1)?;
+        size_args_out[0] = self.args.iter().map(|arg| arg.len() + 1).sum::<usize>() as u32;
+        Ok(())
+    }
+    pub(super) unsafe extern "C" fn args_sizes_get(
+        ctxt: CalleeCtxt,
+        params: *const ValueRaw,
+        returns: *mut ValueRaw,
+    ) {
+        let num_args_out = (*params.offset(0)).into();
+        let size_args_out = (*params.offset(1)).into();
+        *returns =
+            errno((*ctxt.wasi_context).args_sizes_get_internal(num_args_out, size_args_out)).into();
+    }
+
+    /// Read environment variable data.
+    /// The sizes of the buffers should match that returned by `environ_sizes_get`.
+    /// Key/value pairs are expected to be joined with `=`s, and terminated with `\0`s.
+    ///
+    /// #### Params
+    /// - `environ`: Pointer to the environment variable data.
+    /// - `environ_buf`: Pointer to the environment variable buffer.
+    ///
+    /// #### Results
+    /// - `Result<(), Errno>`
+    #[inline]
+    fn environ_get_internal(&self, environ: Ptr<u32>, environ_buf: Ptr<u8>) -> Result<(), Errno> {
+        log::debug!("wasi::environ_get()");
+        let num_env_vars = std::env::vars().count();
+        let env_vars_size = std::env::vars()
+            .map(|(k, v)| k.len() + v.len() + /* null terminator */ 1 + /* equals symbol */ 1)
+            .sum::<usize>();
+
+        let environ = self.get_memory_slice(environ, num_env_vars)?;
+        let environ_buf = self.get_memory_slice(environ_buf, env_vars_size)?;
+
+        let mut environ_buf_offset = 0;
+        for (i, (key, value)) in std::env::vars().enumerate() {
+            let key_bytes = key.as_bytes();
+            let value_bytes = value.as_bytes();
+
+            let key_len = key_bytes.len();
+            let value_len = value_bytes.len();
+
+            environ[i] = environ_buf_offset as u32;
+
+            let environ_buf_slot =
+                &mut environ_buf[environ_buf_offset..environ_buf_offset + key_len];
+            environ_buf_slot.copy_from_slice(key_bytes);
+
+            environ_buf[environ_buf_offset + key_len] = b'=';
+            environ_buf
+                [environ_buf_offset + key_len + 1..environ_buf_offset + key_len + 1 + value_len]
+                .copy_from_slice(value_bytes);
+
+            environ_buf[environ_buf_offset + key_len + 1 + value_len] = b'\0';
+            environ_buf_offset += key_len + value_len + 2;
+        }
+        Ok(())
+    }
+    pub(super) unsafe extern "C" fn environ_get(
+        ctxt: CalleeCtxt,
+        params: *const ValueRaw,
+        returns: *mut ValueRaw,
+    ) {
+        let environ = (*params.offset(0)).into();
+        let environ_buf = (*params.offset(1)).into();
+        *returns = errno((*ctxt.wasi_context).environ_get_internal(environ, environ_buf)).into();
+    }
+
+    /// Return environment variable data sizes.
+    ///
+    /// #### Results
+    /// - `Result<(Size, Size), Errno>`: Returns the number of environment variable arguments and the size of the environment variable data.
+    #[inline]
+    fn environ_sizes_get_internal(
+        &self,
+        num_env_vars_out: Ptr<u32>,
+        size_env_vars_out: Ptr<u32>,
+    ) -> Result<(), Errno> {
+        log::debug!("wasi::environ_sizes_get()");
+        let num_env_vars_out = self.get_memory_slice(num_env_vars_out, 1)?;
+        num_env_vars_out[0] = std::env::vars().count() as u32;
+
+        let size_env_vars_out = self.get_memory_slice(size_env_vars_out, 1)?;
+        size_env_vars_out[0] = std::env::vars()
+            .map(|(k, v)| k.len() + v.len() + /* null terminator */ 1 + /* equals symbol */ 1)
+            .sum::<usize>() as u32;
+        Ok(())
+    }
+    pub(super) unsafe extern "C" fn environ_sizes_get(
+        ctxt: CalleeCtxt,
+        params: *const ValueRaw,
+        returns: *mut ValueRaw,
+    ) {
+        let num_env_vars_out = (*params.offset(0)).into();
+        let size_env_vars_out = (*params.offset(1)).into();
+        *returns = errno(
+            (*ctxt.wasi_context).environ_sizes_get_internal(num_env_vars_out, size_env_vars_out),
+        )
+        .into();
+    }
+
+    /// Terminate the process normally. An exit code of 0 indicates successful termination of the program. The meanings of other values is dependent on the environment.
+    ///
+    /// #### Params
+    /// - `rval`: `ExitCode`: The exit code returned by the process.
+    #[inline]
+    fn proc_exit_internal(&self, rval: ExitCode) -> ! {
+        log::debug!("wasi::proc_exit(exit_val: {rval})");
+        std::process::exit(rval as i32);
+    }
+    pub(super) unsafe extern "C" fn proc_exit(
+        ctxt: CalleeCtxt,
+        params: *const ValueRaw,
+        returns: *mut ValueRaw,
+    ) {
+        let rval = (*params.offset(0)).into();
+        (*ctxt.wasi_context).proc_exit_internal(rval)
+    }
+
+    /// Write to a file descriptor.
+    /// Note: This is similar to `writev` in POSIX.
+    ///
+    /// #### Params
+    /// - `fd`: `FD`: The file descriptor.
+    /// - `iovs`: `CIOVecArray`: List of scatter/gather vectors from which to retrieve data.
+    ///
+    /// #### Results
+    /// - `Result<size, errno>`: Returns the number of bytes written if successful, or an error if one occurred.
+    #[inline]
+    fn fd_write_internal(
+        &self,
+        fd: FD,
+        iovs: CIOVecArray,
+        num_iovs: Size,
+        written_bytes_out: Ptr<Size>,
+    ) -> Result<(), Errno> {
+        log::debug!("wasi::fd_write(fd: {fd}, num_data_vecs: {num_iovs})");
+        let opened_fd = self.get_fd(fd)?;
+        opened_fd.has_right_or_err(Rights::FdWrite)?;
+        if num_iovs > 1024 {
+            return Err(Errno::Inval);
+        }
+        let iovecs = self.get_memory_slice(iovs, num_iovs as usize)?;
+        let out = self.get_memory_slice(written_bytes_out, 1)?;
+
+        let mut c_iovecs = Vec::with_capacity(num_iovs as usize);
+        for iov in iovecs {
+            let buf = self.get_memory_slice(iov.buf, iov.buf_len as usize)?;
+            c_iovecs.push(libc::iovec {
+                iov_base: buf.as_ptr() as _,
+                iov_len: buf.len(),
+            })
+        }
+        let written = unsafe { libc::writev(opened_fd.fd, c_iovecs.as_ptr(), num_iovs as i32) };
+        if written == -1 {
+            return Err(Errno::Io);
+        }
+        out[0] = written as u32;
+        Ok(())
+    }
+    pub(super) unsafe extern "C" fn fd_write(
+        ctxt: CalleeCtxt,
+        params: *const ValueRaw,
+        returns: *mut ValueRaw,
+    ) {
+        let fd = (*params.offset(0)).into();
+        let iovs = (*params.offset(1)).into();
+        let num_iovs = (*params.offset(2)).into();
+        let writte_bytes_out = (*params.offset(3)).into();
+        *returns =
+            errno((*ctxt.wasi_context).fd_write_internal(fd, iovs, num_iovs, writte_bytes_out))
+                .into();
+    }
+
+    /// Close a file descriptor.
+    /// Note: This is similar to `close` in POSIX.
+    ///
+    /// #### Params
+    /// - `fd`: `FD`: The file descriptor.
+    ///
+    /// #### Results
+    /// - `Result<(), Errno>`: Returns `Ok(())` if the file descriptor is closed successfully, or an error if one occurred.
+    #[inline]
+    fn fd_close_internal(&self, fd: FD) -> Result<(), Errno> {
+        log::debug!("wasi::fd_close(fd: {fd})");
+        let opened_fd = self.get_fd(fd)?;
+        if opened_fd.should_close {
+            return Err(Errno::Badf);
+        }
+        Ok(())
+    }
+    pub(super) unsafe extern "C" fn fd_close(
+        ctxt: CalleeCtxt,
+        params: *const ValueRaw,
+        returns: *mut ValueRaw,
+    ) {
+        let fd = (*params.offset(0)).into();
+        *returns = errno((*ctxt.wasi_context).fd_close_internal(fd)).into();
+    }
+
+    /// Get the attributes of a file descriptor.
+    /// Note: This returns similar flags to `fcntl(fd, F_GETFL)` in POSIX, as well as additional fields.
+    ///
+    /// #### Params
+    /// - `fd`: `FD`: The file descriptor.
+    ///
+    /// #### Results
+    /// - `Result<fdstat, Errno>`: Returns the attributes of the file descriptor if successful, or an error if one occurred.
+
+    #[inline]
+    fn fd_fdstat_get_internal(&self, fd: FD, out: Ptr<FdStat>) -> Result<(), Errno> {
+        log::debug!("wasi::fd_fdstat_get(fd: {fd})");
+        let opened_fd = self.get_fd(fd)?;
+        let out = self.get_memory_slice(out, 1)?;
+        out[0] = opened_fd.stat;
+        Ok(())
+    }
+    pub(super) unsafe extern "C" fn fd_fdstat_get(
+        ctxt: CalleeCtxt,
+        params: *const ValueRaw,
+        returns: *mut ValueRaw,
+    ) {
+        let fd = (*params.offset(0)).into();
+        let out = (*params.offset(1)).into();
+        *returns = errno((*ctxt.wasi_context).fd_fdstat_get_internal(fd, out)).into();
+    }
+
+    /// Move the offset of a file descriptor.
+    /// Note: This is similar to `lseek` in POSIX.
+    ///
+    ///
+    /// #### Params
+    /// - `fd`: `FD`: The file descriptor.
+    /// - `offset`: `FileDelta`: The number of bytes to move.
+    /// - `whence`: `Whence`: The base from which the offset is relative.
+    ///
+    /// #### Results
+    /// - `Result<FileSize, Errno>`: The new offset of the file descriptor, relative to the start of the file.
+    #[inline]
+    fn fd_seek_internal(
+        &self,
+        fd: FD,
+        offset: FileDelta,
+        whence: Whence,
+        out: Ptr<FileSize>,
+    ) -> Result<(), Errno> {
+        log::debug!("wasi::fd_seek(fd: {fd}, offset: {offset}, whence: {whence:?})");
+        let opened_fd = self.get_fd(fd)?;
+        opened_fd.has_right_or_err(Rights::FdSeek)?;
+        let out = self.get_memory_slice(out, 1)?;
+        debug_assert_eq!(Whence::Cur as u8, libc::SEEK_CUR as u8);
+        debug_assert_eq!(Whence::End as u8, libc::SEEK_END as u8);
+        debug_assert_eq!(Whence::Set as u8, libc::SEEK_SET as u8);
+        let res = unsafe { libc::lseek(opened_fd.fd, offset, whence as u8 as i32) };
+        if res == -1 {
+            return Err(Errno::Io);
+        }
+        // to u64 is safe, as a currect offset is always non-negative
+        out[0] = res as u64;
+        Ok(())
+    }
+    pub(super) unsafe extern "C" fn fd_seek(
+        ctxt: CalleeCtxt,
+        params: *const ValueRaw,
+        returns: *mut ValueRaw,
+    ) {
+        let fd = (*params.offset(0)).into();
+        let offset = (*params.offset(1)).into();
+        let whence = std::mem::transmute::<u8, Whence>((*params.offset(2)).as_u32() as u8);
+        let out = (*params.offset(3)).into();
+        *returns = errno((*ctxt.wasi_context).fd_seek_internal(fd, offset, whence, out)).into();
+    }
+
+    /// Adjust the flags associated with a file descriptor.
+    /// Note: This is similar to `fcntl(fd, F_SETFL, flags)` in POSIX.
+    ///
+    /// #### Params
+    /// - `fd`: `FD`: The file descriptor.
+    /// - `flags`: `fdflags`: The desired values of the file descriptor flags.
+    ///
+    /// #### Results
+    /// - `Result<(), Errno>`: Returns `Ok(())` if the flags are successfully adjusted, or an error if one occurred.
+    #[inline]
+    fn fd_fdstat_set_flags_internal(&mut self, fd: FD, flags: FdFlags) -> Result<(), Errno> {
+        log::debug!("wasi::fd_fdstat_set_flags(fd: {fd}, flags: {flags:?})");
+        let opened_fd = self.get_fd_mut(fd)?;
+        opened_fd.has_right_or_err(Rights::FdFdstatSetFlags)?;
+
+        // on linux, changing of the sync flags is not possible and would be silently ignored by fcntl
+        if flags & FdFlags::DSync != opened_fd.stat.fs_flags & FdFlags::DSync
+            || flags & FdFlags::Sync != opened_fd.stat.fs_flags & FdFlags::Sync
+            || flags & FdFlags::RSync != opened_fd.stat.fs_flags & FdFlags::RSync
+        {
+            return Err(Errno::Inval);
+        }
+
+        // TODO: do we actually need to sync this with the file system?
+        debug_assert_eq!(FdFlags::Append as u16, libc::O_APPEND as u16);
+        debug_assert_eq!(FdFlags::Nonblock as u16, libc::O_NONBLOCK as u16);
+        let res = unsafe { libc::fcntl(opened_fd.fd, libc::F_SETFL, flags as i32) };
+        if res == -1 {
+            return Err(Errno::Io);
+        }
+        opened_fd.stat.fs_flags = flags;
+        Ok(())
+    }
+    pub(super) unsafe extern "C" fn fd_fdstat_set_flags(
+        ctxt: CalleeCtxt,
+        params: *const ValueRaw,
+        returns: *mut ValueRaw,
+    ) {
+        let fd = (*params.offset(0)).into();
+        let flags = std::mem::transmute::<u16, FdFlags>((*params.offset(2)).as_u32() as u16);
+        *returns = errno((*ctxt.wasi_context).fd_fdstat_set_flags_internal(fd, flags)).into();
+    }
+
+    /// Return a description of the given preopened file descriptor.
+    ///
+    /// #### Params
+    /// - `fd`: `FD`: The file descriptor.
+    ///
+    /// #### Results
+    /// - `Result<prestat, errno>`: Returns the description of the preopened file descriptor if successful, or an error if one occurred.
+    #[inline]
+    fn fd_prestat_get_internal(&self, fd: FD, out: Ptr<PreStat>) -> Result<(), Errno> {
+        log::debug!("wasi::fd_prestat_get(fd: {fd})");
+        let opened_fd = self.get_fd(fd)?;
+        match opened_fd.file_path {
+            None => Err(Errno::NotSup),
+            Some(ref path) => {
+                let out = self.get_memory_slice(out, 1)?;
+                out[0] = PreStat::Dir(PreStatDir {
+                    pr_name_len: path.len() as u32,
+                });
+                Ok(())
+            }
+        }
+    }
+    pub(super) unsafe extern "C" fn fd_prestat_get(
+        ctxt: CalleeCtxt,
+        params: *const ValueRaw,
+        returns: *mut ValueRaw,
+    ) {
+        let fd = (*params.offset(0)).into();
+        let out = (*params.offset(1)).into();
+        *returns = errno((*ctxt.wasi_context).fd_prestat_get_internal(fd, out)).into();
+    }
+
+    /// Return a description of the given preopened file descriptor.
+    ///
+    /// #### Params
+    /// - `fd`: `FD`: The file descriptor.
+    /// - `path`: `Ptr`: A buffer into which to write the preopened directory name.
+    /// - `path_len`: `Size`: The length of the buffer.
+    ///
+    /// #### Results
+    /// - `Result<(), Errno>`: Returns `Ok(())` if the description is successfully written to the buffer, or an error if one occurred.
+    #[inline]
+    fn fd_prestat_dir_name_internal(
+        &self,
+        fd: FD,
+        out_path: Ptr<u8>,
+        out_path_len: Size,
+    ) -> Result<(), Errno> {
+        log::debug!("wasi::fd_prestat_dir_name(fd: {fd})");
+        let opened_fd = self.get_fd(fd)?;
+        match opened_fd.file_path {
+            None => Err(Errno::NotSup),
+            Some(ref stored_path) => {
+                if stored_path.len() > out_path_len as usize {
+                    return Err(Errno::NameTooLong);
+                }
+                // use stored_path.len() to prevent panic in subsequent copy_from_slice
+                let out_path = self.get_memory_slice(out_path, stored_path.len())?;
+                out_path.copy_from_slice(stored_path.as_bytes());
+                log::debug!("wasi::fd_prestat_dir_name -> {}", stored_path);
+                Ok(())
+            }
+        }
+    }
+    pub(super) unsafe extern "C" fn fd_prestat_dir_name(
+        ctxt: CalleeCtxt,
+        params: *const ValueRaw,
+        returns: *mut ValueRaw,
+    ) {
+        let fd = (*params.offset(0)).into();
+        let path = (*params.offset(1)).into();
+        let path_len = (*params.offset(2)).into();
+        *returns =
+            errno((*ctxt.wasi_context).fd_prestat_dir_name_internal(fd, path, path_len)).into();
+    }
+
+    /// Read from a file descriptor.
+    /// Note: This is similar to `readv` in POSIX.
+    ///
+    /// #### Params
+    /// - `fd`: `FD`: The file descriptor.
+    /// - `iovs`: `IOVecArray`: The array of iovec structures specifying the buffers to read into.
+    ///
+    /// #### Results
+    /// - `Result<size, errno>`: Returns the number of bytes read if successful, or an error if one occurred.
+    #[inline]
+    fn fd_read_internal(
+        &self,
+        fd: FD,
+        iovs: IOVecArray,
+        num_iovs: Size,
+        read_bytes_out: Ptr<Size>,
+    ) -> Result<(), Errno> {
+        log::debug!("wasi::fd_read(fd: {fd}, num_data_vecs: {num_iovs})");
+        let opened_fd: &FileDescriptor = self.get_fd(fd)?;
+        // harmonize with wasmtime, as we would normally return NotCapable
+        opened_fd
+            .has_right_or_err(Rights::FdRead)
+            .map_err(|_| Errno::Badf)?;
+        let input_iovecs = self.get_memory_slice(iovs, num_iovs as usize)?;
+        let read_bytes_out = self.get_memory_slice(read_bytes_out, 1)?;
+
+        let mut iovecs = Vec::with_capacity(num_iovs as usize);
+        for iov in input_iovecs {
+            let buf = self.get_memory_slice(iov.buf, iov.buf_len as usize)?;
+            iovecs.push(libc::iovec {
+                iov_base: buf.as_ptr() as _,
+                iov_len: buf.len(),
+            })
+        }
+        let read = unsafe { libc::readv(opened_fd.fd, iovecs.as_ptr(), num_iovs as i32) };
+        if read == -1 {
+            return Err(Errno::Io);
+        }
+        read_bytes_out[0] = read as u32;
+        Ok(())
+    }
+    pub(super) unsafe extern "C" fn fd_read(
+        ctxt: CalleeCtxt,
+        params: *const ValueRaw,
+        returns: *mut ValueRaw,
+    ) {
+        let fd = (*params.offset(0)).into();
+        let iovs = (*params.offset(1)).into();
+        let num_iovs = (*params.offset(2)).into();
+        let read_bytes_out = (*params.offset(3)).into();
+        *returns =
+            errno((*ctxt.wasi_context).fd_read_internal(fd, iovs, num_iovs, read_bytes_out)).into();
+    }
+
+    /// Open a file or directory.
+    /// The returned file descriptor is not guaranteed to be the lowest-numbered file descriptor not currently open; it is randomized to prevent applications from depending on making assumptions about indexes, since this is error-prone in multi-threaded contexts. The returned file descriptor is guaranteed to be less than 2**31.
+    /// Note: This is similar to `openat` in POSIX.
+    ///
+    /// #### Params
+    /// - `fd`: `FD`: The file descriptor.
+    /// - `dirflags`: `LookupFlags`: Flags determining the method of how the path is resolved.
+    /// - `path`: `String`: The relative path of the file or directory to open, relative to the `fd` directory.
+    /// - `oflags`: `OFlags`: The method by which to open the file.
+    /// - `fs_rights_base`: `Rights`: The initial rights of the newly created file descriptor. The implementation is allowed to return a file descriptor with fewer rights than specified, if and only if those rights do not apply to the type of file being opened. The *base* rights are rights that will apply to operations using the file descriptor itself, while the *inheriting* rights are rights that apply to file descriptors derived from it.
+    /// - `fs_rights_inheriting`: `Rights`
+    /// - `fdflags`: `FdFlags`
+    ///
+    /// #### Results
+    /// - `Result<FD, Errno>`: The file descriptor of the file that has been opened.
+    #[inline]
+    #[allow(clippy::too_many_arguments)]
+    fn path_open_internal(
+        &mut self,
+        fd: FD,
+        dirflags: LookupFlags,
+        path: Ptr<u8>,
+        path_len: Size,
+        oflags: OpenFlags,
+        fs_rights_base: Rights,
+        fs_rights_inheriting: Rights,
+        fdflags: FdFlags,
+        out_fd: Ptr<FD>,
+    ) -> Result<(), Errno> {
+        log::debug!("wasi::path_open(fd: {fd}...");
+        let opened_fd = self.get_fd(fd)?;
+        if opened_fd.stat.fs_filetype != FileType::Directory {
+            return Err(Errno::NotDir);
+        }
+        let path = self.get_memory_slice(path, path_len as usize)?;
+        // check that path is valid utf-8
+        let path = str::from_utf8(path).map_err(|_| Errno::Inval)?;
+        let path = Path::new(path);
+        if !path.is_relative() {
+            log::debug!("...path not relative");
+            return Err(Errno::Inval);
+        }
+        log::debug!("...path: {:?})wasi::path_open", path);
+
+        let mut descriptor_flags = 0;
+        if fs_rights_base.contains(Rights::FdRead) && fs_rights_base.contains(Rights::FdWrite) {
+            descriptor_flags |= libc::O_RDWR;
+        } else if fs_rights_base.contains(Rights::FdRead) {
+            descriptor_flags |= libc::O_RDONLY;
+        } else if fs_rights_base.contains(Rights::FdWrite) {
+            descriptor_flags |= libc::O_WRONLY;
+        } else {
+            return Err(Errno::Inval);
+        }
+        if fs_rights_base.contains(Rights::FdSync) {
+            descriptor_flags |= libc::O_SYNC;
+        }
+        if fs_rights_base.contains(Rights::FdDatasync) {
+            descriptor_flags |= libc::O_DSYNC;
+        }
+        if fdflags.contains(FdFlags::RSync) {
+            descriptor_flags |= libc::O_RSYNC;
+        }
+
+        let mut append_flags = 0;
+        if fdflags.contains(FdFlags::Append) {
+            append_flags |= libc::O_APPEND;
+        }
+
+        let flags = oflags.to_libc() | dirflags.to_libc() | descriptor_flags | append_flags;
+        let mut file_mode = 0;
+        if fs_rights_base.contains(Rights::FdRead) {
+            file_mode |= libc::S_IRUSR;
+        }
+        if fs_rights_base.contains(Rights::FdWrite) {
+            file_mode |= libc::S_IWUSR;
+        }
+
+        let fd_res = unsafe {
+            libc::openat(
+                opened_fd.fd,
+                path.as_os_str().as_encoded_bytes().as_ptr() as _,
+                oflags as i32,
+                file_mode,
+            )
+        };
+        if fd_res == -1 {
+            log::debug!("errno: {}, {}", fd_res, nix::errno::Errno::last());
+            return Err(Errno::Io);
+        }
+        let new_host_fd = FileDescriptor {
+            fd: fd_res,
+            stat: FdStat {
+                fs_filetype: FileType::RegularFile,
+                fs_rights_base,
+                fs_rights_inheriting,
+                fs_flags: fdflags,
+            },
+            file_path: None,
+            should_close: true,
+        };
+        let out_fd = self.get_memory_slice(out_fd, 1)?;
+        // TODO: check for shared memory to prevent race condition
+        out_fd[0] = self.open_fds.len() as i32;
+        self.open_fds.push(new_host_fd);
+        Ok(())
+    }
+    pub(super) unsafe extern "C" fn path_open(
+        ctxt: CalleeCtxt,
+        params: *const ValueRaw,
+        returns: *mut ValueRaw,
+    ) {
+        let fd = (*params.offset(0)).into();
+        let dirflags = std::mem::transmute::<u32, LookupFlags>((*params.offset(1)).as_u32());
+        let path = (*params.offset(2)).into();
+        let path_len = (*params.offset(3)).into();
+        let oflags = std::mem::transmute::<u16, OpenFlags>((*params.offset(4)).as_u32() as u16);
+        let fs_rights_base = std::mem::transmute::<u64, Rights>((*params.offset(5)).as_u64());
+        let fs_rights_inheriting = std::mem::transmute::<u64, Rights>((*params.offset(6)).as_u64());
+        let fdflags = std::mem::transmute::<u16, FdFlags>((*params.offset(7)).as_u32() as u16);
+        let out_fd = (*params.offset(8)).into();
+        *returns = errno((*ctxt.wasi_context).path_open_internal(
+            fd,
+            dirflags,
+            path,
+            path_len,
+            oflags,
+            fs_rights_base,
+            fs_rights_inheriting,
+            fdflags,
+            out_fd,
+        ))
+        .into();
+    }
 }
 
-/// Reads command-line
-///
-/// #### Results
-/// - `Result<(Size, Size), Errno>`: Returns the number of arguments and the size of the argument string data, or an error.
-pub extern "C" fn args_sizes_get(out: Ptr<(Size, Size)>) -> Errno {
-    unimplemented!()
-}
-
-/// Read environment variable data.
-/// The sizes of the buffers should match that returned by `environ_sizes_get`.
-/// Key/value pairs are expected to be joined with `=`s, and terminated with `\0`s.
-///
-/// #### Params
-/// - `environ`: Pointer to the environment variable data.
-/// - `environ_buf`: Pointer to the environment variable buffer.
-///
-/// #### Results
-/// - `Result<(), Errno>`
-pub extern "C" fn environ_get(environ: Ptr<Ptr<u8>>, environ_buf: Ptr<u8>) -> Result<(), Errno> {
-    unimplemented!()
-}
-
-/// Return environment variable data sizes.
-///
-/// #### Results
-/// - `Result<(Size, Size), Errno>`: Returns the number of environment variable arguments and the size of the environment variable data.
-pub extern "C" fn environ_sizes_get(out: Ptr<(Size, Size)>) -> Errno {
-    unimplemented!()
-}
-
-/// Return the resolution of a clock.
-/// Implementations are required to provide a non-zero value for supported clocks. For unsupported clocks, return `Errno::Inval`.
-/// Note: This is similar to `clock_getres` in POSIX.
-///
-/// #### Params
-/// - `id`: `ClockID`: The clock for which to return the resolution.
-///
-/// #### Results
-/// - `Result<TimeStamp, Errno>`: The resolution of the clock, or an error if one happened.
-///
-///
-pub extern "C" fn clock_res_get(id: ClockID) -> Result<TimeStamp, Errno> {
-    unimplemented!()
-}
-
-/// Return the time value of a clock.
-/// Note: This is similar to `clock_gettime` in POSIX.
-///
-/// #### Params
-/// - `id`: `ClockID`: The clock for which to return the time.
-/// - `precision`: `TimeStamp`: The maximum lag (exclusive) that the returned time value may have, compared to its actual value.
-///
-/// #### Results
-/// - `Result<TimeStamp, Errno>`: The time value of the clock.
-pub extern "C" fn clock_time_get(id: ClockID, precision: TimeStamp) -> Result<TimeStamp, Errno> {
-    unimplemented!()
-}
-
-/// Provide file advisory information on a file descriptor.
-/// Note: This is similar to `posix_fadvise` in POSIX.
-///
-/// #### Params
-/// - `fd`: `FD`: The file descriptor.
-/// - `offset`: `FileSize`: The offset within the file to which the advisory applies.
-/// - `len`: `FileSize`: The length of the region to which the advisory applies.
-/// - `advice`: `Advice`: The advice.
-///
-/// #### Results
-/// - `Result<(), Errno>`
-pub extern "C" fn fd_advise(
-    fd: FD,
-    offset: FileSize,
-    len: FileSize,
-    advice: Advice,
-) -> Result<(), Errno> {
-    unimplemented!()
-}
-
-/// Force the allocation of space in a file.
-/// Note: This is similar to `posix_fallocate` in POSIX.
-///
-/// #### Params
-/// - `fd`: `FD`: The file descriptor.
-/// - `offset`: `FileSize`: The offset at which to start the allocation.
-/// - `len`: `FileSize`: The length of the area that is allocated.
-///
-/// #### Results
-/// - `Result<(), Errno>`
-pub extern "C" fn fd_allocate(fd: FD, offset: FileSize, len: FileSize) -> Result<(), Errno> {
-    unimplemented!()
-}
-
-/// Close a file descriptor.
-/// Note: This is similar to `close` in POSIX.
-///
-/// #### Params
-/// - `fd`: `FD`: The file descriptor.
-///
-/// #### Results
-/// - `Result<(), Errno>`: Returns `Ok(())` if the file descriptor is closed successfully, or an error if one occurred.
-pub extern "C" fn fd_close(fd: FD) -> Result<(), Errno> {
-    unimplemented!()
-}
-
-/// Synchronize the data of a file to disk.
-/// Note: This is similar to `fdatasync` in POSIX.
-///
-/// #### Params
-/// - `fd`: `FD`: The file descriptor.
-///
-/// #### Results
-/// - `Result<(), Errno>`: Returns `Ok(())` if the data is successfully synchronized to disk, or an error if one occurred.
-pub extern "C" fn fd_datasync(fd: FD) -> Result<(), Errno> {
-    unimplemented!()
-}
-
-/// Get the attributes of a file descriptor.
-/// Note: This returns similar flags to `fcntl(fd, F_GETFL)` in POSIX, as well as additional fields.
-///
-/// #### Params
-/// - `fd`: `FD`: The file descriptor.
-///
-/// #### Results
-/// - `Result<fdstat, Errno>`: Returns the attributes of the file descriptor if successful, or an error if one occurred.
-pub extern "C" fn fd_fdstat_get(fd: FD, out: Ptr<FdStat>) -> Errno {
-    unimplemented!()
-}
-
-/// Adjust the flags associated with a file descriptor.
-/// Note: This is similar to `fcntl(fd, F_SETFL, flags)` in POSIX.
-///
-/// #### Params
-/// - `fd`: `FD`: The file descriptor.
-/// - `flags`: `fdflags`: The desired values of the file descriptor flags.
-///
-/// #### Results
-/// - `Result<(), Errno>`: Returns `Ok(())` if the flags are successfully adjusted, or an error if one occurred.
-pub extern "C" fn fd_fdstat_set_flags(fd: FD, flags: FdFlags) -> Result<(), Errno> {
-    unimplemented!()
-}
-
-/// Adjust the rights associated with a file descriptor.
-/// This can only be used to remove rights, and returns `Errno::NotCapable` if called in a way that would attempt to add rights.
-///
-/// #### Params
-/// - `fd`: `FD`: The file descriptor.
-/// - `fs_rights_base`: `rights`: The desired rights of the file descriptor.
-/// - `fs_rights_inheriting`: `rights`: The desired inheriting rights of the file descriptor.
-///
-/// #### Results
-/// - `Result<(), Errno>`: Returns `Ok(())` if the rights are successfully adjusted, or an error if one occurred.
-pub extern "C" fn fd_fdstat_set_rights(
-    fd: FD,
-    fs_rights_base: Rights,
-    fs_rights_inheriting: Rights,
-) -> Result<(), Errno> {
-    unimplemented!()
-}
-
-/// Return the attributes of an open file.
-///
-/// #### Params
-/// - `fd`: `FD`: The file descriptor.
-///
-/// #### Results
-/// - `Result<filestat, errno>`: Returns the attributes of the file descriptor if successful, or an error if one occurred.
-pub extern "C" fn fd_filestat_get(fd: FD, out: Ptr<FileStat>) -> Errno {
-    unimplemented!()
-}
-
-/// Adjust the size of an open file. If this increases the file's size, the extra bytes are filled with zeros.
-/// Note: This is similar to `ftruncate` in POSIX.
-///
-/// #### Params
-/// - `fd`: `FD`: The file descriptor.
-/// - `size`: `filesize`: The desired file size.
-///
-/// #### Results
-/// - `Result<(), errno>`
-pub extern "C" fn fd_filestat_set_size(fd: FD, size: FileSize) -> Result<(), Errno> {
-    unimplemented!()
-}
-
-/// Adjust the timestamps of an open file or directory.
-/// Note: This is similar to `futimens` in POSIX.
-///
-/// #### Params
-/// - `fd`: `FD`: The file descriptor.
-/// - `atim`: `timestamp`: The desired values of the data access timestamp.
-/// - `mtim`: `timestamp`: The desired values of the data modification timestamp.
-/// - `fst_flags`: `fstflags`: A bitmask indicating which timestamps to adjust.
-///
-/// #### Results
-/// - `Result<(), errno>`
-pub extern "C" fn fd_filestat_set_times(
-    fd: FD,
-    atim: TimeStamp,
-    mtim: TimeStamp,
-    fst_flags: FstFlags,
-) -> Result<(), Errno> {
-    unimplemented!()
-}
-
-/// Read from a file descriptor, without using and updating the file descriptor's offset.
-///
-/// #### Params
-/// - `fd`: `FD`: The file descriptor.
-/// - `iovs`: `IOVecArray`: The array of iovec structures specifying the buffers to read into.
-/// - `offset`: `FileSize`: The offset within the file at which to read.
-///
-/// #### Results
-/// - `Result<size, errno>`: Returns the number of bytes read if successful, or an error if one occurred.
-pub extern "C" fn fd_pread(fd: FD, iovs: IOVecArray, offset: FileSize) -> Result<Size, Errno> {
-    unimplemented!()
-}
-
-/// Return a description of the given preopened file descriptor.
-///
-/// #### Params
-/// - `fd`: `FD`: The file descriptor.
-///
-/// #### Results
-/// - `Result<prestat, errno>`: Returns the description of the preopened file descriptor if successful, or an error if one occurred.
-pub extern "C" fn fd_prestat_get(fd: FD) -> Result<PreStat, Errno> {
-    unimplemented!()
-}
-
-/// Return a description of the given preopened file descriptor.
-///
-/// #### Params
-/// - `fd`: `FD`: The file descriptor.
-/// - `path`: `Ptr`: A buffer into which to write the preopened directory name.
-/// - `path_len`: `Size`: The length of the buffer.
-///
-/// #### Results
-/// - `Result<(), Errno>`: Returns `Ok(())` if the description is successfully written to the buffer, or an error if one occurred.
-pub extern "C" fn fd_prestat_dir_name(fd: FD, path: Ptr<libc::c_char>, path_len: Size) -> Errno {
-    unimplemented!()
-}
-
-/// Write to a file descriptor, without using and updating the file descriptor's offset.
-///
-/// #### Params
-/// - `fd`: `FD`: The file descriptor.
-/// - `iovs`: `CIOVecArray`: List of scatter/gather vectors from which to retrieve data.
-/// - `offset`: `FileSize`: The offset within the file at which to write.
-///
-/// #### Results
-/// - `Result<size, errno>`: Returns the number of bytes written if successful, or an error if one occurred.
-pub extern "C" fn fd_pwrite(fd: FD, iovs: CIOVecArray, offset: FileSize) -> Result<Size, Errno> {
-    unimplemented!()
-}
-
-/// Read from a file descriptor.
-/// Note: This is similar to `readv` in POSIX.
-///
-/// #### Params
-/// - `fd`: `FD`: The file descriptor.
-/// - `iovs`: `IOVecArray`: The array of iovec structures specifying the buffers to read into.
-///
-/// #### Results
-/// - `Result<size, errno>`: Returns the number of bytes read if successful, or an error if one occurred.
-pub extern "C" fn fd_read(fd: FD, iovs: IOVecArray) -> Result<Size, Errno> {
-    unimplemented!()
-}
-
-/// Move the offset of a file descriptor.
-/// Note: This is similar to `lseek` in POSIX.
-///
-///
-/// #### Params
-/// - `fd`: `FD`: The file descriptor.
-/// - `offset`: `FileDelta`: The number of bytes to move.
-/// - `whence`: `Whence`: The base from which the offset is relative.
-///
-/// #### Results
-/// - `Result<FileSize, Errno>`: The new offset of the file descriptor, relative to the start of the file.
-pub extern "C" fn fd_seek(fd: FD, offset: FileDelta, whence: Whence) -> Result<FileSize, Errno> {
-    unimplemented!()
-}
-
-/// Write to a file descriptor.
-/// Note: This is similar to `writev` in POSIX.
-///
-/// #### Params
-/// - `fd`: `FD`: The file descriptor.
-/// - `iovs`: `CIOVecArray`: List of scatter/gather vectors from which to retrieve data.
-///
-/// #### Results
-/// - `Result<size, errno>`: Returns the number of bytes written if successful, or an error if one occurred.
-pub extern "C" fn fd_write(fd: FD, iovs: CIOVecArray) -> Result<Size, Errno> {
-    unimplemented!()
-}
-
-/// Return the attributes of a file or directory.
-/// Note: This is similar to `stat` in POSIX.
-///
-/// #### Params
-/// - `fd`: `FD`: The file descriptor.
-/// - `flags`: `LookupFlags`: Flags determining the method of how the path is resolved.
-/// - `path`: `String`: The path of the file or directory to inspect.
-///
-/// #### Results
-/// - `Result<FileStat, Errno>`: The buffer where the file's attributes are stored.
-pub extern "C" fn path_filestat_get(
-    fd: FD,
-    flags: LookupFlags,
-    path: *const libc::c_char,
-    out: Ptr<FileStat>,
-) -> Errno {
-    unimplemented!()
-}
-
-/// Open a file or directory.
-/// The returned file descriptor is not guaranteed to be the lowest-numbered file descriptor not currently open; it is randomized to prevent applications from depending on making assumptions about indexes, since this is error-prone in multi-threaded contexts. The returned file descriptor is guaranteed to be less than 2**31.
-/// Note: This is similar to `openat` in POSIX.
-///
-/// #### Params
-/// - `fd`: `FD`: The file descriptor.
-/// - `dirflags`: `LookupFlags`: Flags determining the method of how the path is resolved.
-/// - `path`: `String`: The relative path of the file or directory to open, relative to the `fd` directory.
-/// - `oflags`: `OFlags`: The method by which to open the file.
-/// - `fs_rights_base`: `Rights`: The initial rights of the newly created file descriptor. The implementation is allowed to return a file descriptor with fewer rights than specified, if and only if those rights do not apply to the type of file being opened. The *base* rights are rights that will apply to operations using the file descriptor itself, while the *inheriting* rights are rights that apply to file descriptors derived from it.
-/// - `fs_rights_inheriting`: `Rights`
-/// - `fdflags`: `FdFlags`
-///
-/// #### Results
-/// - `Result<FD, Errno>`: The file descriptor of the file that has been opened.
-pub extern "C" fn path_open(
-    fd: FD,
-    dirflags: LookupFlags,
-    path: *const libc::c_char,
-    oflags: OpenFlags,
-    fs_rights_base: Rights,
-    fs_rights_inheriting: Rights,
-    fdflags: FdFlags,
-) -> Result<FD, Errno> {
-    unimplemented!()
-}
-
-/// Terminate the process normally. An exit code of 0 indicates successful termination of the program. The meanings of other values is dependent on the environment.
-///
-/// #### Params
-/// - `rval`: `ExitCode`: The exit code returned by the process.
-pub extern "C" fn proc_exit(rval: ExitCode) {
-    unimplemented!()
-}
-
-/// Temporarily yield execution of the calling thread.
-/// Note: This is similar to `sched_yield` in POSIX.
-///
-/// #### Results
-/// - `Result<(), Errno>`
-pub extern "C" fn sched_yield() -> Result<(), Errno> {
-    unimplemented!()
-}
-
-// ---
-
-// #### <a href="#random_get" name="random_get"></a> `random_get(buf: Pointer<u8>, buf_len: size) -> Result<(), errno>`
-// Write high-quality random data into a buffer.
-// This function blocks when the implementation is unable to immediately
-// provide sufficient high-quality random data.
-// This function may execute slowly, so when large mounts of random data are
-// required, it's advisable to use this function to seed a pseudo-random
-// number generator, rather than to provide the random data directly.
-
-// ##### Params
-// - <a href="#random_get.buf" name="random_get.buf"></a> `buf`: `Pointer<u8>`
-// The buffer to fill with random data.
-
-// - <a href="#random_get.buf_len" name="random_get.buf_len"></a> `buf_len`: [`size`](#size)
-
-// ##### Results
-// - <a href="#random_get.error" name="random_get.error"></a> `error`: `Result<(), errno>`
-
-// ###### Variant Layout
-// - size: 8
-// - align: 4
-// - tag_size: 4
-// ###### Variant cases
-// - <a href="#random_get.error.ok" name="random_get.error.ok"></a> `ok`
-
-// - <a href="#random_get.error.err" name="random_get.error.err"></a> `err`: [`errno`](#errno)
-
-// ---
-
-// #### <a href="#sock_accept" name="sock_accept"></a> `sock_accept(fd: fd, flags: fdflags) -> Result<fd, errno>`
-// Accept a new incoming connection.
-// Note: This is similar to `accept` in POSIX.
-
-// ##### Params
-// - <a href="#sock_accept.fd" name="sock_accept.fd"></a> `fd`: [`fd`](#fd)
-// The listening socket.
-
-// - <a href="#sock_accept.flags" name="sock_accept.flags"></a> `flags`: [`fdflags`](#fdflags)
-// The desired values of the file descriptor flags.
-
-// ##### Results
-// - <a href="#sock_accept.error" name="sock_accept.error"></a> `error`: `Result<fd, errno>`
-// New socket connection
-
-// ###### Variant Layout
-// - size: 8
-// - align: 4
-// - tag_size: 4
-// ###### Variant cases
-// - <a href="#sock_accept.error.ok" name="sock_accept.error.ok"></a> `ok`: [`fd`](#fd)
-
-// - <a href="#sock_accept.error.err" name="sock_accept.error.err"></a> `err`: [`errno`](#errno)
-
-// ---
-
-// #### <a href="#sock_recv" name="sock_recv"></a> `sock_recv(fd: fd, ri_data: iovec_array, ri_flags: riflags) -> Result<(size, roflags), errno>`
-// Receive a message from a socket.
-// Note: This is similar to `recv` in POSIX, though it also supports reading
-// the data into multiple buffers in the manner of `readv`.
-
-// ##### Params
-// - <a href="#sock_recv.fd" name="sock_recv.fd"></a> `fd`: [`fd`](#fd)
-
-// - <a href="#sock_recv.ri_data" name="sock_recv.ri_data"></a> `ri_data`: [`iovec_array`](#iovec_array)
-// List of scatter/gather vectors to which to store data.
-
-// - <a href="#sock_recv.ri_flags" name="sock_recv.ri_flags"></a> `ri_flags`: [`riflags`](#riflags)
-// Message flags.
-
-// ##### Results
-// - <a href="#sock_recv.error" name="sock_recv.error"></a> `error`: `Result<(size, roflags), errno>`
-// Number of bytes stored in ri_data and message flags.
-
-// ###### Variant Layout
-// - size: 12
-// - align: 4
-// - tag_size: 4
-// ###### Variant cases
-// - <a href="#sock_recv.error.ok" name="sock_recv.error.ok"></a> `ok`: `(size, roflags)`
-
-// ####### Record members
-// - <a href="#sock_recv.error.ok.0" name="sock_recv.error.ok.0"></a> `0`: [`size`](#size)
-
-// Offset: 0
-
-// - <a href="#sock_recv.error.ok.1" name="sock_recv.error.ok.1"></a> `1`: [`roflags`](#roflags)
-
-// Offset: 4
-
-// - <a href="#sock_recv.error.err" name="sock_recv.error.err"></a> `err`: [`errno`](#errno)
-
-// ---
-
-// #### <a href="#sock_send" name="sock_send"></a> `sock_send(fd: fd, si_data: ciovec_array, si_flags: siflags) -> Result<size, errno>`
-// Send a message on a socket.
-// Note: This is similar to `send` in POSIX, though it also supports writing
-// the data from multiple buffers in the manner of `writev`.
-
-// ##### Params
-// - <a href="#sock_send.fd" name="sock_send.fd"></a> `fd`: [`fd`](#fd)
-
-// - <a href="#sock_send.si_data" name="sock_send.si_data"></a> `si_data`: [`ciovec_array`](#ciovec_array)
-// List of scatter/gather vectors to which to retrieve data
-
-// - <a href="#sock_send.si_flags" name="sock_send.si_flags"></a> `si_flags`: [`siflags`](#siflags)
-// Message flags.
-
-// ##### Results
-// - <a href="#sock_send.error" name="sock_send.error"></a> `error`: `Result<size, errno>`
-// Number of bytes transmitted.
-
-// ###### Variant Layout
-// - size: 8
-// - align: 4
-// - tag_size: 4
-// ###### Variant cases
-// - <a href="#sock_send.error.ok" name="sock_send.error.ok"></a> `ok`: [`size`](#size)
-
-// - <a href="#sock_send.error.err" name="sock_send.error.err"></a> `err`: [`errno`](#errno)
-
-// ---
-
-// #### <a href="#sock_shutdown" name="sock_shutdown"></a> `sock_shutdown(fd: fd, how: sdflags) -> Result<(), errno>`
-// Shut down socket send and receive channels.
-// Note: This is similar to `shutdown` in POSIX.
-
-// ##### Params
-// - <a href="#sock_shutdown.fd" name="sock_shutdown.fd"></a> `fd`: [`fd`](#fd)
-
-// - <a href="#sock_shutdown.how" name="sock_shutdown.how"></a> `how`: [`sdflags`](#sdflags)
-// Which channels on the socket to shut down.
-
-// ##### Results
-// - <a href="#sock_shutdown.error" name="sock_shutdown.error"></a> `error`: `Result<(), errno>`
-
-// ###### Variant Layout
-// - size: 8
-// - align: 4
-// - tag_size: 4
-// ###### Variant cases
-// - <a href="#sock_shutdown.error.ok" name="sock_shutdown.error.ok"></a> `ok`
-
-// - <a href="#sock_shutdown.error.err" name="sock_shutdown.error.err"></a> `err`: [`errno`](#errno)
-
-// ---
-
-// #### <a href="#fd_prestat_dir_name" name="fd_prestat_dir_name"></a> `fd_prestat_dir_name(fd: fd, path: Pointer<u8>, path_len: size) -> Result<(), errno>`
-// Return a description of the given preopened file descriptor.
-
-// ##### Params
-// - <a href="#fd_prestat_dir_name.fd" name="fd_prestat_dir_name.fd"></a> `fd`: [`fd`](#fd)
-
-// - <a href="#fd_prestat_dir_name.path" name="fd_prestat_dir_name.path"></a> `path`: `Pointer<u8>`
-// A buffer into which to write the preopened directory name.
-
-// - <a href="#fd_prestat_dir_name.path_len" name="fd_prestat_dir_name.path_len"></a> `path_len`: [`size`](#size)
-
-// ##### Results
-// - <a href="#fd_prestat_dir_name.error" name="fd_prestat_dir_name.error"></a> `error`: `Result<(), errno>`
-
-// ###### Variant Layout
-// - size: 8
-// - align: 4
-// - tag_size: 4
-// ###### Variant cases
-// - <a href="#fd_prestat_dir_name.error.ok" name="fd_prestat_dir_name.error.ok"></a> `ok`
-
-// - <a href="#fd_prestat_dir_name.error.err" name="fd_prestat_dir_name.error.err"></a> `err`: [`errno`](#errno)
-
-// ---
-
-// #### <a href="#fd_pwrite" name="fd_pwrite"></a> `fd_pwrite(fd: fd, iovs: ciovec_array, offset: filesize) -> Result<size, errno>`
-// Write to a file descriptor, without using and updating the file descriptor's offset.
-// Note: This is similar to `pwritev` in Linux (and other Unix-es).
-
-// Like Linux (and other Unix-es), any calls of `pwrite` (and other
-// functions to read or write) for a regular file by other threads in the
-// WASI process should not be interleaved while `pwrite` is executed.
-
-// ##### Params
-// - <a href="#fd_pwrite.fd" name="fd_pwrite.fd"></a> `fd`: [`fd`](#fd)
-
-// - <a href="#fd_pwrite.iovs" name="fd_pwrite.iovs"></a> `iovs`: [`ciovec_array`](#ciovec_array)
-// List of scatter/gather vectors from which to retrieve data.
-
-// - <a href="#fd_pwrite.offset" name="fd_pwrite.offset"></a> `offset`: [`filesize`](#filesize)
-// The offset within the file at which to write.
-
-// ##### Results
-// - <a href="#fd_pwrite.error" name="fd_pwrite.error"></a> `error`: `Result<size, errno>`
-// The number of bytes written.
-
-// ###### Variant Layout
-// - size: 8
-// - align: 4
-// - tag_size: 4
-// ###### Variant cases
-// - <a href="#fd_pwrite.error.ok" name="fd_pwrite.error.ok"></a> `ok`: [`size`](#size)
-
-// - <a href="#fd_pwrite.error.err" name="fd_pwrite.error.err"></a> `err`: [`errno`](#errno)
-
-// ---
-// ---
-
-// #### <a href="#fd_readdir" name="fd_readdir"></a> `fd_readdir(fd: fd, buf: Pointer<u8>, buf_len: size, cookie: dircookie) -> Result<size, errno>`
-// Read directory entries from a directory.
-// When successful, the contents of the output buffer consist of a sequence of
-// directory entries. Each directory entry consists of a [`dirent`](#dirent) object,
-// followed by [`dirent::d_namlen`](#dirent.d_namlen) bytes holding the name of the directory
-// entry.
-// This function fills the output buffer as much as possible, potentially
-// truncating the last directory entry. This allows the caller to grow its
-// read buffer size in case it's too small to fit a single large directory
-// entry, or skip the oversized directory entry.
-
-// ##### Params
-// - <a href="#fd_readdir.fd" name="fd_readdir.fd"></a> `fd`: [`fd`](#fd)
-
-// - <a href="#fd_readdir.buf" name="fd_readdir.buf"></a> `buf`: `Pointer<u8>`
-// The buffer where directory entries are stored
-
-// - <a href="#fd_readdir.buf_len" name="fd_readdir.buf_len"></a> `buf_len`: [`size`](#size)
-
-// - <a href="#fd_readdir.cookie" name="fd_readdir.cookie"></a> `cookie`: [`dircookie`](#dircookie)
-// The location within the directory to start reading
-
-// ##### Results
-// - <a href="#fd_readdir.error" name="fd_readdir.error"></a> `error`: `Result<size, errno>`
-// The number of bytes stored in the read buffer. If less than the size of the read buffer, the end of the directory has been reached.
-
-// ###### Variant Layout
-// - size: 8
-// - align: 4
-// - tag_size: 4
-// ###### Variant cases
-// - <a href="#fd_readdir.error.ok" name="fd_readdir.error.ok"></a> `ok`: [`size`](#size)
-
-// - <a href="#fd_readdir.error.err" name="fd_readdir.error.err"></a> `err`: [`errno`](#errno)
-
-// ---
-
-// #### <a href="#fd_renumber" name="fd_renumber"></a> `fd_renumber(fd: fd, to: fd) -> Result<(), errno>`
-// Atomically replace a file descriptor by renumbering another file descriptor.
-// Due to the strong focus on thread safety, this environment does not provide
-// a mechanism to duplicate or renumber a file descriptor to an arbitrary
-// number, like `dup2()`. This would be prone to race conditions, as an actual
-// file descriptor with the same number could be allocated by a different
-// thread at the same time.
-// This function provides a way to atomically renumber file descriptors, which
-// would disappear if `dup2()` were to be removed entirely.
-
-// ##### Params
-// - <a href="#fd_renumber.fd" name="fd_renumber.fd"></a> `fd`: [`fd`](#fd)
-
-// - <a href="#fd_renumber.to" name="fd_renumber.to"></a> `to`: [`fd`](#fd)
-// The file descriptor to overwrite.
-
-// ##### Results
-// - <a href="#fd_renumber.error" name="fd_renumber.error"></a> `error`: `Result<(), errno>`
-
-// ###### Variant Layout
-// - size: 8
-// - align: 4
-// - tag_size: 4
-// ###### Variant cases
-// - <a href="#fd_renumber.error.ok" name="fd_renumber.error.ok"></a> `ok`
-
-// - <a href="#fd_renumber.error.err" name="fd_renumber.error.err"></a> `err`: [`errno`](#errno)
-
-// ---
-
-// #### <a href="#path_filestat_set_times" name="path_filestat_set_times"></a> `path_filestat_set_times(fd: fd, flags: lookupflags, path: string, atim: timestamp, mtim: timestamp, fst_flags: fstflags) -> Result<(), errno>`
-// Adjust the timestamps of a file or directory.
-// Note: This is similar to `utimensat` in POSIX.
-
-// ##### Params
-// - <a href="#path_filestat_set_times.fd" name="path_filestat_set_times.fd"></a> `fd`: [`fd`](#fd)
-
-// - <a href="#path_filestat_set_times.flags" name="path_filestat_set_times.flags"></a> `flags`: [`lookupflags`](#lookupflags)
-// Flags determining the method of how the path is resolved.
-
-// - <a href="#path_filestat_set_times.path" name="path_filestat_set_times.path"></a> `path`: `string`
-// The path of the file or directory to operate on.
-
-// - <a href="#path_filestat_set_times.atim" name="path_filestat_set_times.atim"></a> `atim`: [`timestamp`](#timestamp)
-// The desired values of the data access timestamp.
-
-// - <a href="#path_filestat_set_times.mtim" name="path_filestat_set_times.mtim"></a> `mtim`: [`timestamp`](#timestamp)
-// The desired values of the data modification timestamp.
-
-// - <a href="#path_filestat_set_times.fst_flags" name="path_filestat_set_times.fst_flags"></a> `fst_flags`: [`fstflags`](#fstflags)
-// A bitmask indicating which timestamps to adjust.
-
-// ##### Results
-// - <a href="#path_filestat_set_times.error" name="path_filestat_set_times.error"></a> `error`: `Result<(), errno>`
-
-// ###### Variant Layout
-// - size: 8
-// - align: 4
-// - tag_size: 4
-// ###### Variant cases
-// - <a href="#path_filestat_set_times.error.ok" name="path_filestat_set_times.error.ok"></a> `ok`
-
-// - <a href="#path_filestat_set_times.error.err" name="path_filestat_set_times.error.err"></a> `err`: [`errno`](#errno)
-
-// ---
-
-// #### <a href="#path_link" name="path_link"></a> `path_link(old_fd: fd, old_flags: lookupflags, old_path: string, new_fd: fd, new_path: string) -> Result<(), errno>`
-// Create a hard link.
-// Note: This is similar to `linkat` in POSIX.
-
-// ##### Params
-// - <a href="#path_link.old_fd" name="path_link.old_fd"></a> `old_fd`: [`fd`](#fd)
-
-// - <a href="#path_link.old_flags" name="path_link.old_flags"></a> `old_flags`: [`lookupflags`](#lookupflags)
-// Flags determining the method of how the path is resolved.
-
-// - <a href="#path_link.old_path" name="path_link.old_path"></a> `old_path`: `string`
-// The source path from which to link.
-
-// - <a href="#path_link.new_fd" name="path_link.new_fd"></a> `new_fd`: [`fd`](#fd)
-// The working directory at which the resolution of the new path starts.
-
-// - <a href="#path_link.new_path" name="path_link.new_path"></a> `new_path`: `string`
-// The destination path at which to create the hard link.
-
-// ##### Results
-// - <a href="#path_link.error" name="path_link.error"></a> `error`: `Result<(), errno>`
-
-// ###### Variant Layout
-// - size: 8
-// - align: 4
-// - tag_size: 4
-// ###### Variant cases
-// - <a href="#path_link.error.ok" name="path_link.error.ok"></a> `ok`
-
-// - <a href="#path_link.error.err" name="path_link.error.err"></a> `err`: [`errno`](#errno)
-
-// ---
-
-// ---
-
-// #### <a href="#path_readlink" name="path_readlink"></a> `path_readlink(fd: fd, path: string, buf: Pointer<u8>, buf_len: size) -> Result<size, errno>`
-// Read the contents of a symbolic link.
-// Note: This is similar to `readlinkat` in POSIX.
-
-// ##### Params
-// - <a href="#path_readlink.fd" name="path_readlink.fd"></a> `fd`: [`fd`](#fd)
-
-// - <a href="#path_readlink.path" name="path_readlink.path"></a> `path`: `string`
-// The path of the symbolic link from which to read.
-
-// - <a href="#path_readlink.buf" name="path_readlink.buf"></a> `buf`: `Pointer<u8>`
-// The buffer to which to write the contents of the symbolic link.
-
-// - <a href="#path_readlink.buf_len" name="path_readlink.buf_len"></a> `buf_len`: [`size`](#size)
-
-// ##### Results
-// - <a href="#path_readlink.error" name="path_readlink.error"></a> `error`: `Result<size, errno>`
-// The number of bytes placed in the buffer.
-
-// ###### Variant Layout
-// - size: 8
-// - align: 4
-// - tag_size: 4
-// ###### Variant cases
-// - <a href="#path_readlink.error.ok" name="path_readlink.error.ok"></a> `ok`: [`size`](#size)
-
-// - <a href="#path_readlink.error.err" name="path_readlink.error.err"></a> `err`: [`errno`](#errno)
-
-// ---
-
-// #### <a href="#path_remove_directory" name="path_remove_directory"></a> `path_remove_directory(fd: fd, path: string) -> Result<(), errno>`
-// Remove a directory.
-// Return [`errno::notempty`](#errno.notempty) if the directory is not empty.
-// Note: This is similar to `unlinkat(fd, path, AT_REMOVEDIR)` in POSIX.
-
-// ##### Params
-// - <a href="#path_remove_directory.fd" name="path_remove_directory.fd"></a> `fd`: [`fd`](#fd)
-
-// - <a href="#path_remove_directory.path" name="path_remove_directory.path"></a> `path`: `string`
-// The path to a directory to remove.
-
-// ##### Results
-// - <a href="#path_remove_directory.error" name="path_remove_directory.error"></a> `error`: `Result<(), errno>`
-
-// ###### Variant Layout
-// - size: 8
-// - align: 4
-// - tag_size: 4
-// ###### Variant cases
-// - <a href="#path_remove_directory.error.ok" name="path_remove_directory.error.ok"></a> `ok`
-
-// - <a href="#path_remove_directory.error.err" name="path_remove_directory.error.err"></a> `err`: [`errno`](#errno)
-
-// ---
-
-// #### <a href="#path_rename" name="path_rename"></a> `path_rename(fd: fd, old_path: string, new_fd: fd, new_path: string) -> Result<(), errno>`
-// Rename a file or directory.
-// Note: This is similar to `renameat` in POSIX.
-
-// ##### Params
-// - <a href="#path_rename.fd" name="path_rename.fd"></a> `fd`: [`fd`](#fd)
-
-// - <a href="#path_rename.old_path" name="path_rename.old_path"></a> `old_path`: `string`
-// The source path of the file or directory to rename.
-
-// - <a href="#path_rename.new_fd" name="path_rename.new_fd"></a> `new_fd`: [`fd`](#fd)
-// The working directory at which the resolution of the new path starts.
-
-// - <a href="#path_rename.new_path" name="path_rename.new_path"></a> `new_path`: `string`
-// The destination path to which to rename the file or directory.
-
-// ##### Results
-// - <a href="#path_rename.error" name="path_rename.error"></a> `error`: `Result<(), errno>`
-
-// ###### Variant Layout
-// - size: 8
-// - align: 4
-// - tag_size: 4
-// ###### Variant cases
-// - <a href="#path_rename.error.ok" name="path_rename.error.ok"></a> `ok`
-
-// - <a href="#path_rename.error.err" name="path_rename.error.err"></a> `err`: [`errno`](#errno)
-
-// ---
-
-// #### <a href="#path_symlink" name="path_symlink"></a> `path_symlink(old_path: string, fd: fd, new_path: string) -> Result<(), errno>`
-// Create a symbolic link.
-// Note: This is similar to `symlinkat` in POSIX.
-
-// ##### Params
-// - <a href="#path_symlink.old_path" name="path_symlink.old_path"></a> `old_path`: `string`
-// The contents of the symbolic link.
-
-// - <a href="#path_symlink.fd" name="path_symlink.fd"></a> `fd`: [`fd`](#fd)
-
-// - <a href="#path_symlink.new_path" name="path_symlink.new_path"></a> `new_path`: `string`
-// The destination path at which to create the symbolic link.
-
-// ##### Results
-// - <a href="#path_symlink.error" name="path_symlink.error"></a> `error`: `Result<(), errno>`
-
-// ###### Variant Layout
-// - size: 8
-// - align: 4
-// - tag_size: 4
-// ###### Variant cases
-// - <a href="#path_symlink.error.ok" name="path_symlink.error.ok"></a> `ok`
-
-// - <a href="#path_symlink.error.err" name="path_symlink.error.err"></a> `err`: [`errno`](#errno)
-
-// ---
-
-// #### <a href="#path_unlink_file" name="path_unlink_file"></a> `path_unlink_file(fd: fd, path: string) -> Result<(), errno>`
-// Unlink a file.
-// Return [`errno::isdir`](#errno.isdir) if the path refers to a directory.
-// Note: This is similar to `unlinkat(fd, path, 0)` in POSIX.
-
-// ##### Params
-// - <a href="#path_unlink_file.fd" name="path_unlink_file.fd"></a> `fd`: [`fd`](#fd)
-
-// - <a href="#path_unlink_file.path" name="path_unlink_file.path"></a> `path`: `string`
-// The path to a file to unlink.
-
-// ##### Results
-// - <a href="#path_unlink_file.error" name="path_unlink_file.error"></a> `error`: `Result<(), errno>`
-
-// ###### Variant Layout
-// - size: 8
-// - align: 4
-// - tag_size: 4
-// ###### Variant cases
-// - <a href="#path_unlink_file.error.ok" name="path_unlink_file.error.ok"></a> `ok`
-
-// - <a href="#path_unlink_file.error.err" name="path_unlink_file.error.err"></a> `err`: [`errno`](#errno)
-
-// ---
-
-// #### <a href="#poll_oneoff" name="poll_oneoff"></a> `poll_oneoff(in: ConstPointer<subscription>, out: Pointer<event>, nsubscriptions: size) -> Result<size, errno>`
-// Concurrently poll for the occurrence of a set of events.
-
-// If `nsubscriptions` is 0, returns [`errno::inval`](#errno.inval).
-
-// ##### Params
-// - <a href="#poll_oneoff.in" name="poll_oneoff.in"></a> `in`: `ConstPointer<subscription>`
-// The events to which to subscribe.
-
-// - <a href="#poll_oneoff.out" name="poll_oneoff.out"></a> `out`: `Pointer<event>`
-// The events that have occurred.
-
-// - <a href="#poll_oneoff.nsubscriptions" name="poll_oneoff.nsubscriptions"></a> `nsubscriptions`: [`size`](#size)
-// Both the number of subscriptions and events.
-
-// ##### Results
-// - <a href="#poll_oneoff.error" name="poll_oneoff.error"></a> `error`: `Result<size, errno>`
-// The number of events stored.
-
-// ###### Variant Layout
-// - size: 8
-// - align: 4
-// - tag_size: 4
-// ###### Variant cases
-// - <a href="#poll_oneoff.error.ok" name="poll_oneoff.error.ok"></a> `ok`: [`size`](#size)
-
-// - <a href="#poll_oneoff.error.err" name="poll_oneoff.error.err"></a> `err`: [`errno`](#errno)
-
-// ---
-
-// ---
-
-// #### <a href="#fd_sync" name="fd_sync"></a> `fd_sync(fd: fd) -> Result<(), errno>`
-// Synchronize the data and metadata of a file to disk.
-// Note: This is similar to `fsync` in POSIX.
-
-// ##### Params
-// - <a href="#fd_sync.fd" name="fd_sync.fd"></a> `fd`: [`fd`](#fd)
-
-// ##### Results
-// - <a href="#fd_sync.error" name="fd_sync.error"></a> `error`: `Result<(), errno>`
-
-// ###### Variant Layout
-// - size: 8
-// - align: 4
-// - tag_size: 4
-// ###### Variant cases
-// - <a href="#fd_sync.error.ok" name="fd_sync.error.ok"></a> `ok`
-
-// - <a href="#fd_sync.error.err" name="fd_sync.error.err"></a> `err`: [`errno`](#errno)
-
-// ---
-
-// #### <a href="#fd_tell" name="fd_tell"></a> `fd_tell(fd: fd) -> Result<filesize, errno>`
-// Return the current offset of a file descriptor.
-// Note: This is similar to `lseek(fd, 0, SEEK_CUR)` in POSIX.
-
-// ##### Params
-// - <a href="#fd_tell.fd" name="fd_tell.fd"></a> `fd`: [`fd`](#fd)
-
-// ##### Results
-// - <a href="#fd_tell.error" name="fd_tell.error"></a> `error`: `Result<filesize, errno>`
-// The current offset of the file descriptor, relative to the start of the file.
-
-// ###### Variant Layout
-// - size: 16
-// - align: 8
-// - tag_size: 4
-// ###### Variant cases
-// - <a href="#fd_tell.error.ok" name="fd_tell.error.ok"></a> `ok`: [`filesize`](#filesize)
-
-// - <a href="#fd_tell.error.err" name="fd_tell.error.err"></a> `err`: [`errno`](#errno)
-
-// ---
-
-// ---
-
-// #### <a href="#path_create_directory" name="path_create_directory"></a> `path_create_directory(fd: fd, path: string) -> Result<(), errno>`
-// Create a directory.
-// Note: This is similar to `mkdirat` in POSIX.
-
-// ##### Params
-// - <a href="#path_create_directory.fd" name="path_create_directory.fd"></a> `fd`: [`fd`](#fd)
-
-// - <a href="#path_create_directory.path" name="path_create_directory.path"></a> `path`: `string`
-// The path at which to create the directory.
-
-// ##### Results
-// - <a href="#path_create_directory.error" name="path_create_directory.error"></a> `error`: `Result<(), errno>`
-
-// ###### Variant Layout
-// - size: 8
-// - align: 4
-// - tag_size: 4
-// ###### Variant cases
-// - <a href="#path_create_directory.error.ok" name="path_create_directory.error.ok"></a> `ok`
-
-// - <a href="#path_create_directory.error.err" name="path_create_directory.error.err"></a> `err`: [`errno`](#errno)
+// /// Return the resolution of a clock.
+// /// Implementations are required to provide a non-zero value for supported clocks. For unsupported clocks, return `Errno::Inval`.
+// /// Note: This is similar to `clock_getres` in POSIX.
+// ///
+// /// #### Params
+// /// - `id`: `ClockID`: The clock for which to return the resolution.
+// ///
+// /// #### Results
+// /// - `Result<TimeStamp, Errno>`: The resolution of the clock, or an error if one happened.
+// ///
+// ///
+// pub extern "C" fn clock_res_get(id: ClockID) -> Result<TimeStamp, Errno> {
+//     unimplemented!()
+// }
+
+// /// Return the time value of a clock.
+// /// Note: This is similar to `clock_gettime` in POSIX.
+// ///
+// /// #### Params
+// /// - `id`: `ClockID`: The clock for which to return the time.
+// /// - `precision`: `TimeStamp`: The maximum lag (exclusive) that the returned time value may have, compared to its actual value.
+// ///
+// /// #### Results
+// /// - `Result<TimeStamp, Errno>`: The time value of the clock.
+// pub extern "C" fn clock_time_get(id: ClockID, precision: TimeStamp) -> Result<TimeStamp, Errno> {
+//     unimplemented!()
+// }
+
+// /// Provide file advisory information on a file descriptor.
+// /// Note: This is similar to `posix_fadvise` in POSIX.
+// ///
+// /// #### Params
+// /// - `fd`: `FD`: The file descriptor.
+// /// - `offset`: `FileSize`: The offset within the file to which the advisory applies.
+// /// - `len`: `FileSize`: The length of the region to which the advisory applies.
+// /// - `advice`: `Advice`: The advice.
+// ///
+// /// #### Results
+// /// - `Result<(), Errno>`
+// pub extern "C" fn fd_advise(
+//     fd: FD,
+//     offset: FileSize,
+//     len: FileSize,
+//     advice: Advice,
+// ) -> Result<(), Errno> {
+//     unimplemented!()
+// }
+
+// /// Force the allocation of space in a file.
+// /// Note: This is similar to `posix_fallocate` in POSIX.
+// ///
+// /// #### Params
+// /// - `fd`: `FD`: The file descriptor.
+// /// - `offset`: `FileSize`: The offset at which to start the allocation.
+// /// - `len`: `FileSize`: The length of the area that is allocated.
+// ///
+// /// #### Results
+// /// - `Result<(), Errno>`
+// pub extern "C" fn fd_allocate(fd: FD, offset: FileSize, len: FileSize) -> Result<(), Errno> {
+//     unimplemented!()
+// }
+
+// /// Synchronize the data of a file to disk.
+// /// Note: This is similar to `fdatasync` in POSIX.
+// ///
+// /// #### Params
+// /// - `fd`: `FD`: The file descriptor.
+// ///
+// /// #### Results
+// /// - `Result<(), Errno>`: Returns `Ok(())` if the data is successfully synchronized to disk, or an error if one occurred.
+// pub extern "C" fn fd_datasync(fd: FD) -> Result<(), Errno> {
+//     unimplemented!()
+// }
+
+// /// Adjust the rights associated with a file descriptor.
+// /// This can only be used to remove rights, and returns `Errno::NotCapable` if called in a way that would attempt to add rights.
+// ///
+// /// #### Params
+// /// - `fd`: `FD`: The file descriptor.
+// /// - `fs_rights_base`: `rights`: The desired rights of the file descriptor.
+// /// - `fs_rights_inheriting`: `rights`: The desired inheriting rights of the file descriptor.
+// ///
+// /// #### Results
+// /// - `Result<(), Errno>`: Returns `Ok(())` if the rights are successfully adjusted, or an error if one occurred.
+// pub extern "C" fn fd_fdstat_set_rights(
+//     fd: FD,
+//     fs_rights_base: Rights,
+//     fs_rights_inheriting: Rights,
+// ) -> Result<(), Errno> {
+//     unimplemented!()
+// }
+
+// /// Return the attributes of an open file.
+// ///
+// /// #### Params
+// /// - `fd`: `FD`: The file descriptor.
+// ///
+// /// #### Results
+// /// - `Result<filestat, errno>`: Returns the attributes of the file descriptor if successful, or an error if one occurred.
+// pub extern "C" fn fd_filestat_get(fd: FD, out: Ptr<FileStat>) -> Errno {
+//     unimplemented!()
+// }
+
+// /// Adjust the size of an open file. If this increases the file's size, the extra bytes are filled with zeros.
+// /// Note: This is similar to `ftruncate` in POSIX.
+// ///
+// /// #### Params
+// /// - `fd`: `FD`: The file descriptor.
+// /// - `size`: `filesize`: The desired file size.
+// ///
+// /// #### Results
+// /// - `Result<(), errno>`
+// pub extern "C" fn fd_filestat_set_size(fd: FD, size: FileSize) -> Result<(), Errno> {
+//     unimplemented!()
+// }
+
+// /// Adjust the timestamps of an open file or directory.
+// /// Note: This is similar to `futimens` in POSIX.
+// ///
+// /// #### Params
+// /// - `fd`: `FD`: The file descriptor.
+// /// - `atim`: `timestamp`: The desired values of the data access timestamp.
+// /// - `mtim`: `timestamp`: The desired values of the data modification timestamp.
+// /// - `fst_flags`: `fstflags`: A bitmask indicating which timestamps to adjust.
+// ///
+// /// #### Results
+// /// - `Result<(), errno>`
+// pub extern "C" fn fd_filestat_set_times(
+//     fd: FD,
+//     atim: TimeStamp,
+//     mtim: TimeStamp,
+//     fst_flags: FstFlags,
+// ) -> Result<(), Errno> {
+//     unimplemented!()
+// }
+
+// /// Read from a file descriptor, without using and updating the file descriptor's offset.
+// ///
+// /// #### Params
+// /// - `fd`: `FD`: The file descriptor.
+// /// - `iovs`: `IOVecArray`: The array of iovec structures specifying the buffers to read into.
+// /// - `offset`: `FileSize`: The offset within the file at which to read.
+// ///
+// /// #### Results
+// /// - `Result<size, errno>`: Returns the number of bytes read if successful, or an error if one occurred.
+// pub extern "C" fn fd_pread(fd: FD, iovs: IOVecArray, offset: FileSize) -> Result<Size, Errno> {
+//     unimplemented!()
+// }
+
+// /// Write to a file descriptor, without using and updating the file descriptor's offset.
+// ///
+// /// #### Params
+// /// - `fd`: `FD`: The file descriptor.
+// /// - `iovs`: `CIOVecArray`: List of scatter/gather vectors from which to retrieve data.
+// /// - `offset`: `FileSize`: The offset within the file at which to write.
+// ///
+// /// #### Results
+// /// - `Result<size, errno>`: Returns the number of bytes written if successful, or an error if one occurred.
+// pub extern "C" fn fd_pwrite(fd: FD, iovs: CIOVecArray, offset: FileSize) -> Result<Size, Errno> {
+//     unimplemented!()
+// }
+
+// /// Return the attributes of a file or directory.
+// /// Note: This is similar to `stat` in POSIX.
+// ///
+// /// #### Params
+// /// - `fd`: `FD`: The file descriptor.
+// /// - `flags`: `LookupFlags`: Flags determining the method of how the path is resolved.
+// /// - `path`: `String`: The path of the file or directory to inspect.
+// ///
+// /// #### Results
+// /// - `Result<FileStat, Errno>`: The buffer where the file's attributes are stored.
+// pub extern "C" fn path_filestat_get(
+//     fd: FD,
+//     flags: LookupFlags,
+//     path: *const libc::c_char,
+//     out: Ptr<FileStat>,
+// ) -> Errno {
+//     unimplemented!()
+// }
+
+// /// Temporarily yield execution of the calling thread.
+// /// Note: This is similar to `sched_yield` in POSIX.
+// ///
+// /// #### Results
+// /// - `Result<(), Errno>`
+// pub extern "C" fn sched_yield() -> Result<(), Errno> {
+//     unimplemented!()
+// }

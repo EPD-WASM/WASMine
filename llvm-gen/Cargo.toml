@@ -12,3 +12,6 @@ log = "0.4.21"
 libc = "0.2.155"
 once_cell = "1.19.0"
 runtime-interface = { path = "../runtime-interface" }
+
+[profile.release]
+lto = "fat"

@@ -1,5 +1,5 @@
 use crate::error::RuntimeError;
-use crate::tables::{TableError, TableInstance, TableItem};
+use crate::objects::tables::{TableError, TableInstance, TableItem};
 use crate::Engine;
 use cee_scape::SigJmpBuf;
 use core::slice;

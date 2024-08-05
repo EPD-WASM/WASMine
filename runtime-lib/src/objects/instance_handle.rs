@@ -1,13 +1,17 @@
 use crate::{
-    engine::Engine,
-    func::{Function, FunctionKind},
-    globals::GlobalsObject,
+    helper::{
+        signals::SignalHandler,
+        utils::{super_unsafe_copy_to_ref_mut, Either},
+    },
     linker::{rt_func_imports, DependencyStore},
-    memory::{MemoryError, MemoryObject, MemoryStorage},
-    signals::SignalHandler,
-    tables::{TableError, TableInstance},
-    utils::Either,
-    Cluster, RuntimeError,
+    objects::{
+        functions::{CalleeCtxt, Function, FunctionKind},
+        globals::GlobalsObject,
+        memory::{MemoryError, MemoryObject, MemoryStorage},
+        tables::{TableError, TableInstance},
+    },
+    wasi::{WasiContext, WasiError},
+    Cluster, Engine, RuntimeError,
 };
 use core::{ffi, slice};
 use ir::structs::{module::Module as WasmModule, value::Value};
@@ -25,6 +29,8 @@ pub enum InstantiationError {
     MemoryError(#[from] MemoryError),
     #[error("Function not found: {0}")]
     FunctionNotFound(String),
+    #[error("Error during WASI initialization: {0}")]
+    WasiError(#[from] WasiError),
 }
 
 pub struct InstanceHandle<'a> {
@@ -39,6 +45,7 @@ pub struct InstanceHandle<'a> {
     memories: &'a mut [MemoryObject],
 
     exported_functions: Mutex<HashMap<String, Either<&'a Function, FuncIdx>>>,
+    wasi_context: Option<&'a mut WasiContext>,
 }
 
 impl<'a> InstanceHandle<'a> {
@@ -62,27 +69,38 @@ impl<'a> InstanceHandle<'a> {
             recursion_size: 0,
             id: 0,
         });
-
+        let wasi_context = WasiContext::register_new(cluster, execution_context)?;
         for f in imports.functions.iter() {
-            let (ptr, ctxt) = match f.func.kind {
-                FunctionKind::Host(ptr, ctxt) => (ptr, ctxt),
-                FunctionKind::Wasm(ptr, wasm_func_ptr, ctxt) => {
+            match &f.func.0 {
+                FunctionKind::Host(ptr, ctxt, _) | FunctionKind::Wasm(ptr, _, ctxt, _) => {
                     engine.register_symbol(
-                        &(f.name.symbol_name() + "_wasm_cc"),
-                        wasm_func_ptr.as_ptr(),
+                        &format!("__import_wrapper__{}", f.name.symbol_name()),
+                        *ptr as _,
                     );
-                    (ptr, ctxt)
+                    engine.register_symbol(&format!("__import_ctxt__{}", f.name.module), unsafe {
+                        ctxt.execution_context as _
+                    });
+                }
+                FunctionKind::Wasi(ptr) => {
+                    if let Some(ref wc) = wasi_context {
+                        engine.register_symbol(
+                            &format!("__import_wrapper__{}", f.name.symbol_name()),
+                            *ptr as _,
+                        );
+                        engine.register_symbol(
+                            &format!("__import_ctxt__{}", f.name.module),
+                            (*wc) as *const _ as *mut _,
+                        );
+                    } else {
+                        continue;
+                    }
                 }
                 _ => panic!("unexpected function kind"),
-            };
-            engine.register_symbol(&f.name.symbol_name(), ptr as _);
-            engine.register_symbol(&format!("import_{}_rt_ptr", f.name.module), unsafe {
-                ctxt.execution_context as _
-            });
+            }
         }
 
         for import in rt_func_imports(execution_context as _) {
-            let ptr = match import.func.kind {
+            let ptr = match import.func.0 {
                 FunctionKind::Runtime(ptr) => ptr,
                 _ => panic!("unexpected function kind"),
             };
@@ -137,6 +155,7 @@ impl<'a> InstanceHandle<'a> {
             memories,
             cluster,
             exported_functions,
+            wasi_context,
         })
     }
 
@@ -247,6 +266,7 @@ impl<'a> InstanceHandle<'a> {
         func_name: &str,
         input_params: Vec<Value>,
     ) -> Result<Vec<Value>, RuntimeError> {
+        log::debug!("run_by_name: {func_name}({input_params:?})");
         let func: &Function = self.get_function(func_name)?;
         func.call(&input_params)
     }
@@ -260,24 +280,17 @@ impl<'a> Clone for InstanceHandle<'a> {
         unsafe {
             Self {
                 module: self.module.clone(),
-                cluster: &slice::from_raw_parts(self.cluster as *const Cluster, 1)[0],
+                cluster: super_unsafe_copy_to_ref_mut(self.cluster),
 
-                engine: &mut slice::from_raw_parts_mut(
-                    self.engine as *const Engine as *mut Engine,
-                    1,
-                )[0],
-                execution_context: &mut slice::from_raw_parts_mut(
-                    self.execution_context as *const _ as *mut _,
-                    1,
-                )[0],
+                engine: super_unsafe_copy_to_ref_mut(self.engine),
+                execution_context: super_unsafe_copy_to_ref_mut(self.execution_context),
 
-                globals: &mut slice::from_raw_parts_mut(self.globals as *const _ as *mut _, 1)[0],
+                globals: super_unsafe_copy_to_ref_mut(self.globals),
                 tables: self
                     .tables
                     .iter()
                     .map(|t| TableInstance {
-                        values: &mut slice::from_raw_parts_mut(t.values as *const _ as *mut _, 1)
-                            [0],
+                        values: super_unsafe_copy_to_ref_mut(t.values),
                         ty: t.ty,
                     })
                     .collect(),
@@ -287,6 +300,10 @@ impl<'a> Clone for InstanceHandle<'a> {
                 ),
 
                 exported_functions: Mutex::new(self.exported_functions.lock().unwrap().clone()),
+                wasi_context: match &self.wasi_context {
+                    Some(c) => Some(super_unsafe_copy_to_ref_mut(c)),
+                    None => None,
+                },
             }
         }
     }

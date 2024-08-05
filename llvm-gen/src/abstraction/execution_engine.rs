@@ -157,14 +157,9 @@ impl ExecutionEngine {
     fn create_target_machine() -> Result<LLVMTargetMachineRef, ExecutionError> {
         let cpu = unsafe { LLVMGetHostCPUName() };
         log::debug!("LLVM detected CPU: {:?}", unsafe { CStr::from_ptr(cpu) });
-
         let features = unsafe { LLVMGetHostCPUFeatures() };
-        log::debug!("LLVM detected CPU features: {:?}", unsafe {
-            CStr::from_ptr(features)
-        });
-
         let target_triple = unsafe { LLVMGetDefaultTargetTriple() };
-        log::debug!("LLVM default target triple: {:?}", unsafe {
+        log::debug!("using LLVM target triple: {:?}", unsafe {
             CStr::from_ptr(target_triple)
         });
         if 1 == unsafe { LLVM_InitializeNativeTarget() } {
@@ -189,10 +184,12 @@ impl ExecutionEngine {
 
     pub(crate) fn optimize_module(&mut self, module: &Module) -> Result<(), ExecutionError> {
         let options = unsafe { LLVMCreatePassBuilderOptions() };
+        let optimization_passes = "mem2reg,gvn,reassociate,adce,simplifycfg";
+        log::debug!("running passes '{optimization_passes}' on translated module");
         let err = unsafe {
             LLVMRunPasses(
                 module.get(),
-                to_c_str("simplifycfg").as_ptr(),
+                to_c_str(optimization_passes).as_ptr(),
                 Self::create_target_machine()?,
                 options,
             )

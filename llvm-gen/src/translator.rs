@@ -92,7 +92,7 @@ impl Translator {
         self.wasm_module = wasm_module;
 
         for (global_idx, global) in self.wasm_module.globals.iter().enumerate() {
-            let name = format!("global_{}", global_idx);
+            let name = format!("__wasmine_global__{}", global_idx);
             let global_val_ty = match global.r#type {
                 GlobalType::Const(vt) => vt,
                 GlobalType::Mut(vt) => vt,
@@ -110,7 +110,7 @@ impl Translator {
             })
             .collect::<HashSet<_>>();
         for rt_ptr_name in required_rt_ptr_global_names {
-            let name = format!("import_{}_rt_ptr", rt_ptr_name);
+            let name = format!("__import_ctxt__{}", rt_ptr_name);
             self.module.add_global(&name, self.builder.ptr());
         }
 
@@ -251,6 +251,7 @@ impl Translator {
         func_idx: FuncIdx,
         type_idx: TypeIdx,
     ) -> Result<Function, TranslationError> {
+        let fn_type = self.llvm_external_func_type_from_wasm()?;
         let internal_fn_type = self.llvm_internal_func_type_from_wasm(type_idx as usize)?;
         let internal_function_name = format!("{}", func_idx);
         if let Some(f) = self
@@ -261,16 +262,16 @@ impl Translator {
         }
 
         // declare imported function symbol
-        let import_func_name = format!("{}_wasm_cc", name);
+        let import_func_name = format!("__import_wrapper__{}", name);
         let imported_function = self
             .module
-            .find_func(&import_func_name, internal_fn_type)
+            .find_func(&import_func_name, fn_type)
             .unwrap_or_else(|| {
                 self.module.add_function(
                     &import_func_name,
-                    internal_fn_type,
+                    fn_type,
                     LLVMLinkage::LLVMExternalLinkage,
-                    LLVMCallConv::LLVMFastCallConv,
+                    LLVMCallConv::LLVMCCallConv,
                 )
             });
 
@@ -289,20 +290,65 @@ impl Translator {
 
         // don't forward current runtime ptr, but load their closured runtime ptr
         let import_rt_ptr = self.module.get_global(&format!(
-            "import_{}_rt_ptr",
+            "__import_ctxt__{}",
             name.split_once('.').unwrap().0
         ))?;
         let mut params = vec![import_rt_ptr /* forward imported runtime ptr */];
 
+        let param_arr_ptr: *mut llvm_sys::LLVMValue = self.builder.build_alloca(
+            self.builder
+                .array(self.builder.value_raw_ty(), internal_fn_wasm_type.0.len()),
+            "param_arr",
+        );
         for (i, _) in internal_fn_wasm_type.0.iter().enumerate() {
-            params.push(internal_function.get_param(i + 1));
+            let param_ptr = self.builder.build_gep(
+                self.builder.value_raw_ty(),
+                param_arr_ptr,
+                &mut [self.builder.const_i32(i as u32)],
+                &format!("function param {} ptr calc", i),
+            );
+            self.builder
+                .build_store(internal_function.get_param(i + 1), param_ptr);
         }
-        let ret_val = self
-            .builder
+        params.push(param_arr_ptr);
+        // add return parameter pointer
+        let return_param_ptr = self.builder.build_alloca(
+            self.builder
+                .array(self.builder.value_raw_ty(), internal_fn_wasm_type.1.len()),
+            "return_param_arr",
+        );
+        params.push(return_param_ptr);
+        self.builder
             .build_call(&imported_function, params.as_mut_slice(), "");
+
         match internal_fn_wasm_type.1.len() {
             0 => self.builder.build_ret_void(),
-            _ => self.builder.build_ret(ret_val),
+            1 => {
+                let ret_val = self.builder.build_load(
+                    self.builder.valtype2llvm(internal_fn_wasm_type.1[0]),
+                    return_param_ptr,
+                    "ret_val_0_load",
+                );
+                self.builder.build_ret(ret_val);
+            }
+            _ => {
+                let mut returns = Vec::new();
+                for i in 0..internal_fn_wasm_type.1.len() {
+                    let ret_val_output_ptr = self.builder.build_gep(
+                        self.builder.value_raw_ty(),
+                        return_param_ptr,
+                        &mut [self.builder.const_i32(i as u32)],
+                        &format!("ret_val_{}_out_ptr", i),
+                    );
+                    let ret_val_elem = self.builder.build_load(
+                        self.builder.valtype2llvm(internal_fn_wasm_type.1[i]),
+                        ret_val_output_ptr,
+                        &format!("ret_val_{}_load", i),
+                    );
+                    returns.push(ret_val_elem);
+                }
+                self.builder.build_aggregate_ret(returns.as_mut_slice())
+            }
         }
 
         #[cfg(debug_assertions)]

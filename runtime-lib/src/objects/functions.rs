@@ -1,8 +1,11 @@
 use crate::{
-    execution_context::ExecutionContextWrapper,
-    signals::SignalHandler,
-    types::{WasmReturnType, WasmType, WasmTypeList},
-    utils::macro_invoke_for_each_function_signature,
+    helper::{
+        signals::SignalHandler,
+        types::{WasmReturnType, WasmType, WasmTypeList},
+        utils::macro_invoke_for_each_function_signature,
+    },
+    objects::execution_context::ExecutionContextWrapper,
+    wasi::WasiContext,
     RuntimeError,
 };
 use cee_scape::call_with_sigsetjmp;
@@ -99,8 +102,7 @@ pub enum FunctionError {
 pub union CalleeCtxt {
     pub execution_context: *mut ExecutionContext,
     pub host_func_context: *const HostFuncRawContainer,
-    // placeholder:
-    pub wasi_context: *const ffi::c_void,
+    pub wasi_context: *mut WasiContext,
 }
 
 /// The "boundary calling convention" extends the C calling convention with a few additional rules:
@@ -114,20 +116,17 @@ pub(crate) type BoundaryCCFuncTy =
     unsafe extern "C" fn(CalleeCtxt, *const ValueRaw, *mut ValueRaw) -> ();
 
 #[derive(Clone)]
-pub struct Function {
-    pub(crate) kind: FunctionKind,
-    pub(crate) ty: FuncType,
-}
+pub struct Function(pub(crate) FunctionKind);
 
 unsafe impl Sync for Function {}
 unsafe impl Send for Function {}
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub enum FunctionKind {
     /// A rust function made available to wasm code
     /// Calling Convention:
     ///     - BoundaryCC
-    Host(BoundaryCCFuncTy, CalleeCtxt),
+    Host(BoundaryCCFuncTy, CalleeCtxt, FuncType),
 
     /// A generated and exported wasm function
     /// Calling Convention:
@@ -136,7 +135,7 @@ pub enum FunctionKind {
     ///         (TODO: this effectively prevents calling interpreted functions from llvm code,
     ///                because the interpreter can not dynamically generated arbitrary function
     ///                signatures)
-    Wasm(BoundaryCCFuncTy, NonNull<ffi::c_void>, CalleeCtxt),
+    Wasm(BoundaryCCFuncTy, NonNull<ffi::c_void>, CalleeCtxt, FuncType),
 
     /// A function that is part of the runtime
     /// Calling Convention:
@@ -145,31 +144,39 @@ pub enum FunctionKind {
     /// Note: Functions like `table_grow` and `table_fill` are runtime functions
     /// Note: The first argument is the current function's `ExecutionContext` parameter
     Runtime(NonNull<ffi::c_void>),
+
+    Wasi(BoundaryCCFuncTy),
 }
 
 impl Function {
     pub fn call(&self, params: &[Value]) -> Result<Vec<Value>, RuntimeError> {
-        let mut ret_values = vec![ValueRaw::u64(0); self.ty.1.len()];
+        let (func, ctxt, ty) = match &self.0 {
+            FunctionKind::Host(func, ctxt, ty) => (func, ctxt, ty),
+            FunctionKind::Wasm(func, _, ctxt, ty) => (func, ctxt, ty),
+            FunctionKind::Runtime(..) => {
+                return Err(RuntimeError::Msg(
+                    "Internal runtime functions can only be called from wasm code".into(),
+                ))
+            }
+            FunctionKind::Wasi(..) => {
+                return Err(RuntimeError::Msg(
+                    "Wasi runtime functions can only be called from wasm code".into(),
+                ))
+            }
+        };
+        let mut ret_values = vec![ValueRaw::u64(0); ty.1.len()];
         let params = params
             .iter()
             .cloned()
             .map(ValueRaw::from)
             .collect::<Vec<ValueRaw>>();
-        let (func, ctxt) = match self.kind {
-            FunctionKind::Host(func, ctxt) => (func, ctxt),
-            FunctionKind::Wasm(func, _, ctxt) => (func, ctxt),
-            FunctionKind::Runtime(_) => {
-                return Err(RuntimeError::Msg(
-                    "Internal runtime functions can only be called from wasm code".into(),
-                ))
-            }
-        };
+
         let jmp_res = call_with_sigsetjmp(true, |jmp_buf| {
             ExecutionContextWrapper::set_trap_return_point(jmp_buf);
             SignalHandler::set_thread_executing_wasm();
 
             unsafe {
-                func(ctxt, params.as_ptr(), ret_values.as_mut_ptr());
+                func(*ctxt, params.as_ptr(), ret_values.as_mut_ptr());
             };
 
             SignalHandler::unset_thread_executing_wasm();
@@ -180,7 +187,7 @@ impl Function {
         }
         Ok(ret_values
             .iter()
-            .zip(self.ty.1.iter())
+            .zip(ty.1.iter())
             .map(|(val, val_type)| Value::from_raw(*val, *val_type))
             .collect())
     }
@@ -190,10 +197,11 @@ impl Function {
         ty: FuncType,
         ptr: BoundaryCCFuncTy,
     ) -> Self {
-        Function {
-            kind: FunctionKind::Host(ptr, CalleeCtxt { host_func_context }),
+        Function(FunctionKind::Host(
+            ptr,
+            CalleeCtxt { host_func_context },
             ty,
-        }
+        ))
     }
 
     pub(crate) fn from_wasm_func(
@@ -202,20 +210,19 @@ impl Function {
         boundary_func_ptr: BoundaryCCFuncTy,
         wasm_func_ptr: NonNull<ffi::c_void>,
     ) -> Self {
-        Function {
-            kind: FunctionKind::Wasm(
-                boundary_func_ptr,
-                wasm_func_ptr,
-                CalleeCtxt { execution_context },
-            ),
+        Function(FunctionKind::Wasm(
+            boundary_func_ptr,
+            wasm_func_ptr,
+            CalleeCtxt { execution_context },
             ty,
-        }
+        ))
     }
 
-    pub(crate) fn from_runtime_func(ty: FuncType, ptr: NonNull<ffi::c_void>) -> Self {
-        Function {
-            kind: FunctionKind::Runtime(ptr),
-            ty,
-        }
+    pub(crate) fn from_runtime_func(ptr: NonNull<ffi::c_void>) -> Self {
+        Function(FunctionKind::Runtime(ptr))
+    }
+
+    pub(crate) fn from_wasi_func(boundary_func_ptr: BoundaryCCFuncTy) -> Self {
+        Function(FunctionKind::Wasi(boundary_func_ptr))
     }
 }

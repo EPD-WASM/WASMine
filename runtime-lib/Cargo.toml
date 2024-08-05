@@ -3,6 +3,7 @@ name = "runtime-lib"
 version = "0.1.0"
 edition = "2021"
 
+
 [lib]
 bench = false
 
@@ -21,9 +22,15 @@ runtime-interface = { path = "../runtime-interface" }
 cee-scape = "0.2.0"
 uuid = { version = "1.9.1", features = ["v4"] }
 once_cell = "1.19.0"
+clap = { version = "4.5.13", features = ["derive"] }
+simplelog = "0.12.2"
 
 [features]
 default = ["llvm", "interp"]
 llvm = ["dep:llvm-gen"]
 interp = ["dep:interpreter"]
 asm = []
+
+[profile.release]
+codegen-units = 8
+lto = "fat"

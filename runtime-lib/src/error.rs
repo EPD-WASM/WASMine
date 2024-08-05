@@ -1,6 +1,9 @@
 use crate::{
-    engine::EngineError, func::FunctionError, instance_handle::InstantiationError,
-    linker::LinkingError, memory::MemoryError, tables::TableError,
+    linker::LinkingError,
+    objects::{
+        engine::EngineError, functions::FunctionError, instance_handle::InstantiationError,
+        memory::MemoryError, tables::TableError,
+    },
 };
 use thiserror::Error;
 use wasm_types::ValType;

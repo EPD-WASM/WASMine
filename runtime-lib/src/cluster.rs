@@ -1,6 +1,11 @@
 use crate::{
-    func::Function, globals::GlobalsObject, memory::MemoryObject, segmented_list::SegmentedList,
-    tables::TableObject, Engine,
+    config::Config,
+    helper::segmented_list::SegmentedList,
+    objects::{
+        functions::Function, globals::GlobalsObject, memory::MemoryObject, tables::TableObject,
+    },
+    wasi::WasiContext,
+    Engine,
 };
 use runtime_interface::ExecutionContext;
 use std::sync::Mutex;
@@ -17,17 +22,22 @@ use uuid::Uuid;
 /// Instance Handles are mere references to the resources and are therefore non-owning.
 pub struct Cluster {
     pub(crate) uuid: Uuid,
+    pub(crate) config: Config,
     memories: Mutex<SegmentedList<MemoryObject>>,
     tables: Mutex<SegmentedList<TableObject>>,
     globals: Mutex<SegmentedList<GlobalsObject>>,
     execution_contexts: Mutex<SegmentedList<ExecutionContext>>,
     engines: Mutex<SegmentedList<Engine>>,
     functions: Mutex<SegmentedList<Function>>,
+    wasi_ctxt: Mutex<SegmentedList<WasiContext>>,
 }
 
 impl Cluster {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(config: Config) -> Self {
+        Self {
+            config,
+            ..Default::default()
+        }
     }
 
     // unsafe: extracts mut-ref on cluster.globals without owning cluster.globals
@@ -72,6 +82,12 @@ impl Cluster {
         functions_lock.push(function);
         &mut functions_lock.get_last_segments_ref()[0]
     }
+
+    pub(crate) fn alloc_wasi_context(&self, wasi_ctxt: WasiContext) -> &mut WasiContext {
+        let mut wasi_ctxt_lock = self.wasi_ctxt.lock().unwrap();
+        wasi_ctxt_lock.push(wasi_ctxt);
+        &mut wasi_ctxt_lock.get_last_segments_ref()[0]
+    }
 }
 
 impl PartialEq for Cluster {
@@ -84,12 +100,14 @@ impl Default for Cluster {
     fn default() -> Self {
         Self {
             uuid: Uuid::new_v4(),
+            config: Config::default(),
             memories: Mutex::new(SegmentedList::new()),
             tables: Mutex::new(SegmentedList::new()),
             globals: Mutex::new(SegmentedList::new()),
             execution_contexts: Mutex::new(SegmentedList::new()),
             engines: Mutex::new(SegmentedList::new()),
             functions: Mutex::new(SegmentedList::new()),
+            wasi_ctxt: Mutex::new(SegmentedList::new()),
         }
     }
 }

@@ -26,3 +26,7 @@ pub(crate) enum Either<T1, T2> {
     Left(T1),
     Right(T2),
 }
+
+pub(crate) unsafe fn super_unsafe_copy_to_ref_mut<T>(r: &T) -> &'static mut T {
+    &mut core::slice::from_raw_parts_mut(r as *const _ as *mut _, 1)[0]
+}

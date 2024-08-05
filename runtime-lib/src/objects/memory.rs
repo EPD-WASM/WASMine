@@ -1,7 +1,7 @@
-use crate::error::RuntimeError;
-use crate::execution_context::trap_on_err;
-use crate::linker::RTMemoryImport;
-use crate::{Cluster, WASM_PAGE_LIMIT, WASM_PAGE_SIZE, WASM_RESERVED_MEMORY_SIZE};
+use crate::{
+    error::RuntimeError, linker::RTMemoryImport, objects::execution_context::trap_on_err, Cluster,
+    WASM_PAGE_LIMIT, WASM_PAGE_SIZE, WASM_RESERVED_MEMORY_SIZE,
+};
 use core::slice;
 use ir::structs::data::{Data, DataMode};
 use ir::structs::memory::Memory;

@@ -1,3 +1,6 @@
+use crate::{objects::execution_context::ExecutionContextWrapper, RuntimeError};
+use nix::sys::signal::{self, SaFlags, SigAction, SigHandler, SigSet, Signal};
+use once_cell::sync::Lazy;
 use std::{
     collections::HashMap,
     sync::{
@@ -5,10 +8,6 @@ use std::{
         Mutex,
     },
 };
-
-use crate::{execution_context::ExecutionContextWrapper, RuntimeError};
-use nix::sys::signal::{self, SaFlags, SigAction, SigHandler, SigSet, Signal};
-use once_cell::sync::Lazy;
 
 // signal-handling is made on a per-process basis, so we can use a global static
 static SIGNAL_HANDLER_FALLBACK_FUNCS: Lazy<Mutex<HashMap<libc::c_int, SigAction>>> =

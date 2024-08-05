@@ -1,13 +1,42 @@
+use std::{
+    ops::BitAnd,
+    os::{fd::FromRawFd, unix::fs::FileTypeExt},
+};
+
+use ir::structs::value::{Number, Value, ValueRaw};
+
 /// Wasm pointer type
 #[repr(transparent)]
-pub struct Ptr<T>(u32, std::marker::PhantomData<T>);
+#[derive(Clone, Copy)]
+pub(crate) struct Ptr<T>(u32, std::marker::PhantomData<T>);
+
+impl<T> Ptr<T> {
+    pub(crate) fn get(&self) -> u32 {
+        self.0
+    }
+
+    pub(crate) fn offset(&self, offset: u32) -> Self {
+        Ptr(self.0 + offset, std::marker::PhantomData)
+    }
+}
+
+impl<T> From<u32> for Ptr<T> {
+    fn from(val: u32) -> Self {
+        Ptr(val, std::marker::PhantomData)
+    }
+}
+impl<T> From<ValueRaw> for Ptr<T> {
+    fn from(val: ValueRaw) -> Self {
+        Ptr(val.as_u32(), std::marker::PhantomData)
+    }
+}
 
 /// Wasm constant pointer type
-pub type ConstPtr = u32;
+pub(crate) type ConstPtr = Ptr<u8>;
 
 /// Type of a subscription to an event or its occurrence.
 #[repr(u8)]
-pub enum EventType {
+pub(crate) enum EventType {
     /// The time value of clock `subscription_clock::id` has reached timestamp `subscription_clock::timeout`.
     Clock = 0,
     /// File descriptor `subscription_fd_readwrite::file_descriptor` has data available for reading. This event always triggers for regular files.
@@ -18,63 +47,63 @@ pub enum EventType {
 
 /// The state of the file descriptor subscribed to with `eventtype::fd_read` or `eventtype::fd_write`.
 #[repr(C)]
-pub struct EventRwFlags {
+pub(crate) struct EventRwFlags {
     /// The peer of this socket has closed or disconnected.
-    pub fd_readwrite_hangup: bool,
+    pub(crate) fd_readwrite_hangup: bool,
 }
 
 /// The contents of an `event` when type is `eventtype::fd_read` or `eventtype::fd_write`.
 #[repr(C)]
-pub struct EventFdReadwrite {
+pub(crate) struct EventFdReadwrite {
     /// The number of bytes available for reading or writing.
-    pub nbytes: FileSize,
+    pub(crate) nbytes: FileSize,
     /// The state of the file descriptor.
-    pub flags: EventRwFlags,
+    pub(crate) flags: EventRwFlags,
 }
 
 /// An event that occurred.
 #[repr(C)]
-pub struct Event {
+pub(crate) struct Event {
     /// User-provided value that got attached to `subscription::userdata`.
-    pub userdata: UserData,
+    pub(crate) userdata: UserData,
     /// If non-zero, an error that occurred while processing the subscription request.
-    pub error: Errno,
+    pub(crate) error: Errno,
     /// The type of event that occured
-    pub type_: EventType,
+    pub(crate) type_: EventType,
     /// The contents of the event, if it is an `eventtype::fd_read` or `eventtype::fd_write`. `eventtype::clock` events ignore this field.
-    pub fd_readwrite: EventFdReadwrite,
+    pub(crate) fd_readwrite: EventFdReadwrite,
 }
 
 /// Flags determining how to interpret the timestamp provided in `subscription_clock::timeout`.
 #[repr(C)]
-pub struct SubClockFlags {
+pub(crate) struct SubClockFlags {
     /// If set, treat the timestamp provided in `subscription_clock::timeout` as an absolute timestamp of clock `subscription_clock::id`. If clear, treat the timestamp provided in `subscription_clock::timeout` relative to the current time value of clock `subscription_clock::id`.
-    pub subscription_clock_abstime: bool,
+    pub(crate) subscription_clock_abstime: bool,
 }
 
 /// The contents of a `subscription` when type is `eventtype::clock`.
 #[repr(C)]
-pub struct SubscriptionClock {
+pub(crate) struct SubscriptionClock {
     /// The clock against which to compare the timestamp.
-    pub id: ClockID,
+    pub(crate) id: ClockID,
     /// The absolute or relative timestamp.
-    pub timeout: TimeStamp,
+    pub(crate) timeout: TimeStamp,
     /// The amount of time that the implementation may wait additionally to coalesce with other events.
-    pub precision: TimeStamp,
+    pub(crate) precision: TimeStamp,
     /// Flags specifying whether the timeout is absolute or relative
-    pub flags: SubClockFlags,
+    pub(crate) flags: SubClockFlags,
 }
 
 /// The contents of a `subscription` when type is type is `eventtype::fd_read` or `eventtype::fd_write`.
 #[repr(C)]
-pub struct SubscriptionFdReadwrite {
+pub(crate) struct SubscriptionFdReadwrite {
     /// The file descriptor on which to wait for it to become ready for reading or writing.
-    pub file_descriptor: FD,
+    pub(crate) file_descriptor: FD,
 }
 
 /// The contents of a `subscription`.
 #[repr(u8)]
-pub enum SubscriptionU {
+pub(crate) enum SubscriptionU {
     Clock(SubscriptionClock),
     FdRead(SubscriptionFdReadwrite),
     FdWrite(SubscriptionFdReadwrite),
@@ -82,19 +111,19 @@ pub enum SubscriptionU {
 
 /// Subscription to an event.
 #[repr(C)]
-pub struct Subscription {
+pub(crate) struct Subscription {
     /// User-provided value that is attached to the subscription in the implementation and returned through `event::userdata`.
-    pub userdata: UserData,
+    pub(crate) userdata: UserData,
     /// The type of the event to which to subscribe, and its contents
-    pub u: SubscriptionU,
+    pub(crate) u: SubscriptionU,
 }
 
 /// Exit code generated by a process when exiting.
-pub type ExitCode = u32;
+pub(crate) type ExitCode = u32;
 
 /// Signal condition.
 #[repr(u8)]
-pub enum Signal {
+pub(crate) enum Signal {
     /// No signal. Note that POSIX has special semantics for `kill(pid, 0)`, so this value is reserved.
     None = 0,
     /// Hangup.
@@ -191,26 +220,26 @@ pub enum Signal {
 
 /// Flags provided to `sock_recv`.
 #[repr(C)]
-pub struct RiFlags {
+pub(crate) struct RiFlags {
     /// Returns the message without removing it from the socket's receive queue.
-    pub recv_peek: bool,
+    pub(crate) recv_peek: bool,
     /// On byte-stream sockets, block until the full amount of data can be returned.
-    pub recv_waitall: bool,
+    pub(crate) recv_waitall: bool,
 }
 
 /// Flags returned by `sock_recv`.
 #[repr(C)]
-pub struct RoFlags {
+pub(crate) struct RoFlags {
     /// Returned by `sock_recv`: Message data has been truncated.
-    pub recv_data_truncated: bool,
+    pub(crate) recv_data_truncated: bool,
 }
 
 /// Flags provided to `sock_shutdown`. As there are currently no flags defined, it must be set to zero.
-pub type SiFlags = u16;
+pub(crate) type SiFlags = u16;
 
 /// Which channels on a socket to shut down.
 #[repr(u8)]
-pub enum SdFlags {
+pub(crate) enum SdFlags {
     /// Disables further receive operations.
     Rd = 1 << 0,
     /// Disables further send operations.
@@ -219,37 +248,30 @@ pub enum SdFlags {
 
 /// Identifier for preopened capabilities.
 #[repr(u8)]
-pub enum PreopenType {
+pub(crate) enum PreopenType {
     /// A pre-opened directory.
     Dir = 0,
 }
 
 /// The contents of a `prestat` when type is `preopen_type::dir`.
 #[repr(C)]
-pub struct PreStatDir {
+pub(crate) struct PreStatDir {
     /// The length of the directory name for use with `fd_prestat_dir_name`.
-    pub pr_name_len: Size,
+    pub(crate) pr_name_len: Size,
 }
 
 /// Information about a pre-opened directory.
 #[repr(u8)]
-pub enum PreStat {
+pub(crate) enum PreStat {
     Dir(PreStatDir),
 }
 
-/// Result type
-#[repr(u32)]
-pub enum Result<R, E> {
-    Ok(R),
-    Err(E),
-}
-
-pub type Size = u32;
-pub type FileSize = u64;
-pub type TimeStamp = u64;
+pub(crate) type Size = u32;
+pub(crate) type FileSize = u64;
+pub(crate) type TimeStamp = u64;
 
 #[repr(u32)]
-pub enum ClockID {
+pub(crate) enum ClockID {
     Realtime = 0,
     Monotonic = 1,
     ProcessCputimeID = 2,
@@ -259,7 +281,8 @@ pub enum ClockID {
 /// Error codes returned by functions. Not all of these error codes are returned by the functions provided by this API;
 /// some are used in higher-level library layers, and others are provided merely for alignment with POSIX.
 #[repr(u16)]
-pub enum Errno {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Errno {
     /// Success
     Success = 0,
     /// Argument list too long
@@ -416,12 +439,25 @@ pub enum Errno {
     NotCapable = 76,
 }
 
+impl From<Errno> for ValueRaw {
+    fn from(value: Errno) -> Self {
+        (value as u32).into()
+    }
+}
+
+impl From<Errno> for Value {
+    fn from(value: Errno) -> Self {
+        Value::Number(Number::I32(value as u32))
+    }
+}
+
 /// File descriptor.
-pub type FD = u32;
+pub(crate) type FD = i32;
 
 /// File descriptor rights, determining which actions may be performed.
 #[repr(u64)]
-pub enum Rights {
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Rights {
     /// The right to invoke `fd_datasync`. If `path_open` is set, includes the right to invoke `path_open` with `fdflags::dsync`.
     FdDatasync = 1 << 0,
     /// The right to invoke `fd_read` and `sock_recv`. If `rights::fd_seek` is set, includes the right to invoke `fd_pread`.
@@ -484,36 +520,43 @@ pub enum Rights {
     SockAccept = 1 << 29,
 }
 
-/// A region of memory for scatter/gather reads.
-#[repr(C)]
-pub struct IOVec {
-    /// The address of the buffer to be filled.
-    buf: Ptr<()>,
-    /// The length of the buffer to be filled.
-    buf_len: Size,
+impl Rights {
+    pub(crate) fn empty() -> Self {
+        unsafe { std::mem::transmute::<u64, Rights>(0) }
+    }
 }
 
 /// A region of memory for scatter/gather reads.
 #[repr(C)]
-pub struct CIOVec {
+pub(crate) struct IOVec {
     /// The address of the buffer to be filled.
-    buf: ConstPtr,
+    pub(crate) buf: Ptr<u8>,
     /// The length of the buffer to be filled.
-    buf_len: Size,
+    pub(crate) buf_len: Size,
+}
+
+/// A region of memory for scatter/gather reads.
+#[repr(C)]
+pub(crate) struct CIOVec {
+    /// The address of the buffer to be filled.
+    pub(crate) buf: ConstPtr,
+    /// The length of the buffer to be filled.
+    pub(crate) buf_len: Size,
 }
 
 /// List of scatter/gather vectors.
-pub type IOVecArray = *const IOVec;
+pub(crate) type IOVecArray = Ptr<IOVec>;
 
 /// List of constant scatter/gather vectors.
-pub type CIOVecArray = *const CIOVec;
+pub(crate) type CIOVecArray = Ptr<CIOVec>;
 
 /// Relative offset within a file.
-pub type FileDelta = i64;
+pub(crate) type FileDelta = i64;
 
 /// The position relative to which to set the offset of the file descriptor.
 #[repr(u8)]
-pub enum Whence {
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum Whence {
     Set = 0,
     Cur = 1,
     End = 2,
@@ -521,16 +564,17 @@ pub enum Whence {
 
 /// A reference to the offset of a directory entry.
 /// The value 0 signifies the start of the directory.
-pub type DirCookie = u64;
+pub(crate) type DirCookie = u64;
 
 /// The type for the `dirent::d_namlen` field of `dirent` struct.
-pub type DirNamLen = u32;
+pub(crate) type DirNamLen = u32;
 
 /// File serial number that is unique within its file system.
-pub type INode = u64;
+pub(crate) type INode = u64;
 
 /// The type of a file descriptor or file.
-pub enum FileType {
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FileType {
     /// The type of the file descriptor or file is unknown or is different from any of the other types specified.
     Unknown = 0,
     /// The file descriptor or file refers to a block device inode.
@@ -549,22 +593,40 @@ pub enum FileType {
     SymbolicLink = 7,
 }
 
+impl From<std::fs::FileType> for FileType {
+    fn from(ft: std::fs::FileType) -> Self {
+        if ft.is_file() {
+            FileType::RegularFile
+        } else if ft.is_dir() {
+            FileType::Directory
+        } else if ft.is_symlink() {
+            FileType::SymbolicLink
+        } else if ft.is_block_device() {
+            FileType::BlockDevice
+        } else if ft.is_char_device() {
+            FileType::CharacterDevice
+        } else {
+            FileType::Unknown
+        }
+    }
+}
+
 /// A directory entry.
 #[repr(C)]
-pub struct DirEnt {
+pub(crate) struct DirEnt {
     /// The offset of the next directory entry stored in the directory.
-    pub d_next: DirCookie,
+    pub(crate) d_next: DirCookie,
     /// The serial number of the file in the directory.
-    pub d_ino: INode,
+    pub(crate) d_ino: INode,
     /// The length of the name of the directory entry.
-    pub d_namelen: DirNamLen,
+    pub(crate) d_namelen: DirNamLen,
     /// The type of the file.
-    pub d_type: FileType,
+    pub(crate) d_type: FileType,
 }
 
 /// File or memory access pattern advisory information.
 #[repr(u8)]
-pub enum Advice {
+pub(crate) enum Advice {
     /// The application has no further expectation about the access pattern of the specified data.
     Normal = 0,
     /// The application expects to access the specified data sequentially from lower offsets to higher offsets.
@@ -581,7 +643,8 @@ pub enum Advice {
 
 /// File descriptor flags.
 #[repr(u16)]
-pub enum FdFlags {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum FdFlags {
     /// Append mode: Data written to the file is always appended to the file's end.
     Append = 1 << 0,
     /// Write according to synchronized I/O data integrity completion. Only the data stored in the file is synchronized.
@@ -590,29 +653,52 @@ pub enum FdFlags {
     Nonblock = 1 << 2,
     /// Synchronized read I/O operations.
     RSync = 1 << 3,
-    /// Synchronized write I/O operations.
+    /// Write according to synchronized I/O file integrity completion. In addition to synchronizing the data stored in the file,
+    /// the implementation may also synchronously update the file's metadata.
     Sync = 1 << 4,
+}
+
+impl FdFlags {
+    pub(crate) fn empty() -> Self {
+        unsafe { std::mem::transmute::<u16, FdFlags>(0) }
+    }
 }
 
 /// File descriptor attributes.
 #[repr(C)]
-pub struct FdStat {
+#[derive(Clone, Copy)]
+pub(crate) struct FdStat {
     /// File type.
-    pub fs_filetype: FileType,
+    pub(crate) fs_filetype: FileType,
     /// File descriptor flags.
-    pub fs_flags: FdFlags,
+    pub(crate) fs_flags: FdFlags,
     /// Rights that apply to this file descriptor.
-    pub fs_rights_base: Rights,
+    pub(crate) fs_rights_base: Rights,
     /// Maximum set of rights that may be installed on new paths relative to this file descriptor.
-    pub fs_rights_inheriting: Rights,
+    pub(crate) fs_rights_inheriting: Rights,
+}
+
+impl FdStat {
+    pub(crate) fn for_fd(fd: FD) -> Self {
+        let md = unsafe { std::fs::File::from_raw_fd(fd) }
+            .metadata()
+            .unwrap();
+        // Self {
+        //     fs_filetype: md.file_type().into(),
+        //     fs_flags: ,
+        //     fs_rights_base: Rights::FdRead | Rights::FdWrite,
+        //     fs_rights_inheriting: Rights::FdRead | Rights::FdWrite,
+        // }
+        todo!()
+    }
 }
 
 /// Identifier for a device containing a file system.
-pub type Device = u64;
+pub(crate) type Device = u64;
 
 /// Which file time attributes to adjust.
 #[repr(u16)]
-pub enum FstFlags {
+pub(crate) enum FstFlags {
     /// Adjust the last data access timestamp to the value stored in `filestat::atim`.
     Atim = 1 << 0,
     /// Adjust the last data access timestamp to the time of clock `clockid::realtime`.
@@ -625,14 +711,26 @@ pub enum FstFlags {
 
 /// Flags determining the method of how paths are resolved.
 #[repr(u32)]
-pub enum LookupFlags {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum LookupFlags {
     /// As long as the resolved path corresponds to a symbolic link, it is expanded.
     SymlinkFollow = 1 << 0,
 }
 
+impl LookupFlags {
+    pub(crate) fn to_libc(self) -> libc::c_int {
+        let mut flags = 0;
+        if self.contains(LookupFlags::SymlinkFollow) {
+            flags |= libc::AT_SYMLINK_FOLLOW;
+        }
+        flags
+    }
+}
+
 /// Open flags used by `path_open`.
 #[repr(u16)]
-pub enum OpenFlags {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum OpenFlags {
     /// Create the file if it does not exist.
     Creat = 1 << 0,
     /// Fail if not a directory.
@@ -643,32 +741,106 @@ pub enum OpenFlags {
     Trunc = 1 << 3,
 }
 
+impl OpenFlags {
+    pub(crate) fn to_libc(self) -> libc::c_int {
+        let mut flags = 0;
+        if self.contains(OpenFlags::Creat) {
+            flags |= libc::O_CREAT;
+        }
+        if self.contains(OpenFlags::Directory) {
+            flags |= libc::O_DIRECTORY;
+        }
+        if self.contains(OpenFlags::Excl) {
+            flags |= libc::O_EXCL;
+        }
+        if self.contains(OpenFlags::Trunc) {
+            flags |= libc::O_TRUNC;
+        }
+        flags
+    }
+}
+
 /// Number of hard links to an inode.
-pub type LinkCount = u32;
+pub(crate) type LinkCount = u32;
 
 /// File attributes.
 #[repr(C)]
-pub struct FileStat {
+pub(crate) struct FileStat {
     /// Device ID of device containing the file.
-    pub dev: Device,
+    pub(crate) dev: Device,
     /// File serial number.
-    pub ino: INode,
+    pub(crate) ino: INode,
     /// File type.
-    pub filetype: FileType,
+    pub(crate) filetype: FileType,
     /// Number of hard links to the file.
-    pub nlink: LinkCount,
+    pub(crate) nlink: LinkCount,
     /// For resizable files, the file size in bytes.
     /// For symbolic links, the length in bytes of the pathname contained in the symbolic link.
-    pub size: FileSize,
+    pub(crate) size: FileSize,
     /// Last data access timestamp.
-    pub atim: TimeStamp,
+    pub(crate) atim: TimeStamp,
     /// Last data modification timestamp.
-    pub mtim: TimeStamp,
+    pub(crate) mtim: TimeStamp,
     /// Last file status change timestamp.
-    pub ctim: TimeStamp,
+    pub(crate) ctim: TimeStamp,
 
     _padding: [u8; 8],
 }
 
 /// User-provided value that may be attached to objects that is retained when extracted from the implementation.
-pub type UserData = u64;
+pub(crate) type UserData = u64;
+
+impl BitAnd for Rights {
+    type Output = Rights;
+
+    fn bitand(self, rhs: Rights) -> Rights {
+        unsafe { std::mem::transmute(self as u64 & rhs as u64) }
+    }
+}
+
+impl BitAnd for FdFlags {
+    type Output = FdFlags;
+
+    fn bitand(self, rhs: FdFlags) -> FdFlags {
+        unsafe { std::mem::transmute(self as u16 & rhs as u16) }
+    }
+}
+
+pub(crate) trait BitFlag: BitAnd<Output = Self> + Sized + Copy + Eq {
+    type CType;
+    fn contains(self, needle: Self) -> bool {
+        (self & needle) == needle
+    }
+}
+
+impl BitFlag for OpenFlags {
+    type CType = u16;
+}
+
+impl BitAnd for OpenFlags {
+    type Output = OpenFlags;
+
+    fn bitand(self, rhs: OpenFlags) -> OpenFlags {
+        unsafe { std::mem::transmute(self as u16 & rhs as u16) }
+    }
+}
+
+impl BitFlag for LookupFlags {
+    type CType = u32;
+}
+
+impl BitAnd for LookupFlags {
+    type Output = LookupFlags;
+
+    fn bitand(self, rhs: LookupFlags) -> LookupFlags {
+        unsafe { std::mem::transmute(self as u32 & rhs as u32) }
+    }
+}
+
+impl BitFlag for Rights {
+    type CType = u64;
+}
+
+impl BitFlag for FdFlags {
+    type CType = u16;
+}

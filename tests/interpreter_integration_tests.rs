@@ -1,5 +1,4 @@
 use core::panic;
-use gen_util::generate_spec_test_cases;
 use ir::{
     function::{Function, FunctionSource},
     structs::{
@@ -10,10 +9,8 @@ use ir::{
 };
 use loader::Loader;
 use parser::{error::ParserError, parser::Parser};
-use runtime_interface::RawFunctionPtr;
-use runtime_lib::{BoundLinker, Cluster, Engine, InstanceHandle, Linker, RuntimeError};
+use runtime_lib::{BoundLinker, Cluster, Config, Engine, InstanceHandle, Linker, RuntimeError};
 use std::{collections::HashMap, path::PathBuf, rc::Rc};
-use test_log::test;
 use wasm_types::{NumType, ValType};
 use wast::{
     core::{NanPattern, WastArgCore, WastRetCore},
@@ -167,7 +164,7 @@ pub fn test_interpreter(file_path: &str) {
     };
 
     let linker: Linker = Linker::new();
-    let cluster: Cluster = Cluster::new();
+    let cluster: Cluster = Cluster::new(Config::default());
     let mut declared_modules: DeclaredModulesMap = HashMap::new();
     let mut linker = linker.bind_to(&cluster);
 

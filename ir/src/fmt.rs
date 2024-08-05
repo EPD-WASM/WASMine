@@ -299,9 +299,13 @@ impl Display for GlobalDisplayContext<'_> {
             GlobalType::Const(t) => format!("const {}", t),
         };
         if self.global.import {
-            writeln!(f, "@global_{}: {} = imported", self.idx, gt)
+            writeln!(f, "@__wasmine_global__{}: {} = imported", self.idx, gt)
         } else {
-            writeln!(f, "@global_{}: {} = {:?};", self.idx, gt, self.global.init)
+            writeln!(
+                f,
+                "@__wasmine_global__{}: {} = {:?};",
+                self.idx, gt, self.global.init
+            )
         }
     }
 }

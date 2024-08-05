@@ -27,7 +27,12 @@ pub fn wasmine_llvm_fibonacci_criterion(c: &mut Criterion) {
                             .parse(Loader::from_buf(wasm_bytes))
                             .unwrap(),
                     );
-                    let wasmine_cluster = runtime_lib::Cluster::new();
+                    let config = runtime_lib::ConfigBuilder::new()
+                        .enable_wasi(true)
+                        .set_wasi_dirs(vec![])
+                        .set_wasi_args(vec![])
+                        .finish();
+                    let wasmine_cluster = runtime_lib::Cluster::new(config);
                     let mut wasmine_engine = runtime_lib::Engine::llvm().unwrap();
                     wasmine_engine.init(wasmine_module.clone()).unwrap();
 

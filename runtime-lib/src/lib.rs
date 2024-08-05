@@ -11,32 +11,27 @@ use ir::{
     structs::value::{Number, Value},
     utils::numeric_transmutes::{Bit32, Bit64},
 };
-use std::{path, rc::Rc};
+pub use objects::engine::Engine;
+pub use objects::instance_handle::InstanceHandle;
+use std::{path::Path, rc::Rc};
 use wasm_types::{FuncType, NumType, ValType};
 
+mod cli;
 mod cluster;
-mod engine;
+mod config;
 mod error;
-mod execution_context;
-mod func;
-mod globals;
-mod instance_handle;
+mod helper;
 mod linker;
-mod memory;
-mod segmented_list;
-mod signals;
-mod tables;
-mod types;
-mod utils;
+mod objects;
 mod wasi;
 
+pub use cli::main;
 pub use cluster::Cluster;
-pub use engine::Engine;
 pub use error::RuntimeError;
-pub use instance_handle::InstanceHandle;
 pub use linker::{BoundLinker, Linker};
 
 // reexports
+pub use config::{Config, ConfigBuilder};
 pub use ir::structs::module::Module as WasmModule;
 pub use loader::Loader;
 pub use parser::{Parser, ParserError, ValidationError};
@@ -101,42 +96,41 @@ fn parse_input_params_for_function(function_type: &FuncType) -> Result<Vec<Value
     Ok(values)
 }
 
-fn run_internal(path: &str) -> Result<Vec<Value>, RuntimeError> {
-    let path = path::Path::new(path);
+fn run_internal(path: &Path, config: Config) -> Result<Vec<Value>, RuntimeError> {
+    log::debug!("run_internal: {:?}", config);
+
     let loader = loader::Loader::from_file(path);
     let parser = parser::Parser::default();
     let module = Rc::new(parser.parse(loader).unwrap());
 
     let mut engine;
-
-    #[cfg(feature = "interp")]
-    {
-        engine = Engine::interpreter()?;
-    }
-    #[cfg(all(not(feature = "interp"), feature = "llvm"))]
+    #[cfg(feature = "llvm")]
     {
         engine = Engine::llvm()?;
     }
-
+    #[cfg(all(not(feature = "llvm"), feature = "interp"))]
+    {
+        engine = Engine::interpreter()?;
+    }
     engine.init(module.clone())?;
 
-    let cluster = Cluster::new();
-    let mut linker = Linker::new();
-    linker.link_wasi();
+    let cluster = Cluster::new(config);
+    let linker = Linker::new();
 
     let linker = linker.bind_to(&cluster);
     let mut module_handle = linker.instantiate_and_link(module.clone(), engine)?;
-    module_handle.run_by_name(
-        "_start",
-        parse_input_params_for_function(
-            module_handle
-                .get_function_type_from_func_idx(module_handle.query_start_function().unwrap()),
-        )?,
-    )
+    // module_handle.run_by_name(
+    //     "_start",
+    //     parse_input_params_for_function(
+    //         module_handle
+    //             .get_function_type_from_func_idx(module_handle.query_start_function().unwrap()),
+    //     )?,
+    // )
+    module_handle.run_by_name("_start", vec![])
 }
 
-pub fn run(path: &str) -> u8 {
-    match run_internal(path) {
+pub fn run(path: &Path, config: Config) -> u8 {
+    match run_internal(path, config) {
         Ok(return_values) => {
             for v in return_values {
                 log::info!("Result: {}", v);
@@ -144,7 +138,7 @@ pub fn run(path: &str) -> u8 {
             0
         }
         Err(e) => {
-            eprintln!("Error: {}", e);
+            log::error!("Error: {}", e);
             1
         }
     }

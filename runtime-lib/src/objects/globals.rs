@@ -1,4 +1,5 @@
-use crate::{instance_handle::InstantiationError, linker::RTGlobalImport, Cluster, Engine};
+use super::instance_handle::InstantiationError;
+use crate::{linker::RTGlobalImport, Cluster, Engine};
 use ir::structs::{
     global::Global,
     value::{ConstantValue, ValueRaw},
@@ -41,7 +42,7 @@ impl GlobalsObject {
         for instance in imports.iter().rev() {
             globals[instance.idx as usize].addr = instance.addr;
             engine.register_symbol(
-                &format!("global_{}", instance.idx),
+                &format!("__wasmine_global__{}", instance.idx),
                 globals[instance.idx as usize].addr as _,
             );
         }
@@ -49,7 +50,7 @@ impl GlobalsObject {
             if !global.import {
                 let addr = unsafe { (storage as *mut ValueRaw).add(idx) };
                 globals[idx].addr = addr;
-                engine.register_symbol(&format!("global_{}", idx), addr as _);
+                engine.register_symbol(&format!("__wasmine_global__{}", idx), addr as _);
             }
         }
         for (idx, global) in globals_meta.iter().enumerate() {

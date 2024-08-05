@@ -1,8 +1,10 @@
 use crate::{
-    engine::EngineError,
-    execution_context::{trap_on_err, ExecutionContextWrapper},
-    instance_handle::InstantiationError,
     linker::RTTableImport,
+    objects::{
+        engine::EngineError,
+        execution_context::{trap_on_err, ExecutionContextWrapper},
+        instance_handle::InstantiationError,
+    },
     Cluster, Engine, InstanceHandle, RuntimeError,
 };
 use core::slice;

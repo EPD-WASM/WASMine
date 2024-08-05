@@ -41,6 +41,6 @@ impl Executor {
 
     pub fn get_global_value(&self, global_idx: GlobalIdx) -> Result<ValueRaw, ExecutionError> {
         self.execution_engine
-            .get_global_value(&format!("global_{}", global_idx))
+            .get_global_value(&format!("__wasmine_global__{}", global_idx))
     }
 }

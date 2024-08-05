@@ -168,7 +168,12 @@ impl<'a> BenchState<'a> {
         execution_end: extern "C" fn(*mut u8),
     ) -> Result<Self> {
         let mut linker = Linker::new();
-        let cluster = Cluster::new();
+        let config = runtime_lib::ConfigBuilder::new()
+            .enable_wasi(true)
+            .set_wasi_dirs(vec![])
+            .set_wasi_args(vec![])
+            .finish();
+        let cluster = Cluster::new(config);
 
         linker.link_host_function("bench", "start", move || {
             execution_start(execution_timer);

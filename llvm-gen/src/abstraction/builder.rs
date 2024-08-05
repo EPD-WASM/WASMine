@@ -3,16 +3,16 @@ use crate::util::to_c_str;
 use ir::structs::value::ValueRaw;
 use llvm_sys::{
     core::{
-        LLVMAddIncoming, LLVMAppendBasicBlockInContext, LLVMBuildAdd, LLVMBuildAggregateRet,
-        LLVMBuildAlloca, LLVMBuildBitCast, LLVMBuildBr, LLVMBuildCall2, LLVMBuildCondBr,
-        LLVMBuildFCmp, LLVMBuildFPCast, LLVMBuildFPToSI, LLVMBuildFPToUI, LLVMBuildGEP2,
-        LLVMBuildICmp, LLVMBuildIntCast2, LLVMBuildLoad2, LLVMBuildMul, LLVMBuildPhi, LLVMBuildRet,
-        LLVMBuildRetVoid, LLVMBuildSIToFP, LLVMBuildSelect, LLVMBuildStore, LLVMBuildSub,
-        LLVMBuildSwitch, LLVMBuildUIToFP, LLVMBuildUnreachable, LLVMConstBitCast, LLVMConstInt,
-        LLVMConstNull, LLVMConstReal, LLVMCreateBuilderInContext, LLVMDisposeBuilder,
-        LLVMDoubleTypeInContext, LLVMFloatTypeInContext, LLVMInt16TypeInContext, LLVMInt1Type,
-        LLVMInt32TypeInContext, LLVMInt64TypeInContext, LLVMInt8TypeInContext,
-        LLVMIntTypeInContext, LLVMMDStringInContext2, LLVMMetadataAsValue,
+        LLVMAddIncoming, LLVMAppendBasicBlockInContext, LLVMArrayType2, LLVMBuildAdd,
+        LLVMBuildAggregateRet, LLVMBuildAlloca, LLVMBuildBitCast, LLVMBuildBr, LLVMBuildCall2,
+        LLVMBuildCondBr, LLVMBuildFCmp, LLVMBuildFPCast, LLVMBuildFPToSI, LLVMBuildFPToUI,
+        LLVMBuildGEP2, LLVMBuildICmp, LLVMBuildIntCast2, LLVMBuildLoad2, LLVMBuildMul,
+        LLVMBuildPhi, LLVMBuildRet, LLVMBuildRetVoid, LLVMBuildSIToFP, LLVMBuildSelect,
+        LLVMBuildStore, LLVMBuildSub, LLVMBuildSwitch, LLVMBuildUIToFP, LLVMBuildUnreachable,
+        LLVMConstBitCast, LLVMConstInt, LLVMConstNull, LLVMConstReal, LLVMCreateBuilderInContext,
+        LLVMDisposeBuilder, LLVMDoubleTypeInContext, LLVMFloatTypeInContext,
+        LLVMInt16TypeInContext, LLVMInt1Type, LLVMInt32TypeInContext, LLVMInt64TypeInContext,
+        LLVMInt8TypeInContext, LLVMIntTypeInContext, LLVMMDStringInContext2, LLVMMetadataAsValue,
         LLVMMetadataTypeInContext, LLVMPointerType, LLVMPointerTypeInContext,
         LLVMPositionBuilderAtEnd, LLVMStructTypeInContext, LLVMTypeOf, LLVMVoidTypeInContext,
     },
@@ -159,6 +159,10 @@ impl Builder {
                 false.into(),
             )
         }
+    }
+
+    pub(crate) fn array(&self, elem_ty: LLVMTypeRef, len: usize) -> LLVMTypeRef {
+        unsafe { LLVMArrayType2(elem_ty, len as u64) }
     }
 
     pub(crate) fn valtype2llvm(&self, valtype: ValType) -> LLVMTypeRef {

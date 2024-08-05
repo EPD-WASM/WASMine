@@ -1,3 +1,4 @@
+use crate::objects::functions::BoundaryCCFuncTy;
 use core::ffi;
 use ir::structs::{module::Module as WasmModule, value::ValueRaw};
 use runtime_interface::RawFunctionPtr;
@@ -6,8 +7,6 @@ use std::{
     rc::Rc,
 };
 use wasm_types::{FuncIdx, GlobalIdx};
-
-use crate::func::BoundaryCCFuncTy;
 
 #[derive(Debug, thiserror::Error)]
 pub enum EngineError {
