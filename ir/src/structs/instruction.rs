@@ -1,4 +1,4 @@
-use wasm_types::{instruction::BlockType, FuncIdx, LabelIdx, TableIdx, TypeIdx};
+use wasm_types::{BlockType, FuncIdx, LabelIdx, TableIdx, TypeIdx};
 
 pub enum Instructon {}
 

@@ -1,6 +1,7 @@
 [package]
-name = "loader"
+name = "max-func-type"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+wasmparser = "0.215.0"

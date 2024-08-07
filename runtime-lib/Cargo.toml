@@ -31,6 +31,5 @@ llvm = ["dep:llvm-gen"]
 interp = ["dep:interpreter"]
 asm = []
 
-[profile.release]
-codegen-units = 8
-lto = "fat"
+[dev-dependencies]
+rand = "0.8.5"

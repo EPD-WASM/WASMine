@@ -1,9 +1,8 @@
-use crate::{context::Context, function_builder::FunctionBuilder};
-
 use super::{
     error::ParserError, parse_basic_blocks::parse_basic_blocks,
     wasm_stream_reader::WasmStreamReader,
 };
+use crate::{context::Context, function_builder::FunctionBuilder};
 use ir::{
     function::Function,
     structs::{
@@ -18,11 +17,9 @@ use ir::{
         value::ConstantValue,
     },
 };
-use wasm_types::module::{GlobalType, MemType, Name, Section, TableType};
-use wasm_types::{instruction::BlockType, ImportDesc};
 use wasm_types::{
-    FuncIdx, FuncType, GlobalIdx, Limits, MemIdx, NumType, RefType, ResType, TableIdx, TypeIdx,
-    ValType,
+    BlockType, FuncIdx, FuncType, FuncTypeBuilder, GlobalIdx, GlobalType, ImportDesc, Limits,
+    MemIdx, MemType, Name, NumType, RefType, Section, TableIdx, TableType, TypeIdx, ValType,
 };
 
 pub(crate) trait Parse {
@@ -40,16 +37,14 @@ impl Parse for FuncType {
                 prefix, i.pos,
             )));
         }
-        let rt1 = ResType::parse(i)?;
-        let rt2 = ResType::parse(i)?;
-        Ok(FuncType(rt1, rt2))
-    }
-}
-
-impl Parse for ResType {
-    fn parse(i: &mut WasmStreamReader) -> Result<ResType, ParserError> {
-        let num_values = i.read_leb128::<u32>()?;
-        (0..num_values).map(|_| ValType::parse(i)).collect()
+        let mut builder = FuncTypeBuilder::new();
+        for _ in 0..i.read_leb128::<u32>()? {
+            builder = builder.add_param(ValType::parse(i)?);
+        }
+        for _ in 0..i.read_leb128::<u32>()? {
+            builder = builder.add_result(ValType::parse(i)?);
+        }
+        Ok(builder.finish())
     }
 }
 

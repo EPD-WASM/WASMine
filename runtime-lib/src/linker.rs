@@ -169,7 +169,7 @@ impl<'a> BoundLinker<'a> {
 
             match &import.desc {
                 ImportDesc::Func(type_idx) => {
-                    let requested_function_type = module.function_types[*type_idx as usize].clone();
+                    let requested_function_type = module.function_types[*type_idx as usize];
                     let actual_function_type =
                         match exporting_module.get_function_type_from_name(&import.name) {
                             Some(t) => t,
@@ -180,10 +180,10 @@ impl<'a> BoundLinker<'a> {
                                 })
                             }
                         };
-                    if requested_function_type != *actual_function_type {
+                    if requested_function_type != actual_function_type {
                         return Err(LinkingError::FunctionTypeMismatch {
                             requested: requested_function_type,
-                            actual: actual_function_type.clone(),
+                            actual: actual_function_type,
                         });
                     }
 

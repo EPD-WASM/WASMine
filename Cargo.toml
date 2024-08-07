@@ -1,4 +1,4 @@
-workspace = { members = [ "fuzz", "runtime-lib", "interpreter", "ir", "parser", "tests/gen_util", "wasm-types", "loader", "runtime-interface", "llvm-gen", "sightglass-connector", "benchmarks"] }
+workspace = { members = [ "fuzz", "runtime-lib", "interpreter", "ir", "parser", "tests/gen_util", "wasm-types", "loader", "runtime-interface", "llvm-gen", "sightglass-connector", "benchmarks", "utils/max-func-type"] }
 
 [package]
 name = "wasm_rt"
@@ -32,3 +32,8 @@ path = "./bin/main.rs"
 [profile.release]
 debug = true
 lto = "fat"
+strip = false
+
+[profile.bench]
+debug = true
+strip = false

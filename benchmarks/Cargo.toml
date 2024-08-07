@@ -14,14 +14,6 @@ wasmtime = "22.0.0"
 wasmedge-sdk = { version = "0.13.0", default-features = false, features = ["standalone"] }
 iai-callgrind = "0.12.0"
 
-[profile.release]
-debug = true
-strip = false
-
-[profile.bench]
-debug = true
-strip = false
-
 [[bin]]
 name = "benches_dummy_bin"
 path = "./bin/main.rs"

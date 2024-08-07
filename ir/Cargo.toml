@@ -7,6 +7,3 @@ edition = "2021"
 thiserror = "1.0.60"
 wasm-types = { path = "../wasm-types" }
 once_cell = "1.19.0"
-
-[profile.release]
-lto = "fat"

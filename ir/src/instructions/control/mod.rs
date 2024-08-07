@@ -24,4 +24,4 @@ pub use unreachable::*;
 
 use super::*;
 use crate::structs::instruction::ControlInstruction;
-use wasm_types::instruction::BlockType;
+use wasm_types::BlockType;

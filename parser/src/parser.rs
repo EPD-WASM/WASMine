@@ -21,9 +21,7 @@ use loader::Loader;
 use std::io::{BufReader, Write};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::vec;
-use wasm_types::module::Name;
-use wasm_types::{module::Section, FuncIdx, FuncType, TypeIdx};
-use wasm_types::{ImportDesc, MemIdx, ValType};
+use wasm_types::{FuncIdx, FuncType, ImportDesc, MemIdx, Name, Section, TypeIdx, ValType};
 
 const WASM_MODULE_PREAMBLE: &[u8] = b"\0asm";
 const WASM_MODULE_VERSION: u32 = 1;
@@ -311,7 +309,7 @@ impl Parser {
             FunctionSource::Import(..)
         ));
         let type_idx = self.module.ir.functions[function_idx as usize].type_idx;
-        let function_type = self.module.function_types[type_idx as usize].clone();
+        let function_type = self.module.function_types[type_idx as usize];
 
         // we don't need the code size for decoding an thus don't validate it
         let _ = i.read_leb128::<u32>()?;
@@ -333,14 +331,13 @@ impl Parser {
             return Err(ParserError::Msg("too many locals".into()));
         }
 
-        let input_param_types = function_type.0;
         {
             let locals = match &mut self.module.ir.functions[function_idx as usize].src {
                 FunctionSource::Internal(f) => &mut f.locals,
                 _ => unreachable!(),
             };
-            *locals = Vec::with_capacity(input_param_types.len() + num_expanded_locals as usize);
-            for param_type in input_param_types {
+            *locals = Vec::with_capacity(function_type.num_params() + num_expanded_locals as usize);
+            for param_type in function_type.params_iter() {
                 locals.push(param_type);
             }
             let mut expanded_locals = local_prototypes
@@ -366,13 +363,13 @@ impl Parser {
             let entry_basic_block = BasicBlock::next_id();
             let exit_basic_block = BasicBlock::next_id();
 
-            builder.reserve_bb_with_phis(exit_basic_block, &mut ctxt, function_type.1.clone());
+            builder.reserve_bb_with_phis(exit_basic_block, &mut ctxt, function_type.results_iter());
 
             let function_scope_label = Label {
                 bb_id: exit_basic_block,
                 loop_after_bb_id: None,
                 loop_after_result_type: None,
-                result_type: function_type.1.clone(),
+                result_type: function_type.results(),
             };
             let mut labels = vec![function_scope_label];
             builder.start_bb_with_id(entry_basic_block);
@@ -383,7 +380,11 @@ impl Parser {
                 builder.current_bb_terminator(),
                 ControlInstruction::Unreachable | ControlInstruction::Return
             ) {
-                let _ = validate_and_extract_result_from_stack(&mut ctxt, &function_type.1, false);
+                let _ = validate_and_extract_result_from_stack(
+                    &mut ctxt,
+                    &function_type.results(),
+                    false,
+                );
             }
             builder.continue_bb(exit_basic_block);
             builder.terminate_return(

@@ -63,8 +63,8 @@ impl ExecutionContextWrapper<'_> {
                 let actual_function_type = &wasm_module.function_types[*func_type as usize];
                 if expected_function_type != actual_function_type {
                     return Err(TableError::TableFunctionTypeMismatch {
-                        expected: expected_function_type.clone(),
-                        actual: actual_function_type.clone(),
+                        expected: *expected_function_type,
+                        actual: *actual_function_type,
                     }
                     .into());
                 }

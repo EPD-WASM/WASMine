@@ -11,6 +11,3 @@ wasm-types = { path = "../wasm-types" }
 ir = { path = "../ir" }
 loader = { path = "../loader" }
 itertools = "0.13.0"
-
-[profile.release]
-lto = "fat"

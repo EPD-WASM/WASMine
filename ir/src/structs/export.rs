@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use wasm_types::{module::Name, FuncIdx, GlobalIdx, MemIdx, TableIdx};
+use wasm_types::{FuncIdx, GlobalIdx, MemIdx, Name, TableIdx};
 
 #[derive(Debug, Clone)]
 pub struct FuncExport {

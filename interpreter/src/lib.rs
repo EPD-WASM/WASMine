@@ -1,3 +1,5 @@
+#![allow(clippy::all)]
+#![allow(warnings)]
 use control_flow::GlueHandler;
 use core::ffi;
 use ir::structs::value::{Number, ValueRaw};
@@ -182,9 +184,7 @@ impl Interpreter {
             vars: VariableStore::new(Vec::new()),
         });
 
-        let ret_types = ctx.module.function_types[entry_fn.type_idx as usize]
-            .1
-            .clone();
+        let ret_types = ctx.module.function_types[entry_fn.type_idx as usize].results();
         // println!("return types: {:?}", ret_types);
         // println!("decoded instructions: {:#?}", self.ctx.stack.last().unwrap().decoder);
         // println!("entry_fn: {:#?}", entry_fn);

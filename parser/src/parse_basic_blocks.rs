@@ -8,39 +8,65 @@ use ir::{
     instructions::{Variable, VariableID},
     structs::instruction::ControlInstruction,
 };
-use wasm_types::instruction::BlockType;
+use wasm_types::BlockType;
 use wasm_types::{NumType, RefType, ResType, ValType};
 
-fn setup_block_stack(block_type: BlockType, ctxt: &mut Context) -> Vec<VariableID> {
-    let input_signature = get_block_input_signature(ctxt, block_type);
-    let input_length = input_signature.len();
-    // divide stack into block stack (input params) and remaining stack (output params)
-    ctxt.stack.stash_with_keep(input_length);
-    let mut input_vars = Vec::new();
-    for (i, input_var) in input_signature.iter().enumerate() {
-        if ctxt.stack[i].type_ != *input_var {
-            ctxt.poison(ValidationError::Msg(
-                "mismatched input signature in target label".to_string(),
-            ))
-        } else {
-            input_vars.push(ctxt.stack[i].id);
+struct BTWrapper(BlockType);
+
+impl BTWrapper {
+    fn setup_block_stack(&self, ctxt: &mut Context) -> Vec<VariableID> {
+        // divide stack into block stack (input params) and remaining stack (output params)
+        let input_length = self.block_inputs_count(ctxt);
+        ctxt.stack.stash_with_keep(input_length);
+        let mut input_vars = Vec::new();
+        for (i, input_var) in self.block_inputs(ctxt).enumerate() {
+            if ctxt.stack[i].type_ != input_var {
+                ctxt.poison(ValidationError::Msg(
+                    "mismatched input signature in target label".to_string(),
+                ))
+            } else {
+                input_vars.push(ctxt.stack[i].id);
+            }
+        }
+        input_vars
+    }
+
+    fn block_returns(&self, ctxt: &Context) -> Box<dyn Iterator<Item = ValType>> {
+        match self.0 {
+            BlockType::Empty => Box::new(std::iter::empty()),
+            BlockType::ShorthandFunc(val_type) => Box::new(std::iter::once(val_type)),
+            BlockType::FunctionSig(func_idx) => {
+                Box::new(ctxt.module.function_types[func_idx as usize].results_iter())
+            }
         }
     }
-    input_vars
-}
 
-fn get_block_return_signature(ctxt: &Context, block_type: BlockType) -> ResType {
-    match block_type {
-        BlockType::Empty => Vec::new(),
-        BlockType::ShorthandFunc(val_type) => vec![val_type],
-        BlockType::FunctionSig(func_idx) => ctxt.module.function_types[func_idx as usize].1.clone(),
+    fn block_returns_count(&self, ctxt: &Context) -> usize {
+        match self.0 {
+            BlockType::Empty => 0,
+            BlockType::ShorthandFunc(_) => 1,
+            BlockType::FunctionSig(func_idx) => {
+                ctxt.module.function_types[func_idx as usize].num_results()
+            }
+        }
     }
-}
 
-fn get_block_input_signature(ctxt: &Context, block_type: BlockType) -> ResType {
-    match block_type {
-        BlockType::Empty | BlockType::ShorthandFunc(_) => Vec::new(),
-        BlockType::FunctionSig(func_idx) => ctxt.module.function_types[func_idx as usize].0.clone(),
+    fn block_inputs(&self, ctxt: &Context) -> Box<dyn Iterator<Item = ValType>> {
+        match self.0 {
+            BlockType::Empty | BlockType::ShorthandFunc(_) => Box::new(std::iter::empty()),
+            BlockType::FunctionSig(func_idx) => {
+                Box::new(ctxt.module.function_types[func_idx as usize].params_iter())
+            }
+        }
+    }
+
+    fn block_inputs_count(&self, ctxt: &Context) -> usize {
+        match self.0 {
+            BlockType::Empty | BlockType::ShorthandFunc(_) => 0,
+            BlockType::FunctionSig(func_idx) => {
+                ctxt.module.function_types[func_idx as usize].num_params()
+            }
+        }
     }
 }
 
@@ -124,7 +150,8 @@ fn parse_terminator(
 ) -> Result<(), ParserError> {
     match builder.current_bb_terminator().clone() {
         ControlInstruction::Block(block_type) => {
-            let block_input_vars = setup_block_stack(block_type.clone(), ctxt);
+            let block_type = BTWrapper(block_type);
+            let block_input_vars = block_type.setup_block_stack(ctxt);
 
             // complete leading bb
             let first_nested_block_id = BasicBlock::next_id();
@@ -137,17 +164,13 @@ fn parse_terminator(
             let after_block_bb_id = BasicBlock::next_id();
             let block_label = Label {
                 bb_id: after_block_bb_id,
-                result_type: get_block_return_signature(ctxt, block_type.clone()),
+                result_type: block_type.block_returns(ctxt).collect(),
                 loop_after_bb_id: None,
                 loop_after_result_type: None,
             };
             labels.push(block_label.clone());
 
-            builder.reserve_bb_with_phis(
-                after_block_bb_id,
-                ctxt,
-                get_block_return_signature(ctxt, block_type.clone()),
-            );
+            builder.reserve_bb_with_phis(after_block_bb_id, ctxt, block_type.block_returns(ctxt));
 
             // parse block instructions until the block's "end"
             builder.start_bb_with_id(first_nested_block_id);
@@ -166,7 +189,8 @@ fn parse_terminator(
         }
 
         ControlInstruction::Loop(block_type) => {
-            let block_input_vars = setup_block_stack(block_type.clone(), ctxt);
+            let block_type = BTWrapper(block_type);
+            let block_input_vars = block_type.setup_block_stack(ctxt);
             let leading_bb_id = builder.current_bb_get().id;
 
             let loop_hdr_bb_id = BasicBlock::next_id();
@@ -175,11 +199,7 @@ fn parse_terminator(
 
             // loop entry
             {
-                builder.reserve_bb_with_phis(
-                    loop_hdr_bb_id,
-                    ctxt,
-                    get_block_input_signature(ctxt, block_type.clone()),
-                );
+                builder.reserve_bb_with_phis(loop_hdr_bb_id, ctxt, block_type.block_inputs(ctxt));
                 builder.replace_phi_inputs_on_stack(ctxt);
                 builder.terminate_jmp(
                     loop_body_bb_id,
@@ -193,11 +213,7 @@ fn parse_terminator(
             }
 
             // loop exit
-            builder.reserve_bb_with_phis(
-                loop_exit_bb_id,
-                ctxt,
-                get_block_return_signature(ctxt, block_type.clone()),
-            );
+            builder.reserve_bb_with_phis(loop_exit_bb_id, ctxt, block_type.block_returns(ctxt));
 
             // complete leading bb
             builder.continue_bb(leading_bb_id);
@@ -209,9 +225,9 @@ fn parse_terminator(
             // add next label to jump to (one more recursion level)
             let block_label = Label {
                 bb_id: loop_hdr_bb_id,
-                result_type: get_block_input_signature(ctxt, block_type.clone()),
+                result_type: block_type.block_inputs(ctxt).collect(),
                 loop_after_bb_id: Some(loop_exit_bb_id),
-                loop_after_result_type: Some(get_block_return_signature(ctxt, block_type.clone())),
+                loop_after_result_type: Some(block_type.block_returns(ctxt).collect()),
             };
             labels.push(block_label.clone());
 
@@ -230,12 +246,12 @@ fn parse_terminator(
         }
 
         ControlInstruction::IfElse(block_type) => {
+            let block_type = BTWrapper(block_type);
             let pred_bb_id = builder.current_bb_get().id;
             let cond_var = ctxt.pop_var_with_type(&ValType::Number(NumType::I32)).id;
-            let return_signature = get_block_return_signature(ctxt, block_type.clone());
 
             let if_else_exit_bb = BasicBlock::next_id();
-            builder.reserve_bb_with_phis(if_else_exit_bb, ctxt, return_signature.clone());
+            builder.reserve_bb_with_phis(if_else_exit_bb, ctxt, block_type.block_returns(ctxt));
 
             // save label stack size outside of block
             let label_depth = labels.len();
@@ -245,11 +261,11 @@ fn parse_terminator(
                 bb_id: if_else_exit_bb,
                 loop_after_bb_id: None,
                 loop_after_result_type: None,
-                result_type: return_signature.clone(),
+                result_type: block_type.block_returns(ctxt).collect(),
             };
             labels.push(block_label.clone());
 
-            let block_input_vars = setup_block_stack(block_type.clone(), ctxt);
+            let block_input_vars = block_type.setup_block_stack(ctxt);
 
             let target_if_true = BasicBlock::next_id();
             builder.start_bb_with_id(target_if_true);
@@ -259,7 +275,7 @@ fn parse_terminator(
                 output_vars: ref end_of_then_out_vars,
             } = builder.current_bb_get().terminator
             {
-                if end_of_then_out_vars.len() != return_signature.len() {
+                if end_of_then_out_vars.len() != block_type.block_returns_count(ctxt) {
                     // this is only a marker block and it only means trouble keeping it
                     builder.eliminate_current_bb();
                 } else {
@@ -269,10 +285,7 @@ fn parse_terminator(
                 // restore state from if-statement
                 ctxt.stack.unstash();
                 ctxt.stack.stash();
-                for (var, type_) in block_input_vars
-                    .iter()
-                    .zip(get_block_input_signature(ctxt, block_type))
-                {
+                for (var, type_) in block_input_vars.iter().zip(block_type.block_inputs(ctxt)) {
                     ctxt.push_var(Variable { id: *var, type_ });
                 }
 
@@ -412,17 +425,17 @@ fn parse_terminator(
                         .cloned()
                 })
                 .unwrap();
-            let call_params = validate_and_extract_result_from_stack(ctxt, &func_type.0, false);
+            let call_params =
+                validate_and_extract_result_from_stack(ctxt, &func_type.params(), false);
             // pop all parameters from the stack
             ctxt.stack
                 .stack
                 .truncate(ctxt.stack.stack.len() - call_params.len());
 
             let return_vars = func_type
-                .1
-                .iter()
+                .results_iter()
                 .map(|val| {
-                    let var = ctxt.create_var(*val);
+                    let var = ctxt.create_var(val);
                     let tmp = var.id;
                     ctxt.push_var(var);
                     tmp
@@ -458,17 +471,17 @@ fn parse_terminator(
 
             let selector_var = ctxt.pop_var_with_type(&ValType::Number(NumType::I32)).id;
             let func_type = ctxt.module.function_types.get(type_idx as usize).unwrap();
-            let call_params = validate_and_extract_result_from_stack(ctxt, &func_type.0, false);
+            let call_params =
+                validate_and_extract_result_from_stack(ctxt, &func_type.params(), false);
             // pop all parameters from the stack
             ctxt.stack
                 .stack
                 .truncate(ctxt.stack.stack.len() - call_params.len());
 
             let return_vars = func_type
-                .1
-                .iter()
+                .results_iter()
                 .map(|val| {
-                    let var = ctxt.create_var(*val);
+                    let var = ctxt.create_var(val);
                     let tmp = var.id;
                     ctxt.push_var(var);
                     tmp

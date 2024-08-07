@@ -49,14 +49,14 @@ pub const INTL_PAGE_SIZE: u32 = 2_u32.pow(12);
 fn parse_input_params_for_function(function_type: &FuncType) -> Result<Vec<Value>, RuntimeError> {
     let args = std::env::args().skip(2);
     let num_args = args.len();
-    if num_args != function_type.0.len() {
+    if num_args != function_type.num_params() {
         return Err(RuntimeError::ArgumentNumberMismatch(
-            function_type.0.len(),
+            function_type.num_params(),
             num_args,
         ));
     }
     let mut values = Vec::new();
-    for (param_type, arg) in function_type.0.iter().zip(args) {
+    for (param_type, arg) in function_type.params_iter().zip(args) {
         let value = match param_type {
             ValType::Number(NumType::F32) => {
                 Value::Number(Number::F32(arg.parse().map_err(|_| {

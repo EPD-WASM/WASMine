@@ -7,7 +7,7 @@ use ir::{
 };
 use itertools::Itertools;
 use std::{collections::HashMap, hash::BuildHasherDefault, hash::Hasher};
-use wasm_types::ResType;
+use wasm_types::ValType;
 
 pub(crate) struct FunctionBuilder {
     bbs: HashMap<BasicBlockID, (BasicBlock, InstructionEncoder), BuildHasherDefault<SimpleHasher>>,
@@ -59,11 +59,10 @@ impl FunctionBuilder {
         &mut self,
         id: BasicBlockID,
         ctxt: &mut Context,
-        inputs: ResType,
+        inputs: impl Iterator<Item = ValType>,
     ) {
         self.start_bb_with_id(id);
         self.bbs.get_mut(&id).unwrap().0.inputs = inputs
-            .into_iter()
             .map(|var_type| PhiNode {
                 inputs: Vec::new(),
                 out: ctxt.create_var(var_type).id,

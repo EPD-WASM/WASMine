@@ -1,7 +1,7 @@
 use super::utils::macro_invoke_for_each_function_signature;
 use ir::structs::value::ValueRaw;
 use std::mem::MaybeUninit;
-use wasm_types::{FuncType, NumType, ValType};
+use wasm_types::{FuncType, FuncTypeBuilder, NumType, ValType};
 
 pub(crate) trait WasmType {
     fn valtype() -> ValType;
@@ -106,7 +106,12 @@ macro_rules! wasm_return_type_impl {
             $t: WasmType
         {
             fn func_type(params: impl Iterator<Item = ValType>) -> FuncType {
-                FuncType(params.collect(), vec![$t::valtype()])
+                let mut builder = FuncTypeBuilder::new();
+                for param in params {
+                    builder = builder.add_param(param);
+                }
+                builder = builder.add_result($t::valtype());
+                builder.finish()
             }
 
             unsafe fn to_raw(self, ret_args: *mut ValueRaw) {
@@ -123,7 +128,14 @@ macro_rules! wasm_return_type_impl {
             $($t: WasmType,)*
         {
             fn func_type(params: impl Iterator<Item = ValType>) -> FuncType {
-                FuncType(params.collect(), vec![$($t::valtype(),)*])
+                let mut builder = FuncTypeBuilder::new();
+                for param in params {
+                    builder = builder.add_param(param);
+                }
+                $(
+                    builder = builder.add_result($t::valtype());
+                )*
+                builder.finish()
             }
 
             #[allow(unused_assignments)]

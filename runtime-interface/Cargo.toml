@@ -7,6 +7,3 @@ edition = "2021"
 wasm-types = { path = "../wasm-types" }
 ir = { path = "../ir" }
 cee-scape = "0.2.0"
-
-[profile.release]
-lto = "fat"

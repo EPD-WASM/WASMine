@@ -205,23 +205,24 @@ impl Translator {
         &self,
         functype_idx: usize,
     ) -> Result<LLVMTypeRef, TranslationError> {
-        let func_type = self.wasm_module.function_types[functype_idx].clone();
+        let func_type = self.wasm_module.function_types[functype_idx];
         let mut param_types = vec![
             // runtime ptr
             self.builder.ptr(),
         ];
-        for valtype in func_type.0.iter() {
-            param_types.push(self.builder.valtype2llvm(*valtype));
+        for valtype in func_type.params_iter() {
+            param_types.push(self.builder.valtype2llvm(valtype));
         }
 
-        let return_type = match func_type.1.len() {
+        let return_type = match func_type.num_results() {
             0 => self.builder.void(),
-            1 => self.builder.valtype2llvm(func_type.1[0]),
+            1 => self
+                .builder
+                .valtype2llvm(func_type.results_iter().next().unwrap()),
             _ => self.builder.r#struct(
                 func_type
-                    .1
-                    .iter()
-                    .map(|valtype| self.builder.valtype2llvm(*valtype))
+                    .results_iter()
+                    .map(|valtype| self.builder.valtype2llvm(valtype))
                     .collect::<Vec<_>>()
                     .as_mut_slice(),
             ),
@@ -276,7 +277,7 @@ impl Translator {
             });
 
         // create wrapper with internal signature for calls via different calling conventions
-        let internal_fn_wasm_type = self.wasm_module.function_types[type_idx as usize].clone();
+        let internal_fn_wasm_type = self.wasm_module.function_types[type_idx as usize];
         let internal_function = self.module.add_function(
             &internal_function_name,
             internal_fn_type,
@@ -296,11 +297,13 @@ impl Translator {
         let mut params = vec![import_rt_ptr /* forward imported runtime ptr */];
 
         let param_arr_ptr: *mut llvm_sys::LLVMValue = self.builder.build_alloca(
-            self.builder
-                .array(self.builder.value_raw_ty(), internal_fn_wasm_type.0.len()),
+            self.builder.array(
+                self.builder.value_raw_ty(),
+                internal_fn_wasm_type.num_params(),
+            ),
             "param_arr",
         );
-        for (i, _) in internal_fn_wasm_type.0.iter().enumerate() {
+        for (i, _) in internal_fn_wasm_type.params_iter().enumerate() {
             let param_ptr = self.builder.build_gep(
                 self.builder.value_raw_ty(),
                 param_arr_ptr,
@@ -313,19 +316,22 @@ impl Translator {
         params.push(param_arr_ptr);
         // add return parameter pointer
         let return_param_ptr = self.builder.build_alloca(
-            self.builder
-                .array(self.builder.value_raw_ty(), internal_fn_wasm_type.1.len()),
+            self.builder.array(
+                self.builder.value_raw_ty(),
+                internal_fn_wasm_type.num_results(),
+            ),
             "return_param_arr",
         );
         params.push(return_param_ptr);
         self.builder
             .build_call(&imported_function, params.as_mut_slice(), "");
 
-        match internal_fn_wasm_type.1.len() {
+        match internal_fn_wasm_type.num_results() {
             0 => self.builder.build_ret_void(),
             1 => {
                 let ret_val = self.builder.build_load(
-                    self.builder.valtype2llvm(internal_fn_wasm_type.1[0]),
+                    self.builder
+                        .valtype2llvm(internal_fn_wasm_type.results_iter().next().unwrap()),
                     return_param_ptr,
                     "ret_val_0_load",
                 );
@@ -333,7 +339,7 @@ impl Translator {
             }
             _ => {
                 let mut returns = Vec::new();
-                for i in 0..internal_fn_wasm_type.1.len() {
+                for (i, wasm_ret_ty) in internal_fn_wasm_type.results_iter().enumerate() {
                     let ret_val_output_ptr = self.builder.build_gep(
                         self.builder.value_raw_ty(),
                         return_param_ptr,
@@ -341,7 +347,7 @@ impl Translator {
                         &format!("ret_val_{}_out_ptr", i),
                     );
                     let ret_val_elem = self.builder.build_load(
-                        self.builder.valtype2llvm(internal_fn_wasm_type.1[i]),
+                        self.builder.valtype2llvm(wasm_ret_ty),
                         ret_val_output_ptr,
                         &format!("ret_val_{}_load", i),
                     );
@@ -475,8 +481,8 @@ impl Translator {
 
         let mut params = vec![llvm_function.get_param(0) /* runtime ptr is kept */];
         let param_arr_ptr = llvm_function.get_param(1);
-        for (i, val_type) in func_type.0.iter().enumerate() {
-            let param_llvm_type = self.builder.valtype2llvm(*val_type);
+        for (i, val_type) in func_type.params_iter().enumerate() {
+            let param_llvm_type = self.builder.valtype2llvm(val_type);
             let param_ptr = self.builder.build_gep(
                 self.builder.value_raw_ty(),
                 param_arr_ptr,
@@ -493,14 +499,14 @@ impl Translator {
         let ret_val = self.builder.build_call(
             wrapped_function,
             params.as_mut_slice(),
-            if func_type.1.is_empty() {
+            if func_type.num_results() == 0 {
                 ""
             } else {
                 "call_internal"
             },
         );
 
-        match func_type.1.len() {
+        match func_type.num_results() {
             0 => (),
             1 => {
                 let ret_arr_ptr = llvm_function.get_param(2);
@@ -508,7 +514,7 @@ impl Translator {
             }
             _ => {
                 let ret_arr_ptr = llvm_function.get_param(2);
-                for i in 0..func_type.1.len() {
+                for i in 0..func_type.num_results() {
                     let ret_val_output_ptr = self.builder.build_gep(
                         self.builder.value_raw_ty(),
                         ret_arr_ptr,
@@ -546,8 +552,8 @@ impl Translator {
         self.builder.position_at_end(bb);
 
         let mut locals = Vec::new();
-        for (i, param_wasm_type) in func_type.0.iter().enumerate() {
-            let param_llvm_type = self.builder.valtype2llvm(*param_wasm_type);
+        for (i, param_wasm_type) in func_type.params_iter().enumerate() {
+            let param_llvm_type = self.builder.valtype2llvm(param_wasm_type);
             let param_val = llvm_function.get_param(i + 1);
             let local = self
                 .builder
@@ -555,7 +561,7 @@ impl Translator {
             self.builder.build_store(param_val, local);
             locals.push((local, param_llvm_type));
         }
-        for i in (func_type.0.len() as u32)..(function.locals.len() as u32) {
+        for i in (func_type.num_params() as u32)..(function.locals.len() as u32) {
             let local_ty = &function.locals[i as usize];
             let local_llvm_type = self.builder.valtype2llvm(*local_ty);
             let local_llvm_storage = self

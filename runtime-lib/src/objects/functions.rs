@@ -164,7 +164,7 @@ impl Function {
                 ))
             }
         };
-        let mut ret_values = vec![ValueRaw::u64(0); ty.1.len()];
+        let mut ret_values = vec![ValueRaw::u64(0); ty.num_results()];
         let params = params
             .iter()
             .cloned()
@@ -187,8 +187,8 @@ impl Function {
         }
         Ok(ret_values
             .iter()
-            .zip(ty.1.iter())
-            .map(|(val, val_type)| Value::from_raw(*val, *val_type))
+            .zip(ty.results_iter())
+            .map(|(val, val_type)| Value::from_raw(*val, val_type))
             .collect())
     }
 

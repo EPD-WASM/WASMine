@@ -1,5 +1,5 @@
 use super::value::ConstantValue;
-use wasm_types::{module::GlobalType, ValType};
+use wasm_types::{GlobalType, ValType};
 
 #[derive(Debug, Clone)]
 pub struct Global {

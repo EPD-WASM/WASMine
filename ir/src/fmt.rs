@@ -43,7 +43,10 @@ impl<'a> Display for FunctionDisplayContext<'a> {
 
         let type_idx = self.function.type_idx;
         let function_type = self.module.function_types.get(type_idx as usize).unwrap();
-        let ret_types: Vec<String> = function_type.1.iter().map(|t| format!("{}", t)).collect();
+        let ret_types: Vec<String> = function_type
+            .results_iter()
+            .map(|t| format!("{}", t))
+            .collect();
         let ret_types_str = ret_types.join(", ");
         write!(f, " {}", ret_types_str)?;
 
@@ -51,8 +54,10 @@ impl<'a> Display for FunctionDisplayContext<'a> {
             FunctionSource::Import(FunctionImport { import_idx }) => {
                 let import = &self.module.imports[*import_idx as usize];
                 let import_name = format!("{}.{}", import.module, import.name);
-                let input_types: Vec<String> =
-                    function_type.0.iter().map(|t| format!("{}", t)).collect();
+                let input_types: Vec<String> = function_type
+                    .params_iter()
+                    .map(|t| format!("{}", t))
+                    .collect();
                 let input_types_str = input_types.join(", ");
                 writeln!(f, " ({}) {{", input_types_str)?;
                 write!(f, "/* imported: {} */", import_name)?
@@ -60,7 +65,7 @@ impl<'a> Display for FunctionDisplayContext<'a> {
             FunctionSource::Internal(FunctionInternal { bbs, locals, .. }) => {
                 let input_types: Vec<String> = locals
                     .iter()
-                    .take(function_type.0.len())
+                    .take(function_type.num_params())
                     .map(|t| format!("{}", t))
                     .collect();
                 let input_types_str = input_types.join(", ");

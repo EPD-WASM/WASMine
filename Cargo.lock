@@ -1357,6 +1357,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "max-func-type"
+version = "0.1.0"
+dependencies = [
+ "wasmparser 0.215.0",
+]
+
+[[package]]
 name = "memchr"
 version = "2.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1941,6 +1948,7 @@ dependencies = [
  "nix",
  "once_cell",
  "parser",
+ "rand",
  "runtime-interface",
  "simplelog",
  "thiserror",
@@ -2794,6 +2802,10 @@ dependencies = [
 [[package]]
 name = "wasm-types"
 version = "0.1.0"
+dependencies = [
+ "once_cell",
+ "rand",
+]
 
 [[package]]
 name = "wasm_rt"
@@ -2899,6 +2911,20 @@ name = "wasmparser"
 version = "0.209.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "07035cc9a9b41e62d3bb3a3815a66ab87c993c06fe1cf6b2a3f2a18499d937db"
+dependencies = [
+ "ahash",
+ "bitflags 2.5.0",
+ "hashbrown 0.14.5",
+ "indexmap",
+ "semver",
+ "serde",
+]
+
+[[package]]
+name = "wasmparser"
+version = "0.215.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "53fbde0881f24199b81cf49b6ff8f9c145ac8eb1b7fc439adb5c099734f7d90e"
 dependencies = [
  "ahash",
  "bitflags 2.5.0",

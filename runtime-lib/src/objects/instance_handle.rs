@@ -5,7 +5,7 @@ use crate::{
     },
     linker::{rt_func_imports, DependencyStore},
     objects::{
-        functions::{CalleeCtxt, Function, FunctionKind},
+        functions::{Function, FunctionKind},
         globals::GlobalsObject,
         memory::{MemoryError, MemoryObject, MemoryStorage},
         tables::{TableError, TableInstance},
@@ -180,13 +180,13 @@ impl<'a> InstanceHandle<'a> {
             .ok_or(InstantiationError::FunctionNotFound(name.to_string()))
     }
 
-    pub fn get_function_type_from_func_idx(&self, func_idx: u32) -> &FuncType {
-        &self.module.function_types[self.module.ir.functions[func_idx as usize].type_idx as usize]
+    pub fn get_function_type_from_func_idx(&self, func_idx: u32) -> FuncType {
+        self.module.function_types[self.module.ir.functions[func_idx as usize].type_idx as usize]
     }
 
-    pub fn get_function_type_from_name(&self, name: &str) -> Option<&FuncType> {
+    pub fn get_function_type_from_name(&self, name: &str) -> Option<FuncType> {
         self.module.exports.find_function_idx(name).map(|idx| {
-            &self.module.function_types[self.module.ir.functions[idx as usize].type_idx as usize]
+            self.module.function_types[self.module.ir.functions[idx as usize].type_idx as usize]
         })
     }
 
@@ -202,7 +202,7 @@ impl<'a> InstanceHandle<'a> {
                     };
                     let func = Function::from_wasm_func(
                         self.execution_context_ptr(),
-                        self.get_function_type_from_func_idx(*func_idx).clone(),
+                        self.get_function_type_from_func_idx(*func_idx),
                         self.engine.get_external_function_ptr(idx)?,
                         self.engine.get_internal_function_ptr(idx)?,
                     );

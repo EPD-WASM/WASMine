@@ -1,13 +1,15 @@
-pub mod instruction;
-pub mod module;
+mod functypes;
+mod instruction;
+mod module;
 
 use std::fmt::{self, Display, Formatter};
 
+pub use functypes::{FuncType, FuncTypeBuilder};
 pub use instruction::*;
 pub use module::*;
 
 /// https://webassembly.github.io/spec/core/syntax/types.html#number-types
-#[derive(Debug, Clone, PartialEq, Copy, Default)]
+#[derive(Debug, Clone, PartialEq, Copy, Default, Eq, Hash)]
 pub enum NumType {
     #[default]
     I32,
@@ -17,7 +19,7 @@ pub enum NumType {
 }
 
 /// https://webassembly.github.io/spec/core/syntax/types.html#reference-types
-#[derive(Debug, Clone, PartialEq, Copy, Default)]
+#[derive(Debug, Clone, PartialEq, Copy, Default, Eq, Hash)]
 pub enum RefType {
     #[default]
     FunctionReference,
@@ -25,7 +27,7 @@ pub enum RefType {
 }
 
 /// https://webassembly.github.io/spec/core/syntax/types.html#value-types
-#[derive(Debug, Clone, PartialEq, Default, Copy)]
+#[derive(Debug, Clone, PartialEq, Default, Copy, Eq, Hash)]
 pub enum ValType {
     Number(NumType),
     Reference(RefType),
@@ -36,10 +38,6 @@ pub enum ValType {
 
 /// https://webassembly.github.io/spec/core/syntax/types.html#result-types
 pub type ResType = Vec<ValType>;
-
-// https://webassembly.github.io/spec/core/syntax/types.html#result-types
-#[derive(Debug, Clone, PartialEq)]
-pub struct FuncType(pub ResType, pub ResType);
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Limits {
@@ -90,24 +88,5 @@ impl Display for RefType {
             RefType::FunctionReference => write!(f, "funcref"),
             RefType::ExternReference => write!(f, "externref"),
         }
-    }
-}
-
-impl Display for FuncType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "[{}] -> [{}]",
-            self.0
-                .iter()
-                .map(|t| format!("{}", t))
-                .collect::<Vec<_>>()
-                .join(", "),
-            self.0
-                .iter()
-                .map(|t| format!("{}", t))
-                .collect::<Vec<_>>()
-                .join(", ")
-        )
     }
 }
