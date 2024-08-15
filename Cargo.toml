@@ -19,11 +19,7 @@ log = "0.4.22"
 [dev-dependencies]
 wast = "206.0.0"
 gen_util = { path = "./tests/gen_util" }
-criterion = "0.3"
-wasmparser = "0.207.0"
 test-log = "0.2.16"
-wasmtime = "22.0.0"
-wasmedge-sdk = { version = "0.13.0", default-features = false, features = ["standalone"] }
 
 [[bin]]
 name = "wasm_rt"
@@ -31,9 +27,6 @@ path = "./bin/main.rs"
 
 [profile.release]
 debug = true
-lto = "fat"
-strip = false
 
 [profile.bench]
 debug = true
-strip = false

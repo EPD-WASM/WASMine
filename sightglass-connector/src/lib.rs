@@ -1,11 +1,14 @@
 extern crate anyhow;
 extern crate runtime_lib;
-
 use anyhow::{Context, Result};
+use runtime_lib::wasi::{PreopenDirInheritPerms, PreopenDirPerms, WasiContext, WasiContextBuilder};
 use runtime_lib::{
-    BoundLinker, Cluster, Engine, InstanceHandle, Linker, Loader, Parser, RuntimeError, WasmModule,
+    Cluster, Engine, InstanceHandle, Linker, Loader, Parser, RuntimeError, WasmModule,
 };
 use std::ffi::c_void;
+use std::os::fd::IntoRawFd;
+use std::path::PathBuf;
+use std::pin::Pin;
 use std::rc::Rc;
 use std::slice;
 
@@ -52,16 +55,89 @@ pub struct WasmBenchConfig {
     pub execution_flags_len: usize,
 }
 
+impl WasmBenchConfig {
+    fn working_dir(&self) -> Result<PathBuf> {
+        let working_dir =
+            unsafe { std::slice::from_raw_parts(self.working_dir_ptr, self.working_dir_len) };
+        let working_dir = std::str::from_utf8(working_dir)
+            .context("given working directory is not valid UTF-8")?;
+        Ok(working_dir.into())
+    }
+
+    fn stdout_path(&self) -> Result<PathBuf> {
+        let stdout_path =
+            unsafe { std::slice::from_raw_parts(self.stdout_path_ptr, self.stdout_path_len) };
+        let stdout_path =
+            std::str::from_utf8(stdout_path).context("given stdout path is not valid UTF-8")?;
+        Ok(stdout_path.into())
+    }
+
+    fn stderr_path(&self) -> Result<PathBuf> {
+        let stderr_path =
+            unsafe { std::slice::from_raw_parts(self.stderr_path_ptr, self.stderr_path_len) };
+        let stderr_path =
+            std::str::from_utf8(stderr_path).context("given stderr path is not valid UTF-8")?;
+        Ok(stderr_path.into())
+    }
+
+    fn stdin_path(&self) -> Result<Option<PathBuf>> {
+        if self.stdin_path_ptr.is_null() {
+            return Ok(None);
+        }
+
+        let stdin_path =
+            unsafe { std::slice::from_raw_parts(self.stdin_path_ptr, self.stdin_path_len) };
+        let stdin_path =
+            std::str::from_utf8(stdin_path).context("given stdin path is not valid UTF-8")?;
+        Ok(Some(stdin_path.into()))
+    }
+}
+
 #[allow(clippy::missing_safety_doc)]
 #[no_mangle]
 pub unsafe extern "C" fn wasm_bench_create(
     config: WasmBenchConfig,
     out_bench_ptr: *mut *mut c_void,
 ) -> u8 {
-    // let working_dir = config.working_dir().unwrap();
-    // let stdout_path = config.stdout_path().unwrap();
-    // let stderr_path = config.stderr_path().unwrap();
-    // let stdin_path = config.stdin_path().unwrap();
+    let working_dir = config.working_dir().unwrap();
+    let stdout_path = config.stdout_path().unwrap();
+    let stderr_path = config.stderr_path().unwrap();
+    let stdin_path = config.stdin_path().unwrap();
+
+    let make_wasi_ctxt = move || {
+        let mut builder = WasiContextBuilder::new();
+
+        let stdout = std::fs::File::create(&stdout_path)
+            .unwrap_or_else(|_| panic!("failed to create {}", stdout_path.display()));
+        builder.set_stdout(stdout.into_raw_fd(), true);
+
+        let stderr = std::fs::File::create(&stderr_path)
+            .unwrap_or_else(|_| panic!("failed to create {}", stderr_path.display()));
+        builder.set_stderr(stderr.into_raw_fd(), true);
+
+        if let Some(stdin_path) = &stdin_path {
+            let stdin = std::fs::File::open(stdin_path)
+                .unwrap_or_else(|_| panic!("failed to open {}", stdin_path.display()));
+            builder.set_stdin(stdin.into_raw_fd(), true);
+        }
+
+        // Allow access to the working directory so that the benchmark can read
+        // its input workload(s).
+        builder.preopen_dir(
+            working_dir.clone(),
+            ".",
+            PreopenDirPerms::all(),
+            PreopenDirInheritPerms::all(),
+        )?;
+
+        // Pass this env var along so that the benchmark program can use smaller
+        // input workload(s) if it has them and that has been requested.
+        if let Ok(val) = std::env::var("WASM_BENCH_USE_SMALL_WORKLOAD") {
+            builder.env("WASM_BENCH_USE_SMALL_WORKLOAD".to_string(), val);
+        }
+
+        Ok(builder.finish())
+    };
 
     let state = Box::new(
         BenchState::new(
@@ -74,6 +150,7 @@ pub unsafe extern "C" fn wasm_bench_create(
             config.execution_timer,
             config.execution_start,
             config.execution_end,
+            make_wasi_ctxt,
         )
         .unwrap(),
     );
@@ -137,7 +214,7 @@ fn to_exit_code<T>(result: impl Into<Result<T>>) -> u8 {
 /// This structure contains the actual Rust implementation of the state required
 /// to manage the Wasmtime engine between calls.
 struct BenchState<'a> {
-    linker: BoundLinker<'a>,
+    linker: Linker,
     module: Option<Rc<WasmModule>>,
     instance: Option<InstanceHandle<'a>>,
 
@@ -151,7 +228,9 @@ struct BenchState<'a> {
     _execution_start: extern "C" fn(*mut u8),
     _execution_end: extern "C" fn(*mut u8),
 
-    _cluster: Cluster,
+    cluster: Pin<Box<Cluster>>,
+
+    make_wasi_cx: Box<dyn FnMut() -> Result<WasiContext, RuntimeError>>,
 }
 
 impl<'a> BenchState<'a> {
@@ -166,6 +245,7 @@ impl<'a> BenchState<'a> {
         execution_timer: *mut u8,
         execution_start: extern "C" fn(*mut u8),
         execution_end: extern "C" fn(*mut u8),
+        make_wasi_cx: impl FnMut() -> Result<WasiContext, RuntimeError> + 'static,
     ) -> Result<Self> {
         let mut linker = Linker::new();
         let config = runtime_lib::ConfigBuilder::new()
@@ -181,11 +261,6 @@ impl<'a> BenchState<'a> {
         linker.link_host_function("bench", "end", move || {
             execution_end(execution_timer);
         });
-
-        // we need to "ausdribblen" the lifetime checker, because we build a self-referencial struct
-        // still safe, because we deallocate the cluster last (last struct member)
-        let unsafe_cluster_ref = unsafe { &*(&cluster as *const Cluster) };
-        let linker = linker.bind_to(unsafe_cluster_ref);
 
         Ok(Self {
             linker,
@@ -203,7 +278,9 @@ impl<'a> BenchState<'a> {
             _execution_start: execution_start,
             _execution_end: execution_end,
 
-            _cluster: cluster,
+            cluster: Box::pin(cluster),
+
+            make_wasi_cx: Box::new(make_wasi_cx),
         })
     }
 
@@ -230,9 +307,14 @@ impl<'a> BenchState<'a> {
             .expect("compile the module before instantiating it");
 
         (self.instantiation_start)(self.instantiation_timer);
+        let wasi_ctxt = (self.make_wasi_cx)()?;
+        let mut engine = Engine::llvm()?;
+        engine.init(module.clone())?;
+
         let instance = self
             .linker
-            .instantiate_and_link(module.clone(), Engine::llvm()?)?;
+            .bind_to(unsafe { &*(&*self.cluster.as_ref() as *const _) })
+            .instantiate_and_link_with_wasi(module.clone(), engine, wasi_ctxt)?;
         (self.instantiation_end)(self.instantiation_timer);
 
         self.instance = Some(instance);
@@ -240,12 +322,13 @@ impl<'a> BenchState<'a> {
     }
 
     fn execute(&mut self) -> Result<(), RuntimeError> {
-        let mut instance = self
+        let instance = self
             .instance
             .take()
             .expect("instantiate the module before executing it");
 
-        match instance.run_by_name("_start", Vec::new()) {
+        let func = instance.get_function_by_idx(instance.query_start_function()?)?;
+        match func.call(&[]) {
             Ok(_) => Ok(()),
             Err(trap) => Err(trap),
         }

@@ -63,7 +63,7 @@ fn execute_via_interpreter_backend(
                     .map(|s| s.to_owned())
                     .unwrap_or(format!("func_{}", entry_point));
                 instance
-                    .run_by_name(&fn_name, Vec::default())
+                    .get_function_by_idx(instance.find_exported_func_idx(&fn_name).unwrap()).unwrap().call(&[])
                     .unwrap_or_else(|e| {
                         panic!(
                             "{file_path:?}:{line}:{col}\nError during execution of module start routine '{fn_name}': {e}",
@@ -134,7 +134,10 @@ fn execute_via_interpreter_backend(
             ),
         };
     }
-    instance.run_by_name(invoke.name, input_params)
+    instance
+        .get_function_by_idx(instance.find_exported_func_idx(invoke.name).unwrap())
+        .unwrap()
+        .call(&input_params)
 }
 
 fn parse_module(module: &mut QuoteWat) -> Result<Module, ParserError> {

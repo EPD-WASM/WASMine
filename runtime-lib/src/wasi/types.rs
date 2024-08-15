@@ -1,13 +1,10 @@
-use std::{
-    ops::BitAnd,
-    os::{fd::FromRawFd, unix::fs::FileTypeExt},
-};
-
+use bitflags::bitflags;
 use ir::structs::value::{Number, Value, ValueRaw};
+use std::os::{fd::FromRawFd, unix::fs::FileTypeExt};
 
 /// Wasm pointer type
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct Ptr<T>(u32, std::marker::PhantomData<T>);
 
 impl<T> Ptr<T> {
@@ -454,75 +451,105 @@ impl From<Errno> for Value {
 /// File descriptor.
 pub(crate) type FD = i32;
 
-/// File descriptor rights, determining which actions may be performed.
-#[repr(u64)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Rights {
-    /// The right to invoke `fd_datasync`. If `path_open` is set, includes the right to invoke `path_open` with `fdflags::dsync`.
-    FdDatasync = 1 << 0,
-    /// The right to invoke `fd_read` and `sock_recv`. If `rights::fd_seek` is set, includes the right to invoke `fd_pread`.
-    FdRead = 1 << 1,
-    /// The right to invoke `fd_seek`. This flag implies `rights::fd_tell`.
-    FdSeek = 1 << 2,
-    /// The right to invoke `fd_fdstat_set_flags`.
-    FdFdstatSetFlags = 1 << 3,
-    /// The right to invoke `fd_sync`. If `path_open` is set, includes the right to invoke `path_open` with `fdflags::rsync` and `fdflags::dsync`.
-    FdSync = 1 << 4,
-    /// The right to invoke `fd_tell` in such a way that the file offset remains unaltered (i.e., `whence::cur` with offset zero), or to invoke `fd_tell`.
-    FdTell = 1 << 5,
-    /// The right to invoke `fd_write` and `sock_send`. If `rights::fd_seek` is set, includes the right to invoke `fd_pwrite`.
-    FdWrite = 1 << 6,
-    /// The right to invoke `fd_advise`.
-    FdAdvise = 1 << 7,
-    /// The right to invoke `fd_allocate`.
-    FdAllocate = 1 << 8,
-    /// The right to invoke `path_create_directory`.
-    PathCreateDirectory = 1 << 9,
-    /// The right to invoke `path_create_file`. If `path_open` is set, the right to invoke `path_open` with `oflags::creat`.
-    PathCreateFile = 1 << 10,
-    /// The right to invoke `path_link` with the file descriptor as the source directory.
-    PathLinkSource = 1 << 11,
-    /// The right to invoke `path_link` with the file descriptor as the target directory.
-    PathLinkTarget = 1 << 12,
-    /// The right to invoke `path_open`.
-    PathOpen = 1 << 13,
-    /// The right to invoke `fd_readdir`.
-    FdReaddir = 1 << 14,
-    /// The right to invoke `path_readlink`.
-    PathReadlink = 1 << 15,
-    /// The right to invoke `path_rename` with the file descriptor as the source directory.
-    PathRenameSource = 1 << 16,
-    /// The right to invoke `path_rename` with the file descriptor as the target directory.
-    PathRenameTarget = 1 << 17,
-    /// The right to invoke `path_filestat_get`.
-    PathFilestatGet = 1 << 18,
-    /// The right to change a file's size. If `path_open` is set, includes the right to invoke `path_open` with `oflags::trunc`.
-    PathFilestatSetSize = 1 << 19,
-    /// The right to invoke `path_filestat_set_times`.
-    PathFilestatSetTimes = 1 << 20,
-    /// The right to invoke `fd_filestat_get`.
-    FdFilestatGet = 1 << 21,
-    /// The right to invoke `fd_filestat_set_size`.
-    FdFilestatSetSize = 1 << 22,
-    /// The right to invoke `fd_filestat_set_times`.
-    FdFilestatSetTimes = 1 << 23,
-    /// The right to invoke `path_symlink`.
-    PathSymlink = 1 << 24,
-    /// The right to invoke `path_remove_directory`.
-    PathRemoveDirectory = 1 << 25,
-    /// The right to invoke `path_unlink_file`.
-    PathUnlinkFile = 1 << 26,
-    /// If `rights::fd_read` is set, includes the right to invoke `poll_oneoff` to subscribe to `eventtype::fd_read`. If `rights::fd_write` is set, includes the right to invoke `poll_oneoff` to subscribe to `eventtype::fd_write`.
-    PollFdReadwrite = 1 << 27,
-    /// The right to invoke `sock_shutdown`.
-    SockShutdown = 1 << 28,
-    /// The right to invoke `sock_accept`.
-    SockAccept = 1 << 29,
+bitflags! {
+    /// File descriptor rights, determining which actions may be performed.
+    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+    pub(crate) struct Rights: u64 {
+        /// The right to invoke `fd_datasync`. If `path_open` is set, includes the right to invoke `path_open` with `fdflags::dsync`.
+        const FdDatasync = 1 << 0;
+        /// The right to invoke `fd_read` and `sock_recv`. If `rights::fd_seek` is set, includes the right to invoke `fd_pread`.
+        const FdRead = 1 << 1;
+        /// The right to invoke `fd_seek`. This flag implies `rights::fd_tell`.
+        const FdSeek = 1 << 2;
+        /// The right to invoke `fd_fdstat_set_flags`.
+        const FdFdstatSetFlags = 1 << 3;
+        /// The right to invoke `fd_sync`. If `path_open` is set, includes the right to invoke `path_open` with `fdflags::rsync` and `fdflags::dsync`.
+        const FdSync = 1 << 4;
+        /// The right to invoke `fd_tell` in such a way that the file offset remains unaltered (i.e., `whence::cur` with offset zero), or to invoke `fd_tell`.
+        const FdTell = 1 << 5;
+        /// The right to invoke `fd_write` and `sock_send`. If `rights::fd_seek` is set, includes the right to invoke `fd_pwrite`.
+        const FdWrite = 1 << 6;
+        /// The right to invoke `fd_advise`.
+        const FdAdvise = 1 << 7;
+        /// The right to invoke `fd_allocate`.
+        const FdAllocate = 1 << 8;
+        /// The right to invoke `path_create_directory`.
+        const PathCreateDirectory = 1 << 9;
+        /// The right to invoke `path_create_file`. If `path_open` is set, the right to invoke `path_open` with `oflags::creat`.
+        const PathCreateFile = 1 << 10;
+        /// The right to invoke `path_link` with the file descriptor as the source directory.
+        const PathLinkSource = 1 << 11;
+        /// The right to invoke `path_link` with the file descriptor as the target directory.
+        const PathLinkTarget = 1 << 12;
+        /// The right to invoke `path_open`.
+        const PathOpen = 1 << 13;
+        /// The right to invoke `fd_readdir`.
+        const FdReaddir = 1 << 14;
+        /// The right to invoke `path_readlink`.
+        const PathReadlink = 1 << 15;
+        /// The right to invoke `path_rename` with the file descriptor as the source directory.
+        const PathRenameSource = 1 << 16;
+        /// The right to invoke `path_rename` with the file descriptor as the target directory.
+        const PathRenameTarget = 1 << 17;
+        /// The right to invoke `path_filestat_get`.
+        const PathFilestatGet = 1 << 18;
+        /// The right to change a file's size. If `path_open` is set, includes the right to invoke `path_open` with `oflags::trunc`.
+        const PathFilestatSetSize = 1 << 19;
+        /// The right to invoke `path_filestat_set_times`.
+        const PathFilestatSetTimes = 1 << 20;
+        /// The right to invoke `fd_filestat_get`.
+        const FdFilestatGet = 1 << 21;
+        /// The right to invoke `fd_filestat_set_size`.
+        const FdFilestatSetSize = 1 << 22;
+        /// The right to invoke `fd_filestat_set_times`.
+        const FdFilestatSetTimes = 1 << 23;
+        /// The right to invoke `path_symlink`.
+        const PathSymlink = 1 << 24;
+        /// The right to invoke `path_remove_directory`.
+        const PathRemoveDirectory = 1 << 25;
+        /// The right to invoke `path_unlink_file`.
+        const PathUnlinkFile = 1 << 26;
+        /// If `rights::fd_read` is set, includes the right to invoke `poll_oneoff` to subscribe to `eventtype::fd_read`. If `rights::fd_write` is set, includes the right to invoke `poll_oneoff` to subscribe to `eventtype::fd_write`.
+        const PollFdReadwrite = 1 << 27;
+        /// The right to invoke `sock_shutdown`.
+        const SockShutdown = 1 << 28;
+        /// The right to invoke `sock_accept`.
+        const SockAccept = 1 << 29;
+    }
 }
 
 impl Rights {
-    pub(crate) fn empty() -> Self {
-        unsafe { std::mem::transmute::<u64, Rights>(0) }
+    pub(crate) fn to_libc_mode(self) -> libc::mode_t {
+        let mut mode = 0;
+        if self.contains(Rights::FdRead) {
+            mode |= libc::S_IRUSR;
+        }
+        if self.contains(Rights::FdWrite) {
+            mode |= libc::S_IWUSR;
+        }
+        mode
+    }
+
+    pub(crate) fn to_libc_open_flags(self) -> Result<libc::c_int, Errno> {
+        let mut flags = 0;
+        if self.contains(Rights::FdRead) && self.contains(Rights::FdWrite) {
+            flags |= libc::O_RDWR;
+        } else if self.contains(Rights::FdRead) {
+            flags |= libc::O_RDONLY;
+        } else if self.contains(Rights::FdWrite) {
+            flags |= libc::O_WRONLY;
+        } else {
+            return Err(Errno::Inval);
+        }
+
+        if self.contains(Rights::FdSync) {
+            flags |= libc::O_SYNC;
+        }
+        if self.contains(Rights::FdDatasync) {
+            flags |= libc::O_DSYNC;
+        }
+
+        Ok(flags)
     }
 }
 
@@ -611,6 +638,20 @@ impl From<std::fs::FileType> for FileType {
     }
 }
 
+impl FileType {
+    pub(crate) fn from_libc(st_mode: u32) -> Self {
+        match st_mode & libc::S_IFMT {
+            libc::S_IFBLK => FileType::BlockDevice,
+            libc::S_IFCHR => FileType::CharacterDevice,
+            libc::S_IFDIR => FileType::Directory,
+            libc::S_IFREG => FileType::RegularFile,
+            libc::S_IFSOCK => FileType::SocketStream,
+            libc::S_IFLNK => FileType::SymbolicLink,
+            _ => FileType::Unknown,
+        }
+    }
+}
+
 /// A directory entry.
 #[repr(C)]
 pub(crate) struct DirEnt {
@@ -641,26 +682,34 @@ pub(crate) enum Advice {
     NoReuse = 5,
 }
 
-/// File descriptor flags.
-#[repr(u16)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum FdFlags {
-    /// Append mode: Data written to the file is always appended to the file's end.
-    Append = 1 << 0,
-    /// Write according to synchronized I/O data integrity completion. Only the data stored in the file is synchronized.
-    DSync = 1 << 1,
-    /// Non-blocking mode.
-    Nonblock = 1 << 2,
-    /// Synchronized read I/O operations.
-    RSync = 1 << 3,
-    /// Write according to synchronized I/O file integrity completion. In addition to synchronizing the data stored in the file,
-    /// the implementation may also synchronously update the file's metadata.
-    Sync = 1 << 4,
+bitflags! {
+    /// File descriptor flags.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub(crate) struct FdFlags: u16 {
+        /// Append mode: Data written to the file is always appended to the file's end.
+        const Append = 1 << 0;
+        /// Write according to synchronized I/O data integrity completion. Only the data stored in the file is synchronized.
+        const DSync = 1 << 1;
+        /// Non-blocking mode.
+        const Nonblock = 1 << 2;
+        /// Synchronized read I/O operations.
+        const RSync = 1 << 3;
+        /// Write according to synchronized I/O file integrity completion. In addition to synchronizing the data stored in the file,
+        /// the implementation may also synchronously update the file's metadata.
+        const Sync = 1 << 4;
+    }
 }
 
 impl FdFlags {
-    pub(crate) fn empty() -> Self {
-        unsafe { std::mem::transmute::<u16, FdFlags>(0) }
+    pub(crate) fn to_libc_open_flags(self) -> libc::c_int {
+        let mut flags = 0;
+        if self.contains(FdFlags::Append) {
+            flags |= libc::O_APPEND;
+        }
+        if self.contains(FdFlags::RSync) {
+            flags |= libc::O_RSYNC;
+        }
+        flags
     }
 }
 
@@ -696,30 +745,32 @@ impl FdStat {
 /// Identifier for a device containing a file system.
 pub(crate) type Device = u64;
 
-/// Which file time attributes to adjust.
-#[repr(u16)]
-pub(crate) enum FstFlags {
-    /// Adjust the last data access timestamp to the value stored in `filestat::atim`.
-    Atim = 1 << 0,
-    /// Adjust the last data access timestamp to the time of clock `clockid::realtime`.
-    AtimNow = 1 << 1,
-    /// Adjust the last data modification timestamp to the value stored in `filestat::mtim`.
-    Mtim = 1 << 2,
-    /// Adjust the last data modification timestamp to the time of clock `clockid::realtime`.
-    MtimNow = 1 << 3,
+bitflags! {
+    /// Which file time attributes to adjust.
+    pub(crate) struct FstFlags: u16 {
+        /// Adjust the last data access timestamp to the value stored in `filestat::atim`.
+        const Atim = 1 << 0;
+        /// Adjust the last data access timestamp to the time of clock `clockid::realtime`.
+        const AtimNow = 1 << 1;
+        /// Adjust the last data modification timestamp to the value stored in `filestat::mtim`.
+        const Mtim = 1 << 2;
+        /// Adjust the last data modification timestamp to the time of clock `clockid::realtime`.
+        const MtimNow = 1 << 3;
+    }
 }
 
-/// Flags determining the method of how paths are resolved.
-#[repr(u32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum LookupFlags {
-    /// As long as the resolved path corresponds to a symbolic link, it is expanded.
-    SymlinkFollow = 1 << 0,
+bitflags! {
+    /// Flags determining the method of how paths are resolved.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub(crate) struct LookupFlags: u32 {
+        /// As long as the resolved path corresponds to a symbolic link, it is expanded.
+        const SymlinkFollow = 1 << 0;
+    }
 }
 
 impl LookupFlags {
     pub(crate) fn to_libc(self) -> libc::c_int {
-        let mut flags = 0;
+        let mut flags: i32 = 0;
         if self.contains(LookupFlags::SymlinkFollow) {
             flags |= libc::AT_SYMLINK_FOLLOW;
         }
@@ -727,18 +778,19 @@ impl LookupFlags {
     }
 }
 
-/// Open flags used by `path_open`.
-#[repr(u16)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum OpenFlags {
-    /// Create the file if it does not exist.
-    Creat = 1 << 0,
-    /// Fail if not a directory.
-    Directory = 1 << 1,
-    /// Fail if file already exists.
-    Excl = 1 << 2,
-    /// Truncate file to size 0.
-    Trunc = 1 << 3,
+bitflags! {
+    /// Open flags used by `path_open`.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub(crate) struct OpenFlags: u16 {
+        /// Create the file if it does not exist.
+        const Creat = 1 << 0;
+        /// Fail if not a directory.
+        const Directory = 1 << 1;
+        /// Fail if file already exists.
+        const Excl = 1 << 2;
+        /// Truncate file to size 0.
+        const Trunc = 1 << 3;
+    }
 }
 
 impl OpenFlags {
@@ -761,7 +813,7 @@ impl OpenFlags {
 }
 
 /// Number of hard links to an inode.
-pub(crate) type LinkCount = u32;
+pub(crate) type LinkCount = u64;
 
 /// File attributes.
 #[repr(C)]
@@ -783,64 +835,7 @@ pub(crate) struct FileStat {
     pub(crate) mtim: TimeStamp,
     /// Last file status change timestamp.
     pub(crate) ctim: TimeStamp,
-
-    _padding: [u8; 8],
 }
 
 /// User-provided value that may be attached to objects that is retained when extracted from the implementation.
 pub(crate) type UserData = u64;
-
-impl BitAnd for Rights {
-    type Output = Rights;
-
-    fn bitand(self, rhs: Rights) -> Rights {
-        unsafe { std::mem::transmute(self as u64 & rhs as u64) }
-    }
-}
-
-impl BitAnd for FdFlags {
-    type Output = FdFlags;
-
-    fn bitand(self, rhs: FdFlags) -> FdFlags {
-        unsafe { std::mem::transmute(self as u16 & rhs as u16) }
-    }
-}
-
-pub(crate) trait BitFlag: BitAnd<Output = Self> + Sized + Copy + Eq {
-    type CType;
-    fn contains(self, needle: Self) -> bool {
-        (self & needle) == needle
-    }
-}
-
-impl BitFlag for OpenFlags {
-    type CType = u16;
-}
-
-impl BitAnd for OpenFlags {
-    type Output = OpenFlags;
-
-    fn bitand(self, rhs: OpenFlags) -> OpenFlags {
-        unsafe { std::mem::transmute(self as u16 & rhs as u16) }
-    }
-}
-
-impl BitFlag for LookupFlags {
-    type CType = u32;
-}
-
-impl BitAnd for LookupFlags {
-    type Output = LookupFlags;
-
-    fn bitand(self, rhs: LookupFlags) -> LookupFlags {
-        unsafe { std::mem::transmute(self as u32 & rhs as u32) }
-    }
-}
-
-impl BitFlag for Rights {
-    type CType = u64;
-}
-
-impl BitFlag for FdFlags {
-    type CType = u16;
-}

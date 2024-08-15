@@ -39,13 +39,8 @@ macro_rules! impl_into_func_trait {
 }
 macro_invoke_for_each_function_signature!(impl_into_func_trait);
 
-pub struct HostFuncRaw<F> {
-    closure: F,
-}
-
-pub struct HostFuncRawContainer {
-    func: Box<dyn Any>,
-}
+#[repr(transparent)]
+pub struct HostFuncRawContainer(Box<dyn Any>);
 
 type TestCall = unsafe extern "C" fn(*mut ExecutionContext, *const ValueRaw, *const ValueRaw) -> ();
 
@@ -59,10 +54,8 @@ impl HostFuncRawContainer {
         let ty = RetType::func_type(ParamTypes::valtypes());
         let trampoline: BoundaryCCFuncTy =
             Self::host_func_trampoline::<Closure, ParamTypes, RetType>;
-        let container = Box::new(HostFuncRawContainer {
-            func: Box::from(HostFuncRaw { closure }),
-        });
-        Function::from_host_func(Box::into_raw(container), ty, trampoline)
+        let container = Box::into_raw(Box::new(HostFuncRawContainer(Box::new(closure))));
+        Function::from_host_func(container, ty, trampoline)
     }
 
     unsafe extern "C" fn host_func_trampoline<Closure, ParamTypes, RetType>(
@@ -78,9 +71,8 @@ impl HostFuncRawContainer {
             args.cast::<MaybeUninit<ValueRaw>>(),
             ParamTypes::valtypes().count(),
         );
-        let hfc = &*(callee_ctx.host_func_context);
-        let hf = hfc.func.downcast_ref::<HostFuncRaw<Closure>>().unwrap();
-        let func = &hf.closure;
+        let func_any_ref = unsafe { &(*callee_ctx.host_func_context).0 };
+        let func = func_any_ref.downcast_ref::<Closure>().unwrap();
         let params = ParamTypes::from_raw(args);
         let ret = func(params);
         RetType::to_raw(ret, ret_args);
@@ -193,7 +185,7 @@ impl Function {
     }
 
     pub(crate) fn from_host_func(
-        host_func_context: *mut HostFuncRawContainer,
+        host_func_context: *const HostFuncRawContainer,
         ty: FuncType,
         ptr: BoundaryCCFuncTy,
     ) -> Self {

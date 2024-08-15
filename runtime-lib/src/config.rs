@@ -3,7 +3,7 @@ use std::path::PathBuf;
 #[derive(Debug, Default)]
 pub struct Config {
     pub(crate) enable_wasi: bool,
-    pub(crate) wasi_dirs: Vec<PathBuf>,
+    pub(crate) wasi_dirs: Vec<(PathBuf, String)>,
     pub(crate) wasi_args: Vec<String>,
     pub(crate) start_function: Option<String>,
 }
@@ -25,7 +25,7 @@ impl ConfigBuilder {
         self
     }
 
-    pub fn set_wasi_dirs(mut self, dirs: Vec<PathBuf>) -> Self {
+    pub fn set_wasi_dirs(mut self, dirs: Vec<(PathBuf, String)>) -> Self {
         self = self.enable_wasi(true);
         self.config.wasi_dirs = dirs;
         self

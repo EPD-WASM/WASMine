@@ -6,13 +6,10 @@ use crate::{abstraction::builder::Builder, error::TranslationError};
 use ir::function::{Function as WasmFunction, FunctionSource};
 use ir::function::{FunctionImport, FunctionInternal as WasmFunctionInternal};
 use ir::{basic_block::BasicBlock, structs::module::Module as WasmModule, InstructionDecoder};
-use llvm_sys::analysis::{LLVMVerifierFailureAction, LLVMVerifyFunction, LLVMVerifyModule};
-use llvm_sys::core::{LLVMBuildExtractValue, LLVMDisposeMessage};
+use llvm_sys::core::LLVMBuildExtractValue;
 use llvm_sys::prelude::{LLVMBasicBlockRef, LLVMTypeRef, LLVMValueRef};
 use llvm_sys::{LLVMCallConv, LLVMLinkage};
 use std::collections::HashSet;
-use std::ffi::CStr;
-use std::mem::MaybeUninit;
 use std::ptr::null_mut;
 use std::rc::Rc;
 use wasm_types::*;
@@ -38,53 +35,6 @@ impl Translator {
         })
     }
 
-    #[cfg(debug_assertions)]
-    fn verify_module(&self) -> Result<(), TranslationError> {
-        let mut msg = MaybeUninit::uninit();
-        let res = unsafe {
-            LLVMVerifyModule(
-                self.module.get(),
-                LLVMVerifierFailureAction::LLVMPrintMessageAction,
-                msg.as_mut_ptr(),
-            )
-        };
-        if res != 0 {
-            let msg = unsafe { msg.assume_init() };
-            if !msg.is_null() {
-                let res = Err(TranslationError::Msg(
-                    unsafe { CStr::from_ptr(msg) }.to_string_lossy().into(),
-                ));
-                unsafe { LLVMDisposeMessage(msg) };
-                return res;
-            } else {
-                return Err(TranslationError::Msg("unknown error".into()));
-            }
-        }
-        Ok(())
-    }
-
-    #[cfg(debug_assertions)]
-    fn verify_function(
-        &self,
-        function: &Function,
-        function_idx: u32,
-    ) -> Result<(), TranslationError> {
-        if 1 == unsafe {
-            LLVMVerifyFunction(
-                function.get(),
-                LLVMVerifierFailureAction::LLVMPrintMessageAction,
-            )
-        } {
-            // print module early for debugging
-            self.module.print_to_file();
-            return Err(TranslationError::Msg(format!(
-                "function verification failed for function {}",
-                build_llvm_function_name(function_idx, &self.wasm_module, false)
-            )));
-        }
-        Ok(())
-    }
-
     pub fn translate_module(
         &mut self,
         wasm_module: Rc<WasmModule>,
@@ -105,12 +55,12 @@ impl Translator {
             .imports
             .iter()
             .filter_map(|i| match i.desc {
-                ImportDesc::Func(_) => Some(&i.module),
+                ImportDesc::Func(_) => Some(format!("{}.{}", i.module, i.name)),
                 _ => None,
             })
             .collect::<HashSet<_>>();
-        for rt_ptr_name in required_rt_ptr_global_names {
-            let name = format!("__import_ctxt__{}", rt_ptr_name);
+        for rt_ctxt_name in required_rt_ptr_global_names {
+            let name = format!("__import_ctxt__{}__", rt_ctxt_name);
             self.module.add_global(&name, self.builder.ptr());
         }
 
@@ -263,7 +213,7 @@ impl Translator {
         }
 
         // declare imported function symbol
-        let import_func_name = format!("__import_wrapper__{}", name);
+        let import_func_name = format!("__import__{}__", name);
         let imported_function = self
             .module
             .find_func(&import_func_name, fn_type)
@@ -290,11 +240,10 @@ impl Translator {
         self.builder.position_at_end(entry_bb);
 
         // don't forward current runtime ptr, but load their closured runtime ptr
-        let import_rt_ptr = self.module.get_global(&format!(
-            "__import_ctxt__{}",
-            name.split_once('.').unwrap().0
-        ))?;
-        let mut params = vec![import_rt_ptr /* forward imported runtime ptr */];
+        let import_ctxt_ptr = self
+            .module
+            .get_global(&format!("__import_ctxt__{}__", name))?;
+        let mut params = vec![import_ctxt_ptr /* forward imported runtime ptr */];
 
         let param_arr_ptr: *mut llvm_sys::LLVMValue = self.builder.build_alloca(
             self.builder.array(
@@ -403,11 +352,11 @@ impl Translator {
         wasm_function: &WasmFunctionInternal,
         wasm_ty_idx: TypeIdx,
         llvm_function: &Function,
-        function_idx: FuncIdx,
+        _function_idx: FuncIdx,
     ) -> Result<(), TranslationError> {
         // TODO: remove this, only required for debugging
         #[cfg(debug_assertions)]
-        let _name = build_llvm_function_name(function_idx, &self.wasm_module, false);
+        let _name = build_llvm_function_name(_function_idx, &self.wasm_module, false);
 
         let func_type = self
             .wasm_module
@@ -454,7 +403,7 @@ impl Translator {
         }
 
         #[cfg(debug_assertions)]
-        self.verify_function(llvm_function, function_idx)?;
+        self.verify_function(llvm_function, _function_idx)?;
         Ok(())
     }
 
@@ -637,5 +586,63 @@ impl Translator {
             llvm_function,
         )?;
         Ok(())
+    }
+}
+
+#[cfg(debug_assertions)]
+mod debug_helper {
+    use llvm_sys::{
+        analysis::{LLVMVerifierFailureAction, LLVMVerifyFunction, LLVMVerifyModule},
+        core::LLVMDisposeMessage,
+    };
+
+    use super::*;
+    use std::{ffi::CStr, mem::MaybeUninit};
+
+    impl Translator {
+        pub(super) fn verify_module(&self) -> Result<(), TranslationError> {
+            let mut msg = MaybeUninit::uninit();
+            let res = unsafe {
+                LLVMVerifyModule(
+                    self.module.get(),
+                    LLVMVerifierFailureAction::LLVMPrintMessageAction,
+                    msg.as_mut_ptr(),
+                )
+            };
+            if res != 0 {
+                let msg = unsafe { msg.assume_init() };
+                if !msg.is_null() {
+                    let res = Err(TranslationError::Msg(
+                        unsafe { CStr::from_ptr(msg) }.to_string_lossy().into(),
+                    ));
+                    unsafe { LLVMDisposeMessage(msg) };
+                    return res;
+                } else {
+                    return Err(TranslationError::Msg("unknown error".into()));
+                }
+            }
+            Ok(())
+        }
+
+        pub(super) fn verify_function(
+            &self,
+            function: &Function,
+            function_idx: u32,
+        ) -> Result<(), TranslationError> {
+            if 1 == unsafe {
+                LLVMVerifyFunction(
+                    function.get(),
+                    LLVMVerifierFailureAction::LLVMPrintMessageAction,
+                )
+            } {
+                // print module early for debugging
+                self.module.print_to_file();
+                return Err(TranslationError::Msg(format!(
+                    "function verification failed for function {}",
+                    build_llvm_function_name(function_idx, &self.wasm_module, false)
+                )));
+            }
+            Ok(())
+        }
     }
 }

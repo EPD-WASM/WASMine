@@ -14,6 +14,7 @@ use ir::{
 pub use objects::engine::Engine;
 pub use objects::instance_handle::InstanceHandle;
 use std::{path::Path, rc::Rc};
+use wasi::{PreopenDirInheritPerms, PreopenDirPerms};
 use wasm_types::{FuncType, NumType, ValType};
 
 mod cli;
@@ -23,7 +24,7 @@ mod error;
 mod helper;
 mod linker;
 mod objects;
-mod wasi;
+pub mod wasi;
 
 pub use cli::main;
 pub use cluster::Cluster;
@@ -114,19 +115,54 @@ fn run_internal(path: &Path, config: Config) -> Result<Vec<Value>, RuntimeError>
     }
     engine.init(module.clone())?;
 
+    let start_function = config.start_function.clone();
+
     let cluster = Cluster::new(config);
     let linker = Linker::new();
 
     let linker = linker.bind_to(&cluster);
-    let mut module_handle = linker.instantiate_and_link(module.clone(), engine)?;
-    // module_handle.run_by_name(
-    //     "_start",
-    //     parse_input_params_for_function(
-    //         module_handle
-    //             .get_function_type_from_func_idx(module_handle.query_start_function().unwrap()),
-    //     )?,
-    // )
-    module_handle.run_by_name("_start", vec![])
+    let module_handle = if cluster.config.enable_wasi {
+        let mut wasi_ctxt_builder = wasi::WasiContextBuilder::new();
+        wasi_ctxt_builder.args(cluster.config.wasi_args.clone());
+        wasi_ctxt_builder.inherit_stdio();
+        wasi_ctxt_builder.inherit_host_env();
+        for (preopen_dir, path) in cluster.config.wasi_dirs.iter() {
+            wasi_ctxt_builder.preopen_dir(
+                preopen_dir,
+                path.clone(),
+                PreopenDirPerms::all(),
+                PreopenDirInheritPerms::all(),
+            )?;
+        }
+        let wasi_ctxt = wasi_ctxt_builder.finish();
+        linker.instantiate_and_link_with_wasi(module.clone(), engine, wasi_ctxt)?
+    } else {
+        linker.instantiate_and_link(module.clone(), engine)?
+    };
+
+    let start_function = match start_function {
+        Some(name) => match module.exports.find_function_idx(&name) {
+            Some(idx) => idx,
+            None => {
+                log::error!(
+                    "Could not find configured start function '{}' in wasm modules exports.",
+                    name
+                );
+                return Err(RuntimeError::FunctionNotFound(name.to_owned()));
+            }
+        },
+        None => match module_handle.query_start_function() {
+            Ok(idx) => idx,
+            Err(_) => {
+                log::error!("Wasm module has no default start function. Please provide one explicitely via ");
+                return Err(RuntimeError::FunctionNotFound(
+                    "<start-function>".to_owned(),
+                ));
+            }
+        },
+    };
+    let func = module_handle.get_function_by_idx(start_function)?;
+    func.call(&[])
 }
 
 pub fn run(path: &Path, config: Config) -> u8 {

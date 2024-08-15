@@ -1,7 +1,5 @@
-use std::ffi::CStr;
-
 use llvm_sys::{
-    core::{LLVMDisposeMessage, LLVMGetParam, LLVMPrintValueToString},
+    core::LLVMGetParam,
     prelude::{LLVMTypeRef, LLVMValueRef},
 };
 
@@ -30,22 +28,31 @@ impl Function {
     pub(crate) fn r#type(&self) -> LLVMTypeRef {
         self.ty
     }
-
-    #[allow(dead_code)]
-    #[cfg(debug_assertions)]
-    pub(crate) fn print_to_string(&self) -> String {
-        let s_ptr = unsafe { LLVMPrintValueToString(self.inner) };
-        let r_string = unsafe { CStr::from_ptr(s_ptr) }
-            .to_str()
-            .unwrap()
-            .to_string();
-        unsafe { LLVMDisposeMessage(s_ptr) }
-        r_string
-    }
 }
 
 impl Drop for Function {
     fn drop(&mut self) {
         // function values are dropped with the context
+    }
+}
+
+#[cfg(debug_assertions)]
+mod debug_helper {
+    use super::*;
+    use llvm_sys::core::{LLVMDisposeMessage, LLVMPrintValueToString};
+    use std::ffi::CStr;
+
+    impl Function {
+        #[allow(dead_code)]
+        #[cfg(debug_assertions)]
+        pub(crate) fn print_to_string(&self) -> String {
+            let s_ptr = unsafe { LLVMPrintValueToString(self.inner) };
+            let r_string = unsafe { CStr::from_ptr(s_ptr) }
+                .to_str()
+                .unwrap()
+                .to_string();
+            unsafe { LLVMDisposeMessage(s_ptr) }
+            r_string
+        }
     }
 }

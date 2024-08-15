@@ -3,11 +3,8 @@ use crate::util::to_c_str;
 use crate::ExecutionError;
 use ir::structs::value::ValueRaw;
 use llvm_sys::error::{LLVMCreateStringError, LLVMErrorRef};
-use llvm_sys::execution_engine::{LLVMCreateGDBRegistrationListener, LLVMLinkInMCJIT};
-use llvm_sys::orc2::ee::{
-    LLVMOrcCreateRTDyldObjectLinkingLayerWithSectionMemoryManager,
-    LLVMOrcRTDyldObjectLinkingLayerRegisterJITEventListener,
-};
+use llvm_sys::execution_engine::LLVMLinkInMCJIT;
+use llvm_sys::orc2::ee::LLVMOrcCreateRTDyldObjectLinkingLayerWithSectionMemoryManager;
 use llvm_sys::orc2::lljit::{
     LLVMOrcCreateLLJIT, LLVMOrcCreateLLJITBuilder, LLVMOrcDisposeLLJIT,
     LLVMOrcLLJITAddLLVMIRModuleWithRT, LLVMOrcLLJITBuilderSetJITTargetMachineBuilder,
@@ -41,6 +38,11 @@ use std::mem::{ManuallyDrop, MaybeUninit};
 use std::ptr::null_mut;
 use std::rc::Rc;
 use std::sync::RwLock;
+
+#[cfg(debug_assertions)]
+use llvm_sys::execution_engine::LLVMCreateGDBRegistrationListener;
+#[cfg(debug_assertions)]
+use llvm_sys::orc2::ee::LLVMOrcRTDyldObjectLinkingLayerRegisterJITEventListener;
 
 static TARGET_LOCK: Lazy<RwLock<()>> = Lazy::new(|| RwLock::new(()));
 

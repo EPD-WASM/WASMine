@@ -18,10 +18,13 @@ use ir::structs::{
     module::Module, table::Table,
 };
 use loader::Loader;
-use std::io::{BufReader, Write};
+use std::io::BufReader;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::vec;
 use wasm_types::{FuncIdx, FuncType, ImportDesc, MemIdx, Name, Section, TypeIdx, ValType};
+
+#[cfg(debug_assertions)]
+use std::io::Write;
 
 const WASM_MODULE_PREAMBLE: &[u8] = b"\0asm";
 const WASM_MODULE_VERSION: u32 = 1;
@@ -441,19 +444,7 @@ impl Parser {
             })
             .take(num_remaining_function_defs as usize);
         for func_idx in functions_to_parse {
-            let mut function_parse_result = self.parse_function(i, func_idx);
-            #[cfg(debug_assertions)]
-            {
-                let function_name =
-                    Function::debug_function_name(self.next_empty_function, &self.module);
-                function_parse_result = function_parse_result.map_err(|e| {
-                    ParserError::Msg(format!(
-                        "Error during parsing of function `{}`: {}",
-                        function_name, e
-                    ))
-                })
-            }
-            function_parse_result?;
+            self.parse_function(i, func_idx)?;
             self.next_empty_function = func_idx + 1;
         }
         Ok(())

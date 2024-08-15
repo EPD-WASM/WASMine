@@ -54,6 +54,7 @@ impl<'a> InstanceHandle<'a> {
         m: Rc<WasmModule>,
         engine: Engine,
         imports: DependencyStore,
+        wasi_context: Option<WasiContext>,
     ) -> Result<Self, InstantiationError> {
         let engine = cluster.alloc_engine(engine);
         let execution_context = cluster.alloc_execution_context(ExecutionContext {
@@ -69,26 +70,30 @@ impl<'a> InstanceHandle<'a> {
             recursion_size: 0,
             id: 0,
         });
-        let wasi_context = WasiContext::register_new(cluster, execution_context)?;
+        let wasi_context = wasi_context.map(|mut ctxt| {
+            ctxt.set_execution_context(execution_context);
+            cluster.alloc_wasi_context(ctxt)
+        });
         for f in imports.functions.iter() {
             match &f.func.0 {
                 FunctionKind::Host(ptr, ctxt, _) | FunctionKind::Wasm(ptr, _, ctxt, _) => {
                     engine.register_symbol(
-                        &format!("__import_wrapper__{}", f.name.symbol_name()),
+                        &format!("__import__{}__", f.name.symbol_name()),
                         *ptr as _,
                     );
-                    engine.register_symbol(&format!("__import_ctxt__{}", f.name.module), unsafe {
-                        ctxt.execution_context as _
-                    });
+                    engine.register_symbol(
+                        &format!("__import_ctxt__{}__", f.name.symbol_name()),
+                        unsafe { ctxt.execution_context as _ },
+                    );
                 }
                 FunctionKind::Wasi(ptr) => {
                     if let Some(ref wc) = wasi_context {
                         engine.register_symbol(
-                            &format!("__import_wrapper__{}", f.name.symbol_name()),
+                            &format!("__import__{}__", f.name.symbol_name()),
                             *ptr as _,
                         );
                         engine.register_symbol(
-                            &format!("__import_ctxt__{}", f.name.module),
+                            &format!("__import_ctxt__{}__", f.name.symbol_name()),
                             (*wc) as *const _ as *mut _,
                         );
                     } else {
@@ -190,7 +195,7 @@ impl<'a> InstanceHandle<'a> {
         })
     }
 
-    pub fn get_function(&self, name: &str) -> Result<&Function, RuntimeError> {
+    pub fn get_export_by_name(&self, name: &str) -> Result<&Function, RuntimeError> {
         let mut locked_exported_functions = self.exported_functions.lock().unwrap();
         if let Some(function_entry) = locked_exported_functions.get(name) {
             match function_entry {
@@ -213,6 +218,20 @@ impl<'a> InstanceHandle<'a> {
             }
         }
         Err(RuntimeError::FunctionNotFound(name.to_string()))
+    }
+
+    pub fn get_function_by_idx(&self, func_idx: FuncIdx) -> Result<&Function, RuntimeError> {
+        if let Some(func_name) = self.module.exports.find_function_name(func_idx) {
+            return self.get_export_by_name(func_name);
+        }
+        let func = Function::from_wasm_func(
+            self.execution_context_ptr(),
+            self.get_function_type_from_func_idx(func_idx),
+            self.engine.get_external_function_ptr(func_idx)?,
+            self.engine.get_internal_function_ptr(func_idx)?,
+        );
+        let func_ref = self.cluster.alloc_function(func);
+        Ok(func_ref)
     }
 
     #[inline]
@@ -259,16 +278,6 @@ impl<'a> InstanceHandle<'a> {
 
     pub(crate) fn engine(&mut self) -> &mut Engine {
         self.engine
-    }
-
-    pub fn run_by_name(
-        &mut self,
-        func_name: &str,
-        input_params: Vec<Value>,
-    ) -> Result<Vec<Value>, RuntimeError> {
-        log::debug!("run_by_name: {func_name}({input_params:?})");
-        let func: &Function = self.get_function(func_name)?;
-        func.call(&input_params)
     }
 }
 

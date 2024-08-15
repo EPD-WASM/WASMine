@@ -118,7 +118,29 @@ impl<'a> BoundLinker<'a> {
         engine: Engine,
     ) -> Result<InstanceHandle<'a>, LinkingError> {
         let imports = self.collect_imports_for_module(&module)?;
-        Ok(InstanceHandle::new(self.cluster, module, engine, imports)?)
+        Ok(InstanceHandle::new(
+            self.cluster,
+            module,
+            engine,
+            imports,
+            None,
+        )?)
+    }
+
+    pub fn instantiate_and_link_with_wasi(
+        &self,
+        module: Rc<WasmModule>,
+        engine: Engine,
+        wasi_ctxt: WasiContext,
+    ) -> Result<InstanceHandle<'a>, LinkingError> {
+        let imports = self.collect_imports_for_module(&module)?;
+        Ok(InstanceHandle::new(
+            self.cluster,
+            module,
+            engine,
+            imports,
+            Some(wasi_ctxt),
+        )?)
     }
 
     fn collect_imports_for_module(
@@ -194,7 +216,7 @@ impl<'a> BoundLinker<'a> {
                         .unwrap();
                     imports.functions.push(FunctionDependency {
                         name,
-                        func: match exporting_module.get_function(&import.name) {
+                        func: match exporting_module.get_export_by_name(&import.name) {
                             Ok(f) => f,
                             Err(e) => {
                                 return Err(LinkingError::FunctionNotFound {

@@ -40,13 +40,14 @@ pub fn wasmine_interp_fibonacci(c: &mut Criterion) {
                     let mut wasmine_engine = runtime_lib::Engine::interpreter().unwrap();
                     wasmine_engine.init(wasmine_module.clone()).unwrap();
 
-                    let mut wasmine_instance = runtime_lib::BoundLinker::new(&wasmine_cluster)
+                    let wasmine_instance = runtime_lib::BoundLinker::new(&wasmine_cluster)
                         .instantiate_and_link(wasmine_module.clone(), wasmine_engine)
                         .unwrap();
 
                     wasmine_instance
-                        .run_by_name("_start", vec![Value::Number(Number::I32(*num))])
+                        .get_function_by_idx(wasmine_instance.query_start_function().unwrap())
                         .unwrap()
+                        .call(&[Value::Number(Number::I32(*num))])
                 },
                 BatchSize::SmallInput,
             );

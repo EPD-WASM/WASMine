@@ -19,8 +19,8 @@ struct Args {
     wasi: bool,
 
     /// (WASI-only) list all directories accessible via the WASI API
-    #[arg(short, long, requires = "wasi", value_delimiter = ',')]
-    dir: Vec<PathBuf>,
+    #[arg(short, long, requires = "wasi", value_delimiter = ',', value_parser = parse_wasi_dir_arg, value_name = "HOST_DIR[::GUEST_DIR]")]
+    dir: Vec<(PathBuf, String)>,
 
     /// (WASI-only) additional arguments for the WASI application
     #[arg(last = true, requires = "wasi")]
@@ -67,6 +67,14 @@ impl From<Args> for Config {
             cb = cb.set_start_function(start_func);
         }
         cb.finish()
+    }
+}
+
+fn parse_wasi_dir_arg(s: &str) -> Result<(PathBuf, String), String> {
+    if let Some(s) = s.split_once("::") {
+        Ok((PathBuf::from(s.0), s.1.to_string()))
+    } else {
+        Ok((PathBuf::from(s), s.to_string()))
     }
 }
 

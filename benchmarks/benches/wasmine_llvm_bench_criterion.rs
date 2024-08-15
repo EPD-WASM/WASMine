@@ -1,59 +1,54 @@
-use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
-use ir::structs::value::{Number, Value};
-use loader::Loader;
-use std::{path::PathBuf, rc::Rc};
+// use criterion::{criterion_group, criterion_main, Criterion};
 
-const EXACT_ITER_UNTIL: u32 = 30;
+// pub fn wasmine_llvm_fibonacci_criterion(c: &mut Criterion) {
+//     let wasm_file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+//         .join("fixtures")
+//         .join("fibonacci.wasm");
 
-pub fn wasmine_llvm_fibonacci_criterion(c: &mut Criterion) {
-    let wasm_file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("fixtures")
-        .join("fibonacci.wasm");
+//     let mut group = c.benchmark_group("fibonacci");
+//     group.throughput(Throughput::Elements(1));
+//     group.sample_size(10);
+//     group.warm_up_time(std::time::Duration::from_secs(5));
+//     group.sampling_mode(criterion::SamplingMode::Flat);
 
-    let mut group = c.benchmark_group("fibonacci");
-    group.throughput(Throughput::Elements(1));
-    group.sample_size(10);
-    group.warm_up_time(std::time::Duration::from_secs(5));
-    group.sampling_mode(criterion::SamplingMode::Flat);
+//     let wasm_bytes = std::fs::read(wasm_file_path).unwrap();
+//     for num in (0..EXACT_ITER_UNTIL).chain((EXACT_ITER_UNTIL..=40).step_by(5)) {
+//         group.bench_with_input(BenchmarkId::new("wasmine_llvm_e2e", num), &num, |b, num| {
+//             b.iter_batched(
+//                 || wasm_bytes.clone(),
+//                 |wasm_bytes| {
+//                     let wasmine_module = Rc::new(
+//                         parser::parser::Parser::default()
+//                             .parse(Loader::from_buf(wasm_bytes))
+//                             .unwrap(),
+//                     );
+//                     let config = runtime_lib::ConfigBuilder::new()
+//                         .enable_wasi(true)
+//                         .set_wasi_dirs(vec![])
+//                         .set_wasi_args(vec![])
+//                         .finish();
+//                     let wasmine_cluster = runtime_lib::Cluster::new(config);
+//                     let mut wasmine_engine = runtime_lib::Engine::llvm().unwrap();
+//                     wasmine_engine.init(wasmine_module.clone()).unwrap();
 
-    let wasm_bytes = std::fs::read(wasm_file_path).unwrap();
-    for num in (0..EXACT_ITER_UNTIL).chain((EXACT_ITER_UNTIL..=40).step_by(5)) {
-        group.bench_with_input(BenchmarkId::new("wasmine_llvm_e2e", num), &num, |b, num| {
-            b.iter_batched(
-                || wasm_bytes.clone(),
-                |wasm_bytes| {
-                    let wasmine_module = Rc::new(
-                        parser::parser::Parser::default()
-                            .parse(Loader::from_buf(wasm_bytes))
-                            .unwrap(),
-                    );
-                    let config = runtime_lib::ConfigBuilder::new()
-                        .enable_wasi(true)
-                        .set_wasi_dirs(vec![])
-                        .set_wasi_args(vec![])
-                        .finish();
-                    let wasmine_cluster = runtime_lib::Cluster::new(config);
-                    let mut wasmine_engine = runtime_lib::Engine::llvm().unwrap();
-                    wasmine_engine.init(wasmine_module.clone()).unwrap();
+//                     let mut wasmine_instance = runtime_lib::BoundLinker::new(&wasmine_cluster)
+//                         .instantiate_and_link(wasmine_module.clone(), wasmine_engine)
+//                         .unwrap();
 
-                    let mut wasmine_instance = runtime_lib::BoundLinker::new(&wasmine_cluster)
-                        .instantiate_and_link(wasmine_module.clone(), wasmine_engine)
-                        .unwrap();
+//                     wasmine_instance
+//                         .run_by_name("_start", vec![Value::Number(Number::I32(*num))])
+//                         .unwrap()
+//                 },
+//                 BatchSize::SmallInput,
+//             );
+//         });
+//     }
+//     group.finish();
+// }
 
-                    wasmine_instance
-                        .run_by_name("_start", vec![Value::Number(Number::I32(*num))])
-                        .unwrap()
-                },
-                BatchSize::SmallInput,
-            );
-        });
-    }
-    group.finish();
-}
-
-criterion_group!(
-    name = benches;
-    config = Criterion::default();
-    targets = wasmine_llvm_fibonacci_criterion
-);
-criterion_main!(benches);
+// criterion_group!(
+//     name = benches;
+//     config = Criterion::default();
+//     targets = wasmine_llvm_speccpu_criterion
+// );
+// criterion_main!(benches);

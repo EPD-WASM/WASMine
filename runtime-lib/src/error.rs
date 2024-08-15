@@ -4,6 +4,7 @@ use crate::{
         engine::EngineError, functions::FunctionError, instance_handle::InstantiationError,
         memory::MemoryError, tables::TableError,
     },
+    wasi::WasiError,
 };
 use thiserror::Error;
 use wasm_types::ValType;
@@ -46,4 +47,7 @@ pub enum RuntimeError {
 
     #[error("Function error: {0}")]
     FunctionError(#[from] FunctionError),
+
+    #[error("Wasi error: {0}")]
+    WasiError(#[from] WasiError),
 }

@@ -1,14 +1,13 @@
-use crate::{
-    abstraction::function::Function,
-    util::{build_llvm_function_name, to_c_str},
-    TranslationError, Translator,
-};
+use crate::{abstraction::function::Function, util::to_c_str, TranslationError, Translator};
 use ir::basic_block::BasicBlockGlue;
 use llvm_sys::{
     core::LLVMBuildExtractValue,
     prelude::{LLVMBasicBlockRef, LLVMValueRef},
 };
 use wasm_types::{NumType, ValType};
+
+#[cfg(debug_assertions)]
+use crate::util::build_llvm_function_name;
 
 impl Translator {
     pub(crate) fn translate_terminator(

@@ -132,13 +132,13 @@ Idea:
 ### LLVM Backend Symbol Naming Scheme
 
 Function name mapping:
- - Function `$func_name` imported with C Calling Convention => `__import_wrapper__$(func_name)`
+ - Function `$func_name` imported with C Calling Convention => `__import__$(func_name)__`
  - Function `$func_name` exported from current module with C Calling Convention => `$(func_name)`
  - Function with `$func_idx` declared for internal usage with internal calling convention => `$(func_idx)`
 
 Globals:
  - Regular wasm global with idx `$global_idx` => `__wasmine_global__$(global_idx)`
- - Reference to execution context of other module `$module_name` for calling of imported functions as closures => `__import_ctxt__$(module_name)`
+ - Reference to execution context of other module `$module_name` for calling of imported functions as closures => `__import_ctxt__$(module_name)__`
 
 ### LLVM Calling Conventions and Function Signatures
 
@@ -155,3 +155,9 @@ fn exported_function(execution_context_ptr: *mut ExecutionContext, parameters_ar
 All internal function calls use an internal calling convention which might differ from the C calling convention. All parameters are passed as parameters, multiple return values are returned in structs.
 
 Wrapper functions to convert between the different calling conventions and call signatures are automatically generated for all exported and imported functions.
+
+# TODO
+
+ * use new wasictxt to fix sightglass
+ * add option to compile llvm to shared library
+ * add option to compile via llvm to elf binary where runtime-lib is loaded as interpreter

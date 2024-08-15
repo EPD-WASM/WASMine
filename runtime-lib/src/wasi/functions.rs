@@ -1,10 +1,12 @@
-use core::str;
-use ir::structs::value::ValueRaw;
-use std::path::Path;
-
-use crate::objects::functions::CalleeCtxt;
-
 use super::{types::*, utils::errno, FileDescriptor, WasiContext};
+use crate::objects::functions::CalleeCtxt;
+use ir::structs::value::ValueRaw;
+use std::{
+    ffi::{CString, OsStr},
+    mem::MaybeUninit,
+    os::unix::ffi::OsStrExt,
+    path::Path,
+};
 
 impl WasiContext {
     #[inline]
@@ -106,8 +108,10 @@ impl WasiContext {
     #[inline]
     fn environ_get_internal(&self, environ: Ptr<u32>, environ_buf: Ptr<u8>) -> Result<(), Errno> {
         log::debug!("wasi::environ_get()");
-        let num_env_vars = std::env::vars().count();
-        let env_vars_size = std::env::vars()
+        let num_env_vars = self.env.len();
+        let env_vars_size = self
+            .env
+            .iter()
             .map(|(k, v)| k.len() + v.len() + /* null terminator */ 1 + /* equals symbol */ 1)
             .sum::<usize>();
 
@@ -115,7 +119,7 @@ impl WasiContext {
         let environ_buf = self.get_memory_slice(environ_buf, env_vars_size)?;
 
         let mut environ_buf_offset = 0;
-        for (i, (key, value)) in std::env::vars().enumerate() {
+        for (i, (key, value)) in self.env.iter().enumerate() {
             let key_bytes = key.as_bytes();
             let value_bytes = value.as_bytes();
 
@@ -160,10 +164,12 @@ impl WasiContext {
     ) -> Result<(), Errno> {
         log::debug!("wasi::environ_sizes_get()");
         let num_env_vars_out = self.get_memory_slice(num_env_vars_out, 1)?;
-        num_env_vars_out[0] = std::env::vars().count() as u32;
+        num_env_vars_out[0] = self.env.len() as u32;
 
         let size_env_vars_out = self.get_memory_slice(size_env_vars_out, 1)?;
-        size_env_vars_out[0] = std::env::vars()
+        size_env_vars_out[0] = self
+            .env
+            .iter()
             .map(|(k, v)| k.len() + v.len() + /* null terminator */ 1 + /* equals symbol */ 1)
             .sum::<usize>() as u32;
         Ok(())
@@ -266,7 +272,7 @@ impl WasiContext {
     fn fd_close_internal(&self, fd: FD) -> Result<(), Errno> {
         log::debug!("wasi::fd_close(fd: {fd})");
         let opened_fd = self.get_fd(fd)?;
-        if opened_fd.should_close {
+        if !opened_fd.should_close {
             return Err(Errno::Badf);
         }
         Ok(())
@@ -333,7 +339,7 @@ impl WasiContext {
         debug_assert_eq!(Whence::Cur as u8, libc::SEEK_CUR as u8);
         debug_assert_eq!(Whence::End as u8, libc::SEEK_END as u8);
         debug_assert_eq!(Whence::Set as u8, libc::SEEK_SET as u8);
-        let res = unsafe { libc::lseek(opened_fd.fd, offset, whence as u8 as i32) };
+        let res = unsafe { libc::lseek(opened_fd.fd, offset, whence as i32) };
         if res == -1 {
             return Err(Errno::Io);
         }
@@ -377,9 +383,9 @@ impl WasiContext {
         }
 
         // TODO: do we actually need to sync this with the file system?
-        debug_assert_eq!(FdFlags::Append as u16, libc::O_APPEND as u16);
-        debug_assert_eq!(FdFlags::Nonblock as u16, libc::O_NONBLOCK as u16);
-        let res = unsafe { libc::fcntl(opened_fd.fd, libc::F_SETFL, flags as i32) };
+        debug_assert_eq!(FdFlags::Append.bits(), libc::O_APPEND as u16);
+        debug_assert_eq!(FdFlags::Nonblock.bits(), libc::O_NONBLOCK as u16);
+        let res = unsafe { libc::fcntl(opened_fd.fd, libc::F_SETFL, flags.bits() as libc::c_int) };
         if res == -1 {
             return Err(Errno::Io);
         }
@@ -392,7 +398,7 @@ impl WasiContext {
         returns: *mut ValueRaw,
     ) {
         let fd = (*params.offset(0)).into();
-        let flags = std::mem::transmute::<u16, FdFlags>((*params.offset(2)).as_u32() as u16);
+        let flags = FdFlags::from_bits_truncate((*params.offset(2)).as_u32() as u16);
         *returns = errno((*ctxt.wasi_context).fd_fdstat_set_flags_internal(fd, flags)).into();
     }
 
@@ -561,59 +567,29 @@ impl WasiContext {
             return Err(Errno::NotDir);
         }
         let path = self.get_memory_slice(path, path_len as usize)?;
-        // check that path is valid utf-8
-        let path = str::from_utf8(path).map_err(|_| Errno::Inval)?;
-        let path = Path::new(path);
+        let null_terminated_path = CString::new(path).map_err(|_| Errno::Inval)?;
+        let os_path = OsStr::from_bytes(null_terminated_path.as_bytes());
+        let path = Path::new(os_path);
         if !path.is_relative() {
             log::debug!("...path not relative");
             return Err(Errno::Inval);
         }
         log::debug!("...path: {:?})wasi::path_open", path);
 
-        let mut descriptor_flags = 0;
-        if fs_rights_base.contains(Rights::FdRead) && fs_rights_base.contains(Rights::FdWrite) {
-            descriptor_flags |= libc::O_RDWR;
-        } else if fs_rights_base.contains(Rights::FdRead) {
-            descriptor_flags |= libc::O_RDONLY;
-        } else if fs_rights_base.contains(Rights::FdWrite) {
-            descriptor_flags |= libc::O_WRONLY;
-        } else {
-            return Err(Errno::Inval);
-        }
-        if fs_rights_base.contains(Rights::FdSync) {
-            descriptor_flags |= libc::O_SYNC;
-        }
-        if fs_rights_base.contains(Rights::FdDatasync) {
-            descriptor_flags |= libc::O_DSYNC;
-        }
-        if fdflags.contains(FdFlags::RSync) {
-            descriptor_flags |= libc::O_RSYNC;
-        }
-
-        let mut append_flags = 0;
-        if fdflags.contains(FdFlags::Append) {
-            append_flags |= libc::O_APPEND;
-        }
-
-        let flags = oflags.to_libc() | dirflags.to_libc() | descriptor_flags | append_flags;
-        let mut file_mode = 0;
-        if fs_rights_base.contains(Rights::FdRead) {
-            file_mode |= libc::S_IRUSR;
-        }
-        if fs_rights_base.contains(Rights::FdWrite) {
-            file_mode |= libc::S_IWUSR;
-        }
+        let flags = oflags.to_libc()
+            | dirflags.to_libc()
+            | fs_rights_base.to_libc_open_flags()?
+            | fdflags.to_libc_open_flags();
 
         let fd_res = unsafe {
             libc::openat(
                 opened_fd.fd,
-                path.as_os_str().as_encoded_bytes().as_ptr() as _,
-                oflags as i32,
-                file_mode,
+                null_terminated_path.into_bytes_with_nul().as_ptr() as *const i8,
+                flags,
+                fs_rights_base.to_libc_mode(),
             )
         };
         if fd_res == -1 {
-            log::debug!("errno: {}, {}", fd_res, nix::errno::Errno::last());
             return Err(Errno::Io);
         }
         let new_host_fd = FileDescriptor {
@@ -639,13 +615,13 @@ impl WasiContext {
         returns: *mut ValueRaw,
     ) {
         let fd = (*params.offset(0)).into();
-        let dirflags = std::mem::transmute::<u32, LookupFlags>((*params.offset(1)).as_u32());
+        let dirflags = LookupFlags::from_bits_truncate((*params.offset(1)).as_u32());
         let path = (*params.offset(2)).into();
         let path_len = (*params.offset(3)).into();
-        let oflags = std::mem::transmute::<u16, OpenFlags>((*params.offset(4)).as_u32() as u16);
-        let fs_rights_base = std::mem::transmute::<u64, Rights>((*params.offset(5)).as_u64());
-        let fs_rights_inheriting = std::mem::transmute::<u64, Rights>((*params.offset(6)).as_u64());
-        let fdflags = std::mem::transmute::<u16, FdFlags>((*params.offset(7)).as_u32() as u16);
+        let oflags = OpenFlags::from_bits_truncate((*params.offset(4)).as_u32() as u16);
+        let fs_rights_base = Rights::from_bits_truncate((*params.offset(5)).as_u64());
+        let fs_rights_inheriting = Rights::from_bits_truncate((*params.offset(6)).as_u64());
+        let fdflags = FdFlags::from_bits_truncate((*params.offset(7)).as_u32() as u16);
         let out_fd = (*params.offset(8)).into();
         *returns = errno((*ctxt.wasi_context).path_open_internal(
             fd,
@@ -659,6 +635,131 @@ impl WasiContext {
             out_fd,
         ))
         .into();
+    }
+
+    /// Return the attributes of a file or directory.
+    /// Note: This is similar to `stat` in POSIX.
+    ///
+    /// #### Params
+    /// - `fd`: `FD`: The file descriptor.
+    /// - `flags`: `LookupFlags`: Flags determining the method of how the path is resolved.
+    /// - `path`: `String`: The path of the file or directory to inspect.
+    ///
+    /// #### Results
+    /// - `Result<FileStat, Errno>`: The buffer where the file's attributes are stored.
+    #[inline]
+    fn path_filestat_get_internal(
+        &self,
+        fd: FD,
+        flags: LookupFlags,
+        path: Ptr<u8>,
+        path_len: Size,
+        out: Ptr<FileStat>,
+    ) -> Result<(), Errno> {
+        log::debug!("wasi::path_filestat_get(fd: {fd})");
+        let opened_fd = self.get_fd(fd)?;
+        if opened_fd.stat.fs_filetype != FileType::Directory {
+            return Err(Errno::NotDir);
+        }
+        let path = self.get_memory_slice(path, path_len as usize)?;
+        let null_terminated_path = CString::new(path).map_err(|_| Errno::Inval)?;
+        let os_path = OsStr::from_bytes(null_terminated_path.as_bytes());
+        let path = Path::new(os_path);
+        if !path.is_relative() {
+            return Err(Errno::Inval);
+        }
+
+        let mut stat = MaybeUninit::<libc::stat>::uninit();
+        let stat_res = unsafe {
+            libc::fstatat(
+                opened_fd.fd,
+                null_terminated_path.as_ptr(),
+                stat.as_mut_ptr(),
+                // fstatat by default follows symlinks
+                if flags.contains(LookupFlags::SymlinkFollow) {
+                    0
+                } else {
+                    libc::AT_SYMLINK_NOFOLLOW
+                },
+            )
+        };
+        if stat_res == -1 {
+            // TODO: map real errno to wasi errno
+            log::debug!("fstatat failed: {}", std::io::Error::last_os_error());
+            return Err(Errno::Io);
+        }
+        let stat = unsafe { stat.assume_init() };
+        let filetype = FileType::from_libc(stat.st_mode);
+        let out = self.get_memory_slice(out, 1)?;
+        out[0] = FileStat {
+            dev: stat.st_dev,
+            ino: stat.st_ino,
+            filetype,
+            nlink: stat.st_nlink,
+            size: stat.st_size as FileSize,
+            atim: stat.st_atime as TimeStamp,
+            mtim: stat.st_mtime as TimeStamp,
+            ctim: stat.st_ctime as TimeStamp,
+        };
+        Ok(())
+    }
+    pub(super) unsafe extern "C" fn path_filestat_get(
+        ctxt: CalleeCtxt,
+        params: *const ValueRaw,
+        returns: *mut ValueRaw,
+    ) {
+        let fd = (*params.offset(0)).into();
+        let flags = LookupFlags::from_bits_truncate((*params.offset(1)).as_u32());
+        let path = (*params.offset(2)).into();
+        let path_len = (*params.offset(3)).into();
+        let out = (*params.offset(4)).into();
+        *returns =
+            errno((*ctxt.wasi_context).path_filestat_get_internal(fd, flags, path, path_len, out))
+                .into();
+    }
+
+    /// Return the attributes of an open file.
+    ///
+    /// #### Params
+    /// - `fd`: `FD`: The file descriptor.
+    ///
+    /// #### Results
+    /// - `Result<FileStat, errno>`: Returns the attributes of the file descriptor if successful, or an error if one occurred.
+    #[inline]
+    fn fd_filestat_get_internal(&self, fd: FD, out: Ptr<FileStat>) -> Result<(), Errno> {
+        log::debug!("wasi::fd_filestat_get(fd: {fd})");
+        let opened_fd = self.get_fd(fd)?;
+        let out = self.get_memory_slice(out, 1)?;
+
+        let mut stat = MaybeUninit::<libc::stat>::uninit();
+        let stat_res = unsafe { libc::fstat(opened_fd.fd, stat.as_mut_ptr()) };
+        if stat_res == -1 {
+            // TODO: map real errno to wasi errno
+            log::debug!("fstat failed: {}", std::io::Error::last_os_error());
+            return Err(Errno::Io);
+        }
+        let stat = unsafe { stat.assume_init() };
+        let filetype = FileType::from_libc(stat.st_mode);
+        out[0] = FileStat {
+            dev: stat.st_dev,
+            ino: stat.st_ino,
+            filetype,
+            nlink: stat.st_nlink,
+            size: stat.st_size as FileSize,
+            atim: stat.st_atime as TimeStamp,
+            mtim: stat.st_mtime as TimeStamp,
+            ctim: stat.st_ctime as TimeStamp,
+        };
+        Ok(())
+    }
+    pub(super) unsafe extern "C" fn fd_filestat_get(
+        ctxt: CalleeCtxt,
+        params: *const ValueRaw,
+        returns: *mut ValueRaw,
+    ) {
+        let fd = (*params.offset(0)).into();
+        let out = (*params.offset(1)).into();
+        *returns = errno((*ctxt.wasi_context).fd_filestat_get_internal(fd, out)).into();
     }
 }
 
@@ -754,17 +855,6 @@ impl WasiContext {
 //     unimplemented!()
 // }
 
-// /// Return the attributes of an open file.
-// ///
-// /// #### Params
-// /// - `fd`: `FD`: The file descriptor.
-// ///
-// /// #### Results
-// /// - `Result<filestat, errno>`: Returns the attributes of the file descriptor if successful, or an error if one occurred.
-// pub extern "C" fn fd_filestat_get(fd: FD, out: Ptr<FileStat>) -> Errno {
-//     unimplemented!()
-// }
-
 // /// Adjust the size of an open file. If this increases the file's size, the extra bytes are filled with zeros.
 // /// Note: This is similar to `ftruncate` in POSIX.
 // ///
@@ -821,25 +911,6 @@ impl WasiContext {
 // /// #### Results
 // /// - `Result<size, errno>`: Returns the number of bytes written if successful, or an error if one occurred.
 // pub extern "C" fn fd_pwrite(fd: FD, iovs: CIOVecArray, offset: FileSize) -> Result<Size, Errno> {
-//     unimplemented!()
-// }
-
-// /// Return the attributes of a file or directory.
-// /// Note: This is similar to `stat` in POSIX.
-// ///
-// /// #### Params
-// /// - `fd`: `FD`: The file descriptor.
-// /// - `flags`: `LookupFlags`: Flags determining the method of how the path is resolved.
-// /// - `path`: `String`: The path of the file or directory to inspect.
-// ///
-// /// #### Results
-// /// - `Result<FileStat, Errno>`: The buffer where the file's attributes are stored.
-// pub extern "C" fn path_filestat_get(
-//     fd: FD,
-//     flags: LookupFlags,
-//     path: *const libc::c_char,
-//     out: Ptr<FileStat>,
-// ) -> Errno {
 //     unimplemented!()
 // }
 
