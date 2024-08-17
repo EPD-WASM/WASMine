@@ -1,5 +1,4 @@
 use crate::{
-    config::Config,
     helper::segmented_list::SegmentedList,
     objects::{
         functions::Function, globals::GlobalsObject, memory::MemoryObject, tables::TableObject,
@@ -10,6 +9,9 @@ use crate::{
 use runtime_interface::ExecutionContext;
 use std::sync::Mutex;
 use uuid::Uuid;
+
+#[derive(Debug, Default)]
+pub struct ClusterConfig {/* TODO */}
 
 /// A cluster is a resource tracker, owning all allocated resources of its members. These resources include:
 ///  - Memories
@@ -22,7 +24,7 @@ use uuid::Uuid;
 /// Instance Handles are mere references to the resources and are therefore non-owning.
 pub struct Cluster {
     pub(crate) uuid: Uuid,
-    pub(crate) config: Config,
+    pub(crate) config: ClusterConfig,
     memories: Mutex<SegmentedList<MemoryObject>>,
     tables: Mutex<SegmentedList<TableObject>>,
     globals: Mutex<SegmentedList<GlobalsObject>>,
@@ -33,7 +35,7 @@ pub struct Cluster {
 }
 
 impl Cluster {
-    pub fn new(config: Config) -> Self {
+    pub fn new(config: ClusterConfig) -> Self {
         Self {
             config,
             ..Default::default()
@@ -100,7 +102,7 @@ impl Default for Cluster {
     fn default() -> Self {
         Self {
             uuid: Uuid::new_v4(),
-            config: Config::default(),
+            config: ClusterConfig::default(),
             memories: Mutex::new(SegmentedList::new()),
             tables: Mutex::new(SegmentedList::new()),
             globals: Mutex::new(SegmentedList::new()),

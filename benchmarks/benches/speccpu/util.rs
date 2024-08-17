@@ -1,6 +1,10 @@
 #![allow(dead_code)]
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput};
 use loader::Loader;
+use runtime_lib::{
+    wasi::{PreopenDirInheritPerms, PreopenDirPerms, WasiContextBuilder},
+    ClusterConfig,
+};
 use std::{path::PathBuf, rc::Rc, sync::LazyLock};
 
 pub static PATH_505: LazyLock<PathBuf> =
@@ -96,17 +100,33 @@ pub fn wasmine_llvm_speccpu_criterion(bm: SpeccpuBenchmark, c: &mut Criterion) {
                         .parse(Loader::from_buf(wasm_bytes))
                         .unwrap(),
                 );
-                let config = runtime_lib::ConfigBuilder::new()
-                    .enable_wasi(true)
-                    .set_wasi_dirs(bm.dirs.clone())
-                    .set_wasi_args(bm.args.clone())
-                    .finish();
-                let wasmine_cluster = runtime_lib::Cluster::new(config);
+                let wasmine_cluster = runtime_lib::Cluster::new(ClusterConfig::default());
                 let mut wasmine_engine = runtime_lib::Engine::llvm().unwrap();
                 wasmine_engine.init(wasmine_module.clone()).unwrap();
 
+                let wasi_ctxt = {
+                    let mut builder = WasiContextBuilder::new();
+                    builder.args(bm.args.clone());
+                    for dir in bm.dirs.iter() {
+                        builder
+                            .preopen_dir(
+                                dir.0.clone(),
+                                dir.1.clone(),
+                                PreopenDirPerms::all(),
+                                PreopenDirInheritPerms::all(),
+                            )
+                            .unwrap();
+                    }
+                    builder.inherit_stdio();
+                    builder.finish()
+                };
+
                 let wasmine_instance = runtime_lib::BoundLinker::new(&wasmine_cluster)
-                    .instantiate_and_link(wasmine_module.clone(), wasmine_engine)
+                    .instantiate_and_link_with_wasi(
+                        wasmine_module.clone(),
+                        wasmine_engine,
+                        wasi_ctxt,
+                    )
                     .unwrap();
 
                 wasmine_instance
@@ -134,12 +154,7 @@ pub fn wasmine_llvm_speccpu_iai(bm: SpeccpuBenchmark) {
             .parse(Loader::from_buf(wasm_bytes.clone()))
             .unwrap(),
     );
-    let config = runtime_lib::ConfigBuilder::new()
-        .enable_wasi(true)
-        .set_wasi_dirs(vec![])
-        .set_wasi_args(vec![])
-        .finish();
-    let wasmine_cluster = runtime_lib::Cluster::new(config);
+    let wasmine_cluster = runtime_lib::Cluster::new(ClusterConfig::default());
     let mut wasmine_engine = runtime_lib::Engine::llvm().unwrap();
     wasmine_engine.init(wasmine_module.clone()).unwrap();
 

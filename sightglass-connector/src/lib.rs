@@ -3,7 +3,8 @@ extern crate runtime_lib;
 use anyhow::{Context, Result};
 use runtime_lib::wasi::{PreopenDirInheritPerms, PreopenDirPerms, WasiContext, WasiContextBuilder};
 use runtime_lib::{
-    Cluster, Engine, InstanceHandle, Linker, Loader, Parser, RuntimeError, WasmModule,
+    Cluster, ClusterConfig, Engine, InstanceHandle, Linker, Loader, Parser, RuntimeError,
+    WasmModule,
 };
 use std::ffi::c_void;
 use std::os::fd::IntoRawFd;
@@ -248,12 +249,7 @@ impl<'a> BenchState<'a> {
         make_wasi_cx: impl FnMut() -> Result<WasiContext, RuntimeError> + 'static,
     ) -> Result<Self> {
         let mut linker = Linker::new();
-        let config = runtime_lib::ConfigBuilder::new()
-            .enable_wasi(true)
-            .set_wasi_dirs(vec![])
-            .set_wasi_args(vec![])
-            .finish();
-        let cluster = Cluster::new(config);
+        let cluster = Cluster::new(ClusterConfig::default());
 
         linker.link_host_function("bench", "start", move || {
             execution_start(execution_timer);

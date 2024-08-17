@@ -10,7 +10,9 @@ use ir::{
 };
 use loader::Loader;
 use parser::{error::ParserError, parser::Parser};
-use runtime_lib::{BoundLinker, Cluster, Config, Engine, InstanceHandle, Linker, RuntimeError};
+use runtime_lib::{
+    BoundLinker, Cluster, ClusterConfig, Engine, InstanceHandle, Linker, RuntimeError,
+};
 use std::{collections::HashMap, path::PathBuf, rc::Rc};
 use test_log::test;
 use wasm_types::{NumType, ValType};
@@ -169,7 +171,7 @@ pub fn test_llvm(file_path: &str) {
     };
 
     let linker: Linker = Linker::new();
-    let cluster: Cluster = Cluster::new(Config::default());
+    let cluster: Cluster = Cluster::new(ClusterConfig::default());
     let mut declared_modules: DeclaredModulesMap = HashMap::new();
     let mut linker = linker.bind_to(&cluster);
 

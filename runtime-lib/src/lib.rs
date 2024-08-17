@@ -27,7 +27,7 @@ mod objects;
 pub mod wasi;
 
 pub use cli::main;
-pub use cluster::Cluster;
+pub use cluster::{Cluster, ClusterConfig};
 pub use error::RuntimeError;
 pub use linker::{BoundLinker, Linker};
 
@@ -117,16 +117,16 @@ fn run_internal(path: &Path, config: Config) -> Result<Vec<Value>, RuntimeError>
 
     let start_function = config.start_function.clone();
 
-    let cluster = Cluster::new(config);
+    let cluster = Cluster::new(config.cluster_config);
     let linker = Linker::new();
 
     let linker = linker.bind_to(&cluster);
-    let module_handle = if cluster.config.enable_wasi {
+    let module_handle = if config.enable_wasi {
         let mut wasi_ctxt_builder = wasi::WasiContextBuilder::new();
-        wasi_ctxt_builder.args(cluster.config.wasi_args.clone());
+        wasi_ctxt_builder.args(config.wasi_args.clone());
         wasi_ctxt_builder.inherit_stdio();
         wasi_ctxt_builder.inherit_host_env();
-        for (preopen_dir, path) in cluster.config.wasi_dirs.iter() {
+        for (preopen_dir, path) in config.wasi_dirs.iter() {
             wasi_ctxt_builder.preopen_dir(
                 preopen_dir,
                 path.clone(),

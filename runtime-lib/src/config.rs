@@ -1,3 +1,4 @@
+use crate::cluster::ClusterConfig;
 use std::path::PathBuf;
 
 #[derive(Debug, Default)]
@@ -6,6 +7,7 @@ pub struct Config {
     pub(crate) wasi_dirs: Vec<(PathBuf, String)>,
     pub(crate) wasi_args: Vec<String>,
     pub(crate) start_function: Option<String>,
+    pub(crate) cluster_config: ClusterConfig,
 }
 
 #[derive(Debug, Default)]
