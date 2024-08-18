@@ -16,7 +16,12 @@ use crate::{
 use core::{ffi, slice};
 use ir::structs::{module::Module as WasmModule, value::Value};
 use runtime_interface::{ExecutionContext, GlobalInstance};
-use std::{collections::HashMap, ptr::null_mut, rc::Rc, sync::Mutex};
+use std::{
+    collections::HashMap,
+    ptr::{null_mut, NonNull},
+    rc::Rc,
+    sync::Mutex,
+};
 use wasm_types::{FuncIdx, FuncType, GlobalIdx, MemIdx, TableIdx};
 
 #[derive(thiserror::Error, Debug)]
@@ -76,25 +81,25 @@ impl<'a> InstanceHandle<'a> {
         });
         for f in imports.functions.iter() {
             match &f.func.0 {
-                FunctionKind::Host(ptr, ctxt, _) | FunctionKind::Wasm(ptr, _, ctxt, _) => {
-                    engine.register_symbol(
+                FunctionKind::Host(ptr, ctxt, _) | FunctionKind::Wasm(ptr, ctxt, _) => {
+                    engine.set_symbol_addr(
                         &format!("__import__{}__", f.name.symbol_name()),
-                        *ptr as _,
+                        unsafe { NonNull::new_unchecked(*ptr as _) },
                     );
-                    engine.register_symbol(
+                    engine.set_symbol_addr(
                         &format!("__import_ctxt__{}__", f.name.symbol_name()),
-                        unsafe { ctxt.execution_context as _ },
+                        unsafe { NonNull::new_unchecked(ctxt.execution_context).cast() },
                     );
                 }
                 FunctionKind::Wasi(ptr) => {
                     if let Some(ref wc) = wasi_context {
-                        engine.register_symbol(
+                        engine.set_symbol_addr(
                             &format!("__import__{}__", f.name.symbol_name()),
-                            *ptr as _,
+                            unsafe { NonNull::new_unchecked(*ptr as _) },
                         );
-                        engine.register_symbol(
+                        engine.set_symbol_addr(
                             &format!("__import_ctxt__{}__", f.name.symbol_name()),
-                            (*wc) as *const _ as *mut _,
+                            unsafe { NonNull::new_unchecked(*wc as *const WasiContext as _) },
                         );
                     } else {
                         continue;
@@ -109,7 +114,7 @@ impl<'a> InstanceHandle<'a> {
                 FunctionKind::Runtime(ptr) => ptr,
                 _ => panic!("unexpected function kind"),
             };
-            engine.register_symbol(&import.name.symbol_name(), ptr.as_ptr())
+            engine.set_symbol_addr(&import.name.symbol_name(), ptr)
         }
 
         // initialize globals
@@ -209,7 +214,6 @@ impl<'a> InstanceHandle<'a> {
                         self.execution_context_ptr(),
                         self.get_function_type_from_func_idx(*func_idx),
                         self.engine.get_external_function_ptr(idx)?,
-                        self.engine.get_internal_function_ptr(idx)?,
                     );
                     let func_ref = self.cluster.alloc_function(func);
                     locked_exported_functions.insert(name.to_string(), Either::Left(func_ref));
@@ -228,7 +232,6 @@ impl<'a> InstanceHandle<'a> {
             self.execution_context_ptr(),
             self.get_function_type_from_func_idx(func_idx),
             self.engine.get_external_function_ptr(func_idx)?,
-            self.engine.get_internal_function_ptr(func_idx)?,
         );
         let func_ref = self.cluster.alloc_function(func);
         Ok(func_ref)
@@ -245,7 +248,7 @@ impl<'a> InstanceHandle<'a> {
             wasm_types::GlobalType::Const(ty) => ty,
             wasm_types::GlobalType::Mut(ty) => ty,
         };
-        let global_val = unsafe { *(global_addr) };
+        let global_val = unsafe { *global_addr.as_ptr() };
         Value::from_raw(global_val, *global_valty)
     }
 

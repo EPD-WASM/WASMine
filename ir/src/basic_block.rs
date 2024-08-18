@@ -3,6 +3,7 @@ use crate::{
     structs::instruction::ControlInstruction,
 };
 use once_cell::sync::Lazy;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::VecDeque,
     fmt::Debug,
@@ -14,7 +15,7 @@ static BASIC_BLOCK_ID: Lazy<AtomicU32> = Lazy::new(|| AtomicU32::new(0));
 
 pub type BasicBlockID = u32;
 
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone, Debug, Serialize, Deserialize)]
 pub struct BasicBlock {
     // instructions encoded
     pub instructions: BasicBlockStorage,
@@ -23,7 +24,7 @@ pub struct BasicBlock {
     pub id: BasicBlockID,
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct BasicBlockStorage {
     pub immediate_storage: VecDeque<u8>,
     pub variable_storage: VecDeque<VariableID>,
@@ -107,7 +108,7 @@ impl BasicBlock {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub enum BasicBlockGlue {
     // jump to another block
     Jmp {

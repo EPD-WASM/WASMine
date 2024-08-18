@@ -2,7 +2,7 @@ use ir::structs::{module::Module as WasmModule, value::ValueRaw};
 use std::{ffi, ptr::NonNull, rc::Rc};
 use wasm_types::{DataIdx, ElemIdx, MemIdx, TableIdx, TypeIdx};
 
-pub type RawFunctionPtr = NonNull<core::ffi::c_void>;
+pub type RawPointer = NonNull<core::ffi::c_void>;
 
 /// The only top level datastructure always available to the executing WASM code
 #[derive(Debug)]
@@ -46,7 +46,7 @@ pub struct GlobalStorage {
 
 #[derive(Clone)]
 pub struct GlobalInstance {
-    pub addr: *mut ValueRaw,
+    pub addr: NonNull<ValueRaw>,
 }
 
 // Careful! These function symbols are not mangled and pollute the global namespace!
@@ -86,7 +86,7 @@ extern "C" {
         table_idx: TableIdx,
         type_idx: TypeIdx,
         entry_idx: u32,
-    ) -> RawFunctionPtr;
+    ) -> RawPointer;
     pub fn table_set(ctxt: &mut ExecutionContext, table_idx: usize, value: u64, idx: u32);
     pub fn table_get(ctxt: &mut ExecutionContext, table_idx: usize, idx: u32) -> u64;
     pub fn table_grow(

@@ -1,13 +1,14 @@
 // https://webassembly.github.io/spec/core/exec/runti`me`.html
 
 use crate::utils::numeric_transmutes::{Bit32, Bit64};
+use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use wasm_types::{FuncIdx, GlobalIdx, NumType, RefType, ValType};
 
 mod number_impls;
 mod number_ops;
 
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub enum Number {
     I32(u32),
     I64(u64),
@@ -45,11 +46,11 @@ pub type Vector = [u8; 16];
 pub type FunctionReference = FuncIdx;
 pub type ExternReference = u32;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Reference {
     Null,
     Function(FuncIdx),
-    Extern(*const core::ffi::c_void),
+    Extern(u64),
 }
 
 impl Display for Reference {
@@ -57,12 +58,12 @@ impl Display for Reference {
         match self {
             Reference::Null => write!(f, "null"),
             Reference::Function(idx) => write!(f, "func[{}]", *idx as u64),
-            Reference::Extern(idx) => write!(f, "extern[{}]", *idx as u64),
+            Reference::Extern(idx) => write!(f, "extern[{}]", *idx),
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Value {
     Number(Number),
     Vector(Vector),
@@ -114,7 +115,7 @@ pub union ValueRaw {
 
     v128: [u8; 16],
     funcref: FuncIdx,
-    externref: *const std::ffi::c_void,
+    externref: u64,
 }
 
 impl ValueRaw {
@@ -163,7 +164,7 @@ impl ValueRaw {
     }
 
     #[inline]
-    pub fn externref(value: *const std::ffi::c_void) -> Self {
+    pub fn externref(value: u64) -> Self {
         ValueRaw { externref: value }
     }
 
@@ -208,7 +209,7 @@ impl ValueRaw {
     }
 
     #[inline]
-    pub fn as_externref(self) -> *const std::ffi::c_void {
+    pub fn as_externref(self) -> u64 {
         unsafe { self.externref }
     }
 }
@@ -362,7 +363,7 @@ impl Value {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ConstantValue {
     V(Value),
     // we can't resolve the value of imported globals at parsing time

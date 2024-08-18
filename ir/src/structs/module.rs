@@ -1,14 +1,14 @@
-use std::fmt::Debug;
-
 use super::{
     data::Data, element::Element, export::WasmExports, global::Global, import::Import,
     memory::Memory, table::Table,
 };
 use crate::IR;
+use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
 use wasm_types::{FuncIdx, FuncType};
 
 /// A WebAssembly module
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct Module {
     /// Wasm functions (code)
     pub ir: IR,

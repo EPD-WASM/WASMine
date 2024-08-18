@@ -1,4 +1,4 @@
-use crate::util::to_c_str;
+use crate::util::c_str;
 use crate::{abstraction::function::Function, TranslationError, Translator};
 use ir::instructions::{
     DataDropInstruction, MemoryCopyInstruction, MemoryFillInstruction, MemoryGrowInstruction,
@@ -147,7 +147,7 @@ impl Translator {
                     self.builder.get(),
                     base_addr,
                     self.builder.const_i32(memarg.offset),
-                    to_c_str("add_memarg_offset").as_ptr(),
+                    c_str("add_memarg_offset").as_ptr(),
                 )
             };
         }

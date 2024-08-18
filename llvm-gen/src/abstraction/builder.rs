@@ -1,5 +1,5 @@
 use super::{context::Context, function::Function, module::Module};
-use crate::util::to_c_str;
+use crate::util::c_str;
 use ir::structs::value::ValueRaw;
 use llvm_sys::{
     core::{
@@ -224,7 +224,7 @@ impl Builder {
                 base,
                 indices.as_mut_ptr(),
                 indices.len() as u32,
-                to_c_str(name).as_ptr(),
+                c_str(name).as_ptr(),
             )
         }
     }
@@ -235,11 +235,11 @@ impl Builder {
         ptr: LLVMValueRef,
         name: &str,
     ) -> LLVMValueRef {
-        unsafe { LLVMBuildLoad2(self.get(), ty, ptr, to_c_str(name).as_ptr()) }
+        unsafe { LLVMBuildLoad2(self.get(), ty, ptr, c_str(name).as_ptr()) }
     }
 
     pub(crate) fn build_alloca(&self, ty: LLVMTypeRef, name: &str) -> LLVMValueRef {
-        let res = unsafe { LLVMBuildAlloca(self.get(), ty, to_c_str(name).as_ptr()) };
+        let res = unsafe { LLVMBuildAlloca(self.get(), ty, c_str(name).as_ptr()) };
         // somehow, the result is not a pointer (TODO: ask alexis why this could be / how to debug)
         self.build_bitcast(res, unsafe { LLVMPointerType(ty, 0) }, "local_ptr")
     }
@@ -257,7 +257,7 @@ impl Builder {
                 val,
                 to_ty,
                 signed.into(),
-                to_c_str(name).as_ptr(),
+                c_str(name).as_ptr(),
             )
         }
     }
@@ -270,9 +270,9 @@ impl Builder {
         name: &str,
     ) -> LLVMValueRef {
         if signed {
-            unsafe { LLVMBuildSIToFP(self.get(), val, to_ty, to_c_str(name).as_ptr()) }
+            unsafe { LLVMBuildSIToFP(self.get(), val, to_ty, c_str(name).as_ptr()) }
         } else {
-            unsafe { LLVMBuildUIToFP(self.get(), val, to_ty, to_c_str(name).as_ptr()) }
+            unsafe { LLVMBuildUIToFP(self.get(), val, to_ty, c_str(name).as_ptr()) }
         }
     }
 
@@ -282,7 +282,7 @@ impl Builder {
         to_ty: LLVMTypeRef,
         name: &str,
     ) -> LLVMValueRef {
-        unsafe { LLVMBuildFPCast(self.get(), val, to_ty, to_c_str(name).as_ptr()) }
+        unsafe { LLVMBuildFPCast(self.get(), val, to_ty, c_str(name).as_ptr()) }
     }
 
     pub(crate) fn build_bitcast(
@@ -291,7 +291,7 @@ impl Builder {
         to_ty: LLVMTypeRef,
         name: &str,
     ) -> LLVMValueRef {
-        unsafe { LLVMBuildBitCast(self.get(), val, to_ty, to_c_str(name).as_ptr()) }
+        unsafe { LLVMBuildBitCast(self.get(), val, to_ty, c_str(name).as_ptr()) }
     }
 
     pub(crate) fn build_store(&self, val: LLVMValueRef, ptr: LLVMValueRef) {
@@ -337,7 +337,7 @@ impl Builder {
         rhs: LLVMValueRef,
         name: &str,
     ) -> LLVMValueRef {
-        unsafe { LLVMBuildICmp(self.get(), op, lhs, rhs, to_c_str(name).as_ptr()) }
+        unsafe { LLVMBuildICmp(self.get(), op, lhs, rhs, c_str(name).as_ptr()) }
     }
 
     pub(crate) fn build_fcmp(
@@ -347,7 +347,7 @@ impl Builder {
         rhs: LLVMValueRef,
         name: &str,
     ) -> LLVMValueRef {
-        unsafe { LLVMBuildFCmp(self.get(), op, lhs, rhs, to_c_str(name).as_ptr()) }
+        unsafe { LLVMBuildFCmp(self.get(), op, lhs, rhs, c_str(name).as_ptr()) }
     }
 
     pub(crate) fn build_conditional_branch(
@@ -374,7 +374,7 @@ impl Builder {
                 func.get(),
                 args.as_mut_ptr(),
                 args.len() as u32,
-                to_c_str(name).as_ptr(),
+                c_str(name).as_ptr(),
             )
         }
     }
@@ -412,13 +412,13 @@ impl Builder {
                 cond,
                 then_val,
                 else_val,
-                to_c_str(name).as_ptr(),
+                c_str(name).as_ptr(),
             )
         }
     }
 
     pub(crate) fn build_phi(&self, ty: LLVMTypeRef, name: &str) -> LLVMValueRef {
-        unsafe { LLVMBuildPhi(self.get(), ty, to_c_str(name).as_ptr()) }
+        unsafe { LLVMBuildPhi(self.get(), ty, c_str(name).as_ptr()) }
     }
 
     pub(crate) fn phi_add_incoming(
@@ -447,10 +447,10 @@ impl Builder {
     ) -> LLVMValueRef {
         // TODO: define this globally per function
         let trap_block = unsafe {
-            LLVMAppendBasicBlockInContext(self.context, llvm_func, to_c_str("trap").as_ptr())
+            LLVMAppendBasicBlockInContext(self.context, llvm_func, c_str("trap").as_ptr())
         };
         let cont_block = unsafe {
-            LLVMAppendBasicBlockInContext(self.context, llvm_func, to_c_str("cont").as_ptr())
+            LLVMAppendBasicBlockInContext(self.context, llvm_func, c_str("cont").as_ptr())
         };
         let is_nan_or_inf = self.build_fcmp(
             LLVMRealPredicate::LLVMRealUNO,
@@ -522,9 +522,9 @@ impl Builder {
         self.position_at_end(cont_block);
         let out_ty = self.valtype2llvm(ValType::Number(out_ty));
         if signed {
-            unsafe { LLVMBuildFPToSI(self.get(), val, out_ty, to_c_str(name).as_ptr()) }
+            unsafe { LLVMBuildFPToSI(self.get(), val, out_ty, c_str(name).as_ptr()) }
         } else {
-            unsafe { LLVMBuildFPToUI(self.get(), val, out_ty, to_c_str(name).as_ptr()) }
+            unsafe { LLVMBuildFPToUI(self.get(), val, out_ty, c_str(name).as_ptr()) }
         }
     }
 
@@ -590,14 +590,14 @@ impl Builder {
 
         let rounding_mode = self.DEFAULT_ROUNDING_MODE.get_or_init(|| {
             let rm = "round.dynamic";
-            let rm = LLVMMDStringInContext2(self.context, to_c_str(rm).as_ptr(), rm.len());
+            let rm = LLVMMDStringInContext2(self.context, c_str(rm).as_ptr(), rm.len());
             LLVMValueRefWrapper(LLVMMetadataAsValue(self.context, rm))
         });
 
         let fp_exception_mode = self.DEFAULT_FP_EXCEPTION_MODE.get_or_init(|| {
             let fp_e_m = "fpexcept.ignore";
             let fp_e_m =
-                LLVMMDStringInContext2(self.context, to_c_str(fp_e_m).as_ptr(), fp_e_m.len());
+                LLVMMDStringInContext2(self.context, c_str(fp_e_m).as_ptr(), fp_e_m.len());
             LLVMValueRefWrapper(LLVMMetadataAsValue(self.context, fp_e_m))
         });
 
@@ -626,7 +626,7 @@ impl Builder {
         let fp_exception_mode = self.DEFAULT_FP_EXCEPTION_MODE.get_or_init(|| {
             let fp_e_m = "fpexcept.ignore";
             let fp_e_m =
-                LLVMMDStringInContext2(self.context, to_c_str(fp_e_m).as_ptr(), fp_e_m.len());
+                LLVMMDStringInContext2(self.context, c_str(fp_e_m).as_ptr(), fp_e_m.len());
             LLVMValueRefWrapper(LLVMMetadataAsValue(self.context, fp_e_m))
         });
 
@@ -657,7 +657,7 @@ impl Builder {
         rhs: LLVMValueRef,
         name: &str,
     ) -> LLVMValueRef {
-        unsafe { LLVMBuildAdd(self.get(), lhs, rhs, to_c_str(name).as_ptr()) }
+        unsafe { LLVMBuildAdd(self.get(), lhs, rhs, c_str(name).as_ptr()) }
     }
 
     pub(crate) fn build_sub(
@@ -666,7 +666,7 @@ impl Builder {
         rhs: LLVMValueRef,
         name: &str,
     ) -> LLVMValueRef {
-        unsafe { LLVMBuildSub(self.get(), lhs, rhs, to_c_str(name).as_ptr()) }
+        unsafe { LLVMBuildSub(self.get(), lhs, rhs, c_str(name).as_ptr()) }
     }
 
     pub(crate) fn build_mul(
@@ -675,7 +675,7 @@ impl Builder {
         rhs: LLVMValueRef,
         name: &str,
     ) -> LLVMValueRef {
-        unsafe { LLVMBuildMul(self.get(), lhs, rhs, to_c_str(name).as_ptr()) }
+        unsafe { LLVMBuildMul(self.get(), lhs, rhs, c_str(name).as_ptr()) }
     }
 
     pub(crate) fn build_trap_if_is_zero(&self, val: LLVMValueRef, llvm_func: LLVMValueRef) {
@@ -687,10 +687,10 @@ impl Builder {
         );
         // TODO: define this globally per function == trap block
         let is_zero = unsafe {
-            LLVMAppendBasicBlockInContext(self.context, llvm_func, to_c_str("is_zero").as_ptr())
+            LLVMAppendBasicBlockInContext(self.context, llvm_func, c_str("is_zero").as_ptr())
         };
         let is_not_zero = unsafe {
-            LLVMAppendBasicBlockInContext(self.context, llvm_func, to_c_str("is_not_zero").as_ptr())
+            LLVMAppendBasicBlockInContext(self.context, llvm_func, c_str("is_not_zero").as_ptr())
         };
         self.build_conditional_branch(icmp_res, is_zero, is_not_zero);
 
@@ -710,7 +710,7 @@ impl Builder {
         llvm_func: LLVMValueRef,
     ) -> LLVMValueRef {
         self.build_trap_if_is_zero(rhs, llvm_func);
-        unsafe { llvm_sys::core::LLVMBuildUDiv(self.get(), lhs, rhs, to_c_str(name).as_ptr()) }
+        unsafe { llvm_sys::core::LLVMBuildUDiv(self.get(), lhs, rhs, c_str(name).as_ptr()) }
     }
 
     pub(crate) fn build_sdiv(
@@ -721,7 +721,7 @@ impl Builder {
         llvm_func: LLVMValueRef,
     ) -> LLVMValueRef {
         self.build_trap_if_is_zero(rhs, llvm_func);
-        unsafe { llvm_sys::core::LLVMBuildSDiv(self.get(), lhs, rhs, to_c_str(name).as_ptr()) }
+        unsafe { llvm_sys::core::LLVMBuildSDiv(self.get(), lhs, rhs, c_str(name).as_ptr()) }
     }
 
     pub(crate) fn build_urem(
@@ -732,7 +732,7 @@ impl Builder {
         llvm_func: LLVMValueRef,
     ) -> LLVMValueRef {
         self.build_trap_if_is_zero(rhs, llvm_func);
-        unsafe { llvm_sys::core::LLVMBuildURem(self.get(), lhs, rhs, to_c_str(name).as_ptr()) }
+        unsafe { llvm_sys::core::LLVMBuildURem(self.get(), lhs, rhs, c_str(name).as_ptr()) }
     }
 
     pub(crate) fn build_srem(
@@ -743,7 +743,7 @@ impl Builder {
         llvm_func: LLVMValueRef,
     ) -> LLVMValueRef {
         self.build_trap_if_is_zero(rhs, llvm_func);
-        unsafe { llvm_sys::core::LLVMBuildSRem(self.get(), lhs, rhs, to_c_str(name).as_ptr()) }
+        unsafe { llvm_sys::core::LLVMBuildSRem(self.get(), lhs, rhs, c_str(name).as_ptr()) }
     }
 
     pub(crate) fn build_and(
@@ -752,7 +752,7 @@ impl Builder {
         rhs: LLVMValueRef,
         name: &str,
     ) -> LLVMValueRef {
-        unsafe { llvm_sys::core::LLVMBuildAnd(self.get(), lhs, rhs, to_c_str(name).as_ptr()) }
+        unsafe { llvm_sys::core::LLVMBuildAnd(self.get(), lhs, rhs, c_str(name).as_ptr()) }
     }
 
     pub(crate) fn build_or(
@@ -761,7 +761,7 @@ impl Builder {
         rhs: LLVMValueRef,
         name: &str,
     ) -> LLVMValueRef {
-        unsafe { llvm_sys::core::LLVMBuildOr(self.get(), lhs, rhs, to_c_str(name).as_ptr()) }
+        unsafe { llvm_sys::core::LLVMBuildOr(self.get(), lhs, rhs, c_str(name).as_ptr()) }
     }
 
     pub(crate) fn build_xor(
@@ -770,7 +770,7 @@ impl Builder {
         rhs: LLVMValueRef,
         name: &str,
     ) -> LLVMValueRef {
-        unsafe { llvm_sys::core::LLVMBuildXor(self.get(), lhs, rhs, to_c_str(name).as_ptr()) }
+        unsafe { llvm_sys::core::LLVMBuildXor(self.get(), lhs, rhs, c_str(name).as_ptr()) }
     }
 
     pub(crate) fn build_shl(
@@ -779,7 +779,7 @@ impl Builder {
         rhs: LLVMValueRef,
         name: &str,
     ) -> LLVMValueRef {
-        unsafe { llvm_sys::core::LLVMBuildShl(self.get(), lhs, rhs, to_c_str(name).as_ptr()) }
+        unsafe { llvm_sys::core::LLVMBuildShl(self.get(), lhs, rhs, c_str(name).as_ptr()) }
     }
 
     pub(crate) fn build_lshr(
@@ -788,7 +788,7 @@ impl Builder {
         rhs: LLVMValueRef,
         name: &str,
     ) -> LLVMValueRef {
-        unsafe { llvm_sys::core::LLVMBuildLShr(self.get(), lhs, rhs, to_c_str(name).as_ptr()) }
+        unsafe { llvm_sys::core::LLVMBuildLShr(self.get(), lhs, rhs, c_str(name).as_ptr()) }
     }
 
     pub(crate) fn build_ashr(
@@ -797,7 +797,7 @@ impl Builder {
         rhs: LLVMValueRef,
         name: &str,
     ) -> LLVMValueRef {
-        unsafe { llvm_sys::core::LLVMBuildAShr(self.get(), lhs, rhs, to_c_str(name).as_ptr()) }
+        unsafe { llvm_sys::core::LLVMBuildAShr(self.get(), lhs, rhs, c_str(name).as_ptr()) }
     }
 
     // TODO: use intrinsic for this
@@ -812,7 +812,7 @@ impl Builder {
             let rotate_by = rhs;
 
             let left_shift =
-                llvm_sys::core::LLVMBuildShl(self.get(), val, rotate_by, to_c_str("rotl").as_ptr());
+                llvm_sys::core::LLVMBuildShl(self.get(), val, rotate_by, c_str("rotl").as_ptr());
             let leftover_bits_cnt = match types {
                 NumType::I32 => {
                     let bits = llvm_sys::core::LLVMConstInt(self.i32(), 32, 0);
@@ -820,7 +820,7 @@ impl Builder {
                         self.get(),
                         bits,
                         rotate_by,
-                        to_c_str("rotl").as_ptr(),
+                        c_str("rotl").as_ptr(),
                     )
                 }
                 NumType::I64 => {
@@ -829,7 +829,7 @@ impl Builder {
                         self.get(),
                         bits,
                         rotate_by,
-                        to_c_str("rotl").as_ptr(),
+                        c_str("rotl").as_ptr(),
                     )
                 }
                 _ => panic!("parser error, expected i32 or i64"),
@@ -838,13 +838,13 @@ impl Builder {
                 self.get(),
                 val,
                 leftover_bits_cnt,
-                to_c_str("rotl").as_ptr(),
+                c_str("rotl").as_ptr(),
             );
             llvm_sys::core::LLVMBuildOr(
                 self.get(),
                 left_shift,
                 right_shift,
-                to_c_str("rotl").as_ptr(),
+                c_str("rotl").as_ptr(),
             )
         }
     }
@@ -864,7 +864,7 @@ impl Builder {
                 self.get(),
                 val,
                 rotate_by,
-                to_c_str("rotr").as_ptr(),
+                c_str("rotr").as_ptr(),
             );
             let leftover_bits_cnt = match types {
                 NumType::I32 => {
@@ -873,7 +873,7 @@ impl Builder {
                         self.get(),
                         bits,
                         rotate_by,
-                        to_c_str("rotr").as_ptr(),
+                        c_str("rotr").as_ptr(),
                     )
                 }
                 NumType::I64 => {
@@ -882,7 +882,7 @@ impl Builder {
                         self.get(),
                         bits,
                         rotate_by,
-                        to_c_str("rotr").as_ptr(),
+                        c_str("rotr").as_ptr(),
                     )
                 }
                 _ => panic!("parser error, expected i32 or i64"),
@@ -891,13 +891,13 @@ impl Builder {
                 self.get(),
                 val,
                 leftover_bits_cnt,
-                to_c_str("rotr").as_ptr(),
+                c_str("rotr").as_ptr(),
             );
             llvm_sys::core::LLVMBuildOr(
                 self.get(),
                 left_shift,
                 right_shift,
-                to_c_str("rotr").as_ptr(),
+                c_str("rotr").as_ptr(),
             )
         }
     }

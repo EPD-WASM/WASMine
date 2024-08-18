@@ -1,6 +1,8 @@
+use std::path::PathBuf;
+
 use thiserror::Error;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 pub enum TranslationError {
     #[error("Unimplemented: {0}")]
     Unimplemented(String),
@@ -18,7 +20,7 @@ pub enum TranslationError {
     ExecutionError(String),
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 pub enum ExecutionError {
     #[error("Translation Error: {0}")]
     TranslationError(#[from] TranslationError),
@@ -26,8 +28,12 @@ pub enum ExecutionError {
     LLVM(String),
     #[error("{0}")]
     Msg(String),
-    #[error("Function not found")]
-    FunctionNotFound,
+    #[error("Function {0} not found")]
+    FunctionNotFound(String),
+    #[error("Object file {0} not found")]
+    ObjFileNotFound(PathBuf),
+    #[error("Module {0} not found")]
+    ModuleNotFound(usize),
 }
 
 impl From<llvm_sys::error::LLVMErrorRef> for ExecutionError {

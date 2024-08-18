@@ -1,5 +1,5 @@
-use crate::config::{Config, ConfigBuilder};
-use clap::{Parser, ValueEnum};
+use crate::config::ConfigBuilder;
+use clap::{Parser, Subcommand, ValueEnum};
 use log::LevelFilter;
 use simplelog::{ColorChoice, CombinedLogger, TermLogger, TerminalMode};
 use std::{path::PathBuf, process::ExitCode};
@@ -7,28 +7,80 @@ use std::{path::PathBuf, process::ExitCode};
 #[derive(Parser, Debug)]
 #[command(name = "WASMine", version = "dev")]
 struct Args {
-    /// ".wasm" executable path
-    path: PathBuf,
-
-    /// exported Wasm function name (defaults to the set start function)
-    #[arg(short, long)]
-    invoke: Option<String>,
-
-    /// enable WASI API support (CAUTION: weakens WebAssembly sandboxing)
-    #[arg(short, long, default_value_t = false)]
-    wasi: bool,
-
-    /// (WASI-only) list all directories accessible via the WASI API
-    #[arg(short, long, requires = "wasi", value_delimiter = ',', value_parser = parse_wasi_dir_arg, value_name = "HOST_DIR[::GUEST_DIR]")]
-    dir: Vec<(PathBuf, String)>,
-
-    /// (WASI-only) additional arguments for the WASI application
-    #[arg(last = true, requires = "wasi")]
-    args: Vec<String>,
-
     /// Log Level
     #[arg(short, long, default_value = "warn")]
     log_level: LogLevel,
+
+    /// Backend
+    #[arg(short, long, default_value = "llvm")]
+    backend: Backend,
+
+    #[command(subcommand)]
+    action: Action,
+}
+
+#[derive(Subcommand, Debug, Clone)]
+enum Action {
+    /// execute fully sandboxed
+    Run {
+        /// ".wasm" / ".cwasm" executable path
+        path: PathBuf,
+
+        /// exported Wasm function name (defaults to the set start function)
+        #[arg(short, long)]
+        invoke: Option<String>,
+
+        /// wasm function arguments
+        #[arg(last = true)]
+        function_args: Vec<String>,
+    },
+    /// execute with WASI API support (CAUTION: weakens WebAssembly sandboxing)
+    RunWasi {
+        /// ".wasm" / ".cwasm" executable path
+        path: PathBuf,
+
+        /// exported Wasm function name (defaults to the set start function)
+        #[arg(short, long)]
+        invoke: Option<String>,
+
+        /// list all directories accessible via the WASI API
+        #[arg(short, long, value_delimiter = ',', value_parser = parse_wasi_dir_arg, value_name = "HOST_DIR[::GUEST_DIR]")]
+        dir: Vec<(PathBuf, String)>,
+
+        /// arguments forwarded to the WASI application
+        #[arg(last = true)]
+        wasi_args: Vec<String>,
+    },
+    /// create precompiled cwasm executable
+    #[cfg(feature = "llvm")]
+    Compile {
+        /// `.wasm` file path
+        path: PathBuf,
+
+        /// `.cwasm` output path for the compiled executable
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+    },
+}
+
+#[allow(clippy::upper_case_acronyms)]
+#[derive(ValueEnum, Debug, Clone)]
+enum Backend {
+    #[cfg(feature = "llvm")]
+    LLVM,
+    #[cfg(feature = "interp")]
+    Interpreter,
+}
+
+impl Action {
+    fn path(&self) -> PathBuf {
+        match self {
+            Action::Run { path, .. } => path.clone(),
+            Action::RunWasi { path, .. } => path.clone(),
+            #[cfg(feature = "llvm")]
+            Action::Compile { path, .. } => path.clone(),
+        }
+    }
 }
 
 #[derive(ValueEnum, Debug, Clone)]
@@ -51,25 +103,6 @@ impl From<LogLevel> for LevelFilter {
         }
     }
 }
-
-impl From<Args> for Config {
-    fn from(mut args: Args) -> Self {
-        let mut cb = ConfigBuilder::new()
-            .enable_wasi(args.wasi)
-            .set_wasi_dirs(args.dir);
-        if args.wasi {
-            // set first argument to executable path
-            let mut wasi_args = vec![args.path.to_string_lossy().to_string()];
-            wasi_args.append(&mut args.args);
-            cb = cb.set_wasi_args(wasi_args);
-        }
-        if let Some(start_func) = args.invoke {
-            cb = cb.set_start_function(start_func);
-        }
-        cb.finish()
-    }
-}
-
 fn parse_wasi_dir_arg(s: &str) -> Result<(PathBuf, String), String> {
     if let Some(s) = s.split_once("::") {
         Ok((PathBuf::from(s.0), s.1.to_string()))
@@ -89,8 +122,50 @@ pub fn main() -> ExitCode {
     )])
     .unwrap();
 
-    let path: PathBuf = args.path.clone();
-    let config: Config = args.into();
-    crate::run(&path, config);
-    ExitCode::SUCCESS
+    let path = args.action.path();
+    let engine = match args.backend {
+        #[cfg(feature = "llvm")]
+        Backend::LLVM => crate::Engine::llvm().unwrap(),
+        #[cfg(feature = "interp")]
+        Backend::Interpreter => crate::Engine::interpreter().unwrap(),
+    };
+
+    let mut cb = ConfigBuilder::new();
+    let ret = match args.action {
+        Action::Run {
+            invoke,
+            function_args,
+            ..
+        } => {
+            if let Some(start_func) = invoke {
+                cb.set_start_function(start_func);
+            }
+            crate::run(&path, cb.finish(), engine, function_args)
+        }
+        Action::RunWasi {
+            path,
+            invoke,
+            dir: dirs,
+            mut wasi_args,
+        } => {
+            if let Some(start_func) = invoke {
+                cb.set_start_function(start_func);
+            }
+            cb.set_wasi_dirs(dirs);
+            // set first argument to executable path
+            wasi_args.insert(0, path.to_string_lossy().to_string());
+            cb.set_wasi_args(wasi_args);
+            crate::run(&path, cb.finish(), engine, vec![])
+        }
+        #[cfg(feature = "llvm")]
+        Action::Compile { output, .. } => crate::c_wasm_compilation::compile(
+            &path,
+            &output.unwrap_or_else(|| {
+                PathBuf::new()
+                    .join(path.file_name().unwrap_or_default())
+                    .with_extension("cwasm")
+            }),
+        ),
+    };
+    ExitCode::from(ret)
 }

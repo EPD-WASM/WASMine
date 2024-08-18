@@ -1,4 +1,4 @@
-use loader::Loader;
+use loader::WasmLoader;
 use parser::Parser;
 use wast::Wast;
 
@@ -21,7 +21,7 @@ pub fn test_parser(file_path: &str) {
             wast::WastDirective::Wat(wast::QuoteWat::Wat(wast::Wat::Module(mut module))) => {
                 let binary_mod = module.encode().unwrap();
                 let parser = Parser::default();
-                let loader = Loader::from_buf(binary_mod.clone());
+                let loader = WasmLoader::from_buf(binary_mod.clone());
                 let res = parser.parse(loader);
                 if res.is_err() {
                     std::fs::write("test_module_dump.wasm", binary_mod).unwrap();
@@ -39,7 +39,7 @@ pub fn test_parser(file_path: &str) {
             } => {
                 let binary_mod = module.encode().unwrap();
                 let parser = Parser::default();
-                let loader = Loader::from_buf(binary_mod.clone());
+                let loader = WasmLoader::from_buf(binary_mod.clone());
                 let res = parser.parse(loader);
                 if res.is_ok() {
                     std::fs::write("test_module_dump.wasm", binary_mod).unwrap();

@@ -11,7 +11,7 @@ impl Executable for GlobalSetInstruction {
 
         let global_storage = unsafe { &*ctx.exec_ctx.globals_ptr };
         let global_instance = &global_storage.globals[self.global_idx as usize];
-        unsafe { *global_instance.addr = in1_u64 };
+        unsafe { *global_instance.addr.as_ptr() = in1_u64 };
 
         Ok(())
     }

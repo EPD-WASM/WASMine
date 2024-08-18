@@ -3,7 +3,7 @@ use crate::objects::tables::{TableError, TableInstance, TableItem};
 use crate::Engine;
 use cee_scape::SigJmpBuf;
 use core::slice;
-use runtime_interface::RawFunctionPtr;
+use runtime_interface::RawPointer;
 use std::cell::RefCell;
 use std::fmt::Display;
 use std::ptr::null;
@@ -11,7 +11,7 @@ use wasm_types::{TableIdx, TypeIdx};
 
 thread_local! {
     static TRAP_RETURN: RefCell<SigJmpBuf> = const { RefCell::new(null()) };
-    static TRAP_MSG: RefCell<String> = const { RefCell::new(String::new()) };
+    static TRAP_ERR: RefCell<RuntimeError> = const { RefCell::new(RuntimeError::None) };
 }
 
 #[repr(transparent)]
@@ -21,12 +21,12 @@ pub(crate) struct ExecutionContextWrapper<'a>(
 
 impl ExecutionContextWrapper<'_> {
     pub(crate) fn trap(e: RuntimeError) -> ! {
-        TRAP_MSG.with(|msg| *msg.borrow_mut() = e.to_string());
+        TRAP_ERR.replace(e);
         TRAP_RETURN.with(|buf| unsafe { cee_scape::siglongjmp(*buf.as_ptr(), 1) })
     }
 
-    pub(crate) fn take_trap_msg() -> String {
-        TRAP_MSG.take()
+    pub(crate) fn take_trap() -> RuntimeError {
+        TRAP_ERR.take()
     }
 
     pub(crate) fn get_tables(&mut self) -> &mut [TableInstance] {
@@ -44,7 +44,7 @@ impl ExecutionContextWrapper<'_> {
         table_idx: TableIdx,
         entry_idx: u32,
         ty_idx: TypeIdx,
-    ) -> Result<RawFunctionPtr, RuntimeError> {
+    ) -> Result<RawPointer, RuntimeError> {
         let engine = unsafe { &mut *(self.0.engine as *mut Engine) };
         let wasm_module = self.0.wasm_module.clone();
         let tables = self.get_tables();

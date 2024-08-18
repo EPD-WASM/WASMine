@@ -158,6 +158,6 @@ Wrapper functions to convert between the different calling conventions and call 
 
 # TODO
 
- * use new wasictxt to fix sightglass
- * add option to compile llvm to shared library
+ * add typecheck for host functions
  * add option to compile via llvm to elf binary where runtime-lib is loaded as interpreter
+ * llvm: generate call_indirect in code (-> generate function in LLVM IR and call) (prevent RT call) and bench

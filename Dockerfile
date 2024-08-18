@@ -8,6 +8,7 @@ RUN echo "deb http://apt.llvm.org/bookworm/ llvm-toolchain-bookworm-18 main\ndeb
     clang-18 \
     lld-18 \
     libpolly-18-dev \
+    zlib1g-dev \
     libxml2-utils &&\
     apt-get clean all
 

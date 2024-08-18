@@ -9,4 +9,5 @@ crate-type = ["cdylib"]
 [dependencies]
 anyhow = "1.0.86"
 ir = { version = "0.1.0", path = "../ir" }
+loader = { version = "0.1.0", path = "../loader" }
 runtime-lib = { version = "0.1.0", path = "../runtime-lib" }

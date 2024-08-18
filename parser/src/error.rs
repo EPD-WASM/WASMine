@@ -30,6 +30,8 @@ pub enum ParserError {
     StartFunctionDoesNotExist,
     #[error("alignment must not be larger than natural")]
     AlignmentLargerThanNatural,
+    #[error("Loader error: {0}")]
+    LoaderError(#[from] loader::LoaderError),
 }
 
 #[derive(Debug, Error)]

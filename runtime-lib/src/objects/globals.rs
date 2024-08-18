@@ -6,7 +6,8 @@ use ir::structs::{
 };
 use nix::errno::Errno;
 use runtime_interface::GlobalInstance;
-use std::ptr::null_mut;
+use std::ptr::NonNull;
+use wasm_types::GlobalIdx;
 
 pub struct GlobalsObject {
     pub(crate) inner: runtime_interface::GlobalStorage,
@@ -38,27 +39,31 @@ impl GlobalsObject {
             panic!("Failed to allocate global storage: {}", Errno::last());
         }
 
-        let mut globals = vec![GlobalInstance { addr: null_mut() }; globals_meta.len()];
+        let mut globals = vec![
+            GlobalInstance {
+                addr: NonNull::dangling()
+            };
+            globals_meta.len()
+        ];
         for instance in imports.iter().rev() {
             globals[instance.idx as usize].addr = instance.addr;
-            engine.register_symbol(
-                &format!("__wasmine_global__{}", instance.idx),
-                globals[instance.idx as usize].addr as _,
-            );
+            engine.set_global_addr(instance.idx, globals[instance.idx as usize].addr.cast());
         }
         for (idx, global) in globals_meta.iter().enumerate() {
             if !global.import {
-                let addr = unsafe { (storage as *mut ValueRaw).add(idx) };
+                let addr = unsafe { NonNull::new_unchecked((storage as *mut ValueRaw).add(idx)) };
                 globals[idx].addr = addr;
-                engine.register_symbol(&format!("__wasmine_global__{}", idx), addr as _);
+                engine.set_global_addr(idx as GlobalIdx, addr.cast());
             }
         }
         for (idx, global) in globals_meta.iter().enumerate() {
             if !global.import {
                 unsafe {
-                    *globals[idx].addr = match global.init.clone() {
+                    *globals[idx].addr.as_ptr() = match global.init.clone() {
                         ConstantValue::V(value) => value.into(),
-                        ConstantValue::Global(glob_idx) => *globals[glob_idx as usize].addr,
+                        ConstantValue::Global(glob_idx) => {
+                            *globals[glob_idx as usize].addr.as_ptr()
+                        }
                         ConstantValue::FuncPtr(func_idx) => ValueRaw::funcref(func_idx),
                     }
                 }

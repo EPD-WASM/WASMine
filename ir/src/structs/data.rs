@@ -1,7 +1,8 @@
 use super::value::ConstantValue;
+use serde::{Deserialize, Serialize};
 use wasm_types::MemIdx;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum DataMode {
     Active {
         memory: MemIdx,
@@ -10,7 +11,7 @@ pub enum DataMode {
     Passive,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Data {
     pub init: Vec<u8>,
     pub mode: DataMode,

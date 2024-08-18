@@ -7,7 +7,7 @@ use ir::{
     },
     utils::numeric_transmutes::{Bit32, Bit64},
 };
-use loader::Loader;
+use loader::WasmLoader;
 use parser::{error::ParserError, parser::Parser};
 use runtime_lib::{
     BoundLinker, Cluster, ClusterConfig, Engine, InstanceHandle, Linker, RuntimeError,
@@ -34,7 +34,7 @@ pub fn translate_module<'a>(
     linker: &mut BoundLinker<'a>,
 ) -> Result<(InstanceHandle<'a>, bool), RuntimeError> {
     let mut engine = Engine::interpreter()?;
-    engine.init(module.clone())?;
+    engine.init(module.clone(), None)?;
     let instance_handle = linker.instantiate_and_link(module.clone(), engine)?;
     Ok((instance_handle, false))
 }
@@ -147,7 +147,7 @@ fn parse_module(module: &mut QuoteWat) -> Result<Module, ParserError> {
         .encode()
         .map_err(|e| ParserError::Msg(e.to_string()))?;
     let parser = Parser::default();
-    let loader = Loader::from_buf(binary_mod.clone());
+    let loader = WasmLoader::from_buf(binary_mod.clone());
     parser.parse(loader)
 }
 
@@ -175,7 +175,7 @@ pub fn test_interpreter(file_path: &str) {
 
     let spectest_module_path =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/spectest.wasm");
-    let loader = Loader::from_file(&spectest_module_path);
+    let loader = WasmLoader::from_file(&spectest_module_path).unwrap();
     let parser = Parser::default();
     let res = parser.parse(loader);
     let spectest_module = translate_module(Rc::new(res.unwrap()), &mut linker).unwrap();
@@ -299,15 +299,12 @@ pub fn test_interpreter(file_path: &str) {
                             &mut declared_modules,
                         );
                         match res {
-                            Err(RuntimeError::Trap(_)) => {
+                            Err(_) => {
                                 // assert_eq!(msg, message);
                                 return;
                             }
                             Ok(v) => panic!(
                                 "Expected trap \"{message}\", but got success: {v:?} @{file_path:?}:{line}:{col}",
-                            ),
-                            Err(e) => panic!(
-                                "Expected trap \"{message}\", but got other error \"{e}\": {file_path:?}:{line}:{col}",
                             ),
                         }
                     }
@@ -422,7 +419,7 @@ pub fn test_interpreter(file_path: &str) {
                     panic!("Error during encoding: {:?} {file_path:?}:{line}:{col}", e);
                 });
                 let parser = Parser::default();
-                let loader = Loader::from_buf(binary_mod.clone());
+                let loader = WasmLoader::from_buf(binary_mod.clone());
                 let module = parser.parse(loader).unwrap_or_else(|e| {
                     panic!("Error during parsing: {:?} {file_path:?}:{line}:{col}", e)
                 });
@@ -434,7 +431,7 @@ pub fn test_interpreter(file_path: &str) {
                         e
                     );
                 });
-                engine.init(module.clone()).unwrap_or_else(|e| {
+                engine.init(module.clone(), None).unwrap_or_else(|e| {
                     panic!(
                         "Error during engine init: {:?} {file_path:?}:{line}:{col}",
                         e

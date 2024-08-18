@@ -3,7 +3,7 @@ use crate::{instructions::*, utils::integer_traits::Integer};
 use thiserror::Error;
 use wasm_types::{InstructionType, ValType};
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Clone)]
 pub enum DecodingError {
     #[error("Decoding error: {0}")]
     DecodingError(String),

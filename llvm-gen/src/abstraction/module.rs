@@ -1,5 +1,5 @@
 use super::{context::Context, function::Function};
-use crate::{util::to_c_str, TranslationError};
+use crate::{util::c_str, TranslationError};
 use llvm_sys::{
     core::{
         LLVMAddFunction, LLVMAddGlobal, LLVMFunctionType, LLVMGetNamedFunction, LLVMGetNamedGlobal,
@@ -17,7 +17,7 @@ impl Module {
     pub(crate) fn new(name: &str, context: &Context) -> Self {
         Self {
             inner: unsafe {
-                LLVMModuleCreateWithNameInContext(to_c_str(name).as_ptr(), context.get())
+                LLVMModuleCreateWithNameInContext(c_str(name).as_ptr(), context.get())
             },
         }
     }
@@ -29,7 +29,7 @@ impl Module {
     pub(crate) fn find_func(&self, name: &str, ty: LLVMTypeRef) -> Option<Function> {
         unsafe {
             Function::new(
-                LLVMGetNamedFunction(self.get(), to_c_str(name).as_ptr()),
+                LLVMGetNamedFunction(self.get(), c_str(name).as_ptr()),
                 ty,
             )
         }
@@ -42,7 +42,7 @@ impl Module {
         linkage: LLVMLinkage,
         call_conv: LLVMCallConv,
     ) -> Function {
-        let fn_val = unsafe { LLVMAddFunction(self.get(), to_c_str(name).as_ptr(), ty) };
+        let fn_val = unsafe { LLVMAddFunction(self.get(), c_str(name).as_ptr(), ty) };
         unsafe { LLVMSetLinkage(fn_val, linkage) }
         unsafe { LLVMSetFunctionCallConv(fn_val, call_conv as u32) };
         Function::new(fn_val, ty).unwrap()
@@ -95,7 +95,7 @@ impl Module {
         unsafe {
             llvm_sys::core::LLVMPrintModuleToFile(
                 self.get(),
-                to_c_str("debug_output.ll").as_ptr(),
+                c_str("debug_output.ll").as_ptr(),
                 null_mut(),
             )
         };
@@ -117,7 +117,7 @@ impl Module {
     }
 
     pub(crate) fn get_global(&self, name: &str) -> Result<LLVMValueRef, TranslationError> {
-        let global_addr = unsafe { LLVMGetNamedGlobal(self.get(), to_c_str(name).as_ptr()) };
+        let global_addr = unsafe { LLVMGetNamedGlobal(self.get(), c_str(name).as_ptr()) };
         if global_addr.is_null() {
             Err(TranslationError::Msg(format!("Global {} not found.", name)))
         } else {
@@ -126,7 +126,7 @@ impl Module {
     }
 
     pub(crate) fn add_global(&self, name: &str, ty: LLVMTypeRef) {
-        unsafe { LLVMAddGlobal(self.get(), ty, to_c_str(name).as_ptr()) };
+        unsafe { LLVMAddGlobal(self.get(), ty, c_str(name).as_ptr()) };
     }
 }
 

@@ -17,7 +17,7 @@ use ir::structs::{
     element::Element, export::Export, global::Global, import::Import, memory::Memory,
     module::Module, table::Table,
 };
-use loader::Loader;
+use loader::WasmLoader;
 use std::io::BufReader;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::vec;
@@ -37,7 +37,7 @@ pub struct Parser {
 }
 
 impl Parser {
-    pub fn parse(mut self, loader: Loader) -> Result<Module, ParserError> {
+    pub fn parse(mut self, loader: WasmLoader) -> Result<Module, ParserError> {
         let input = loader.load()?;
         let mut reader = WasmStreamReader::new(BufReader::new(input));
         match self.parse_module(&mut reader) {

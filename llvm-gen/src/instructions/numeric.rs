@@ -1,5 +1,5 @@
 use crate::abstraction::function::Function;
-use crate::util::to_c_str;
+use crate::util::c_str;
 use crate::{error::TranslationError, translator::Translator};
 use ir::instructions::*;
 use ir::{
@@ -402,7 +402,7 @@ impl Translator {
         val: LLVMValueRef,
     ) -> Result<LLVMValueRef, TranslationError> {
         Ok(match instr.op {
-            FUnaryOp::Neg => llvm_sys::core::LLVMBuildFNeg(builder, val, to_c_str("fneg").as_ptr()),
+            FUnaryOp::Neg => llvm_sys::core::LLVMBuildFNeg(builder, val, c_str("fneg").as_ptr()),
 
             // https://llvm.org/docs/LangRef.html#llvm-fabs-intrinsic
             FUnaryOp::Abs => {

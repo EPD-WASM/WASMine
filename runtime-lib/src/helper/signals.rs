@@ -3,6 +3,7 @@ use nix::sys::signal::{self, SaFlags, SigAction, SigHandler, SigSet, Signal};
 use once_cell::sync::Lazy;
 use std::{
     collections::HashMap,
+    ffi::CStr,
     sync::{
         atomic::{AtomicBool, AtomicI32},
         Mutex,
@@ -28,7 +29,10 @@ impl SignalHandler {
         ucontext: *mut libc::c_void,
     ) {
         if THREAD_CURRENTLY_EXECUTES_WASM.with(|b| b.load(std::sync::atomic::Ordering::Relaxed)) {
-            ExecutionContextWrapper::trap(RuntimeError::Trap("signal handler".to_string()))
+            ExecutionContextWrapper::trap(RuntimeError::Trap(format!(
+                "execution triggered {:?} signal",
+                unsafe { CStr::from_ptr(libc::strsignal(sig)) }
+            )))
         }
 
         let signal = Signal::try_from(sig).unwrap();

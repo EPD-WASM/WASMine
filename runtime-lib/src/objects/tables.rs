@@ -17,8 +17,7 @@ use ir::{
     },
     utils::numeric_transmutes::Bit32,
 };
-use runtime_interface::{ExecutionContext, GlobalStorage, RawFunctionPtr};
-use std::ptr::{null_mut, NonNull};
+use runtime_interface::{ExecutionContext, GlobalStorage, RawPointer};
 use wasm_types::{ElemIdx, FuncIdx, FuncType, RefType, TableIdx, TableType, TypeIdx, ValType};
 
 #[derive(Debug, thiserror::Error)]
@@ -49,10 +48,10 @@ pub(crate) enum TableItem {
     FunctionReference {
         func_idx: FuncIdx,
         func_type: TypeIdx,
-        func_ptr: Option<RawFunctionPtr>,
+        func_ptr: Option<RawPointer>,
     },
     ExternReference {
-        func_ptr: Option<RawFunctionPtr>,
+        func_ptr: Option<RawPointer>,
     },
     Null,
 }
@@ -118,7 +117,7 @@ impl InstanceHandle<'_> {
                         return Err(TableError::InvalidOffsetType(v.r#type()).into())
                     }
                     ConstantValue::Global(idx) => unsafe {
-                        (*globals.globals[*idx as usize].addr).as_u32()
+                        globals.globals[*idx as usize].addr.as_ref().as_u32()
                     },
                     ConstantValue::FuncPtr(_) => unimplemented!(),
                 };
@@ -158,7 +157,7 @@ impl TableInstance<'_> {
             }
             RefType::ExternReference => {
                 self.values.0[idx as usize] = TableItem::ExternReference {
-                    func_ptr: RawFunctionPtr::new(value.as_externref() as _),
+                    func_ptr: RawPointer::new(value.as_externref() as _),
                 }
             }
         }
@@ -174,7 +173,7 @@ impl TableInstance<'_> {
                 Ok(Value::Reference(Reference::Function(func_idx)))
             }
             TableItem::ExternReference { func_ptr } => Ok(Value::Reference(Reference::Extern(
-                func_ptr.map(NonNull::as_ptr).unwrap_or(null_mut()),
+                func_ptr.map(|ptr| ptr.as_ptr() as u64).unwrap_or(0),
             ))),
             TableItem::Null => Ok(Value::Reference(Reference::Null)),
         }
@@ -221,7 +220,7 @@ impl TableInstance<'_> {
                         .type_idx,
                 },
                 RefType::ExternReference => TableItem::ExternReference {
-                    func_ptr: RawFunctionPtr::new(value_to_fill.as_externref() as _),
+                    func_ptr: RawPointer::new(value_to_fill.as_externref() as _),
                 },
             };
             self.values.0.resize(new_len, table_value_to_fill);
@@ -256,7 +255,7 @@ impl TableInstance<'_> {
                     func_type: wasm_module.ir.functions[value.as_funcref() as usize].type_idx,
                 },
                 RefType::ExternReference => TableItem::ExternReference {
-                    func_ptr: RawFunctionPtr::new(value.as_externref() as _),
+                    func_ptr: RawPointer::new(value.as_externref() as _),
                 },
             }
         };
@@ -342,7 +341,7 @@ impl TableInstance<'_> {
                         }
                         Value::Reference(Reference::Extern(func_ptr)) => {
                             TableItem::ExternReference {
-                                func_ptr: RawFunctionPtr::new(func_ptr as _),
+                                func_ptr: RawPointer::new(func_ptr as _),
                             }
                         }
                         Value::Reference(Reference::Null) => TableItem::Null,
@@ -373,7 +372,7 @@ fn indirect_call_impl(
     table_idx: TableIdx,
     ty_idx: TypeIdx,
     entry_idx: u32,
-) -> Result<RawFunctionPtr, RuntimeError> {
+) -> Result<RawPointer, RuntimeError> {
     let mut ctxt = ExecutionContextWrapper(ctxt);
     ctxt.indirect_call(table_idx, entry_idx, ty_idx)
 }
@@ -490,7 +489,7 @@ pub extern "C" fn indirect_call(
     table_idx: TableIdx,
     type_idx: TypeIdx,
     entry_idx: u32,
-) -> RawFunctionPtr {
+) -> RawPointer {
     let res = indirect_call_impl(ctxt, table_idx, type_idx, entry_idx);
     trap_on_err(ctxt, res)
 }

@@ -17,7 +17,7 @@ impl Executable for GlobalGetInstruction {
         );
 
         let global_instance = &global_storage.globals[self.global_idx as usize];
-        let global_val = unsafe { *global_instance.addr };
+        let global_val = unsafe { *global_instance.addr.as_ptr() };
 
         stack_frame.vars.set(self.out1, global_val);
 

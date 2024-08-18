@@ -1,7 +1,7 @@
 use crate::objects::functions::BoundaryCCFuncTy;
-use core::ffi;
 use ir::structs::{module::Module as WasmModule, value::ValueRaw};
-use runtime_interface::RawFunctionPtr;
+use loader::CwasmLoader;
+use runtime_interface::RawPointer;
 use std::{
     ops::{Deref, DerefMut},
     rc::Rc,
@@ -33,14 +33,16 @@ pub enum EngineError {
 pub struct Engine(Box<dyn WasmEngine>);
 
 pub trait WasmEngine {
-    fn init(&mut self, wasm_module: Rc<WasmModule>) -> Result<(), EngineError>;
-    fn register_symbol(&mut self, name: &str, address: *const ffi::c_void);
+    fn init(
+        &mut self,
+        wasm_module: Rc<WasmModule>,
+        c_loader: Option<&CwasmLoader>,
+    ) -> Result<(), EngineError>;
+
+    fn set_symbol_addr(&mut self, name: &str, address: RawPointer);
 
     /// Get a raw function pointer that follows the engine backend's internal calling convention
-    fn get_internal_function_ptr(
-        &self,
-        function_idx: FuncIdx,
-    ) -> Result<RawFunctionPtr, EngineError>;
+    fn get_internal_function_ptr(&self, function_idx: FuncIdx) -> Result<RawPointer, EngineError>;
 
     /// Get a typed function pointer that follows the Boundary calling convention
     fn get_external_function_ptr(
@@ -49,6 +51,7 @@ pub trait WasmEngine {
     ) -> Result<BoundaryCCFuncTy, EngineError>;
 
     fn get_global_value(&self, global_idx: GlobalIdx) -> Result<ValueRaw, EngineError>;
+    fn set_global_addr(&mut self, global_idx: GlobalIdx, addr: RawPointer);
 }
 
 impl Engine {
@@ -86,7 +89,7 @@ mod llvm_engine_impl {
     pub(crate) struct LLVMEngine {
         context: Rc<llvm_gen::Context>,
         translator: llvm_gen::Translator,
-        executor: llvm_gen::Executor,
+        executor: llvm_gen::JITExecutor,
         module_already_translated: bool,
         wasm_module: Option<Rc<WasmModule>>,
     }
@@ -95,7 +98,7 @@ mod llvm_engine_impl {
         pub(crate) fn new() -> Result<Self, EngineError> {
             let context = Rc::new(llvm_gen::Context::create());
             let translator = llvm_gen::Translator::new(context.clone())?;
-            let executor = llvm_gen::Executor::new(context.clone())?;
+            let executor = llvm_gen::JITExecutor::new(context.clone())?;
             Ok(Self {
                 context,
                 translator,
@@ -107,10 +110,18 @@ mod llvm_engine_impl {
     }
 
     impl WasmEngine for LLVMEngine {
-        fn init(&mut self, wasm_module: Rc<WasmModule>) -> Result<(), EngineError> {
+        fn init(
+            &mut self,
+            wasm_module: Rc<WasmModule>,
+            c_loader: Option<&CwasmLoader>,
+        ) -> Result<(), EngineError> {
             self.wasm_module = Some(wasm_module.clone());
-            let llvm_module = self.translator.translate_module(wasm_module)?;
-            self.executor.add_module(llvm_module)?;
+            if let Some(loader) = c_loader {
+                self.executor.add_object_file(loader.llvm_memory_buffer())?;
+            } else {
+                let llvm_module = self.translator.translate_module(wasm_module)?;
+                self.executor.add_module(llvm_module)?;
+            }
             self.module_already_translated = true;
             Ok(())
         }
@@ -119,8 +130,8 @@ mod llvm_engine_impl {
             Ok(self.executor.get_global_value(global_idx)?)
         }
 
-        fn register_symbol(&mut self, name: &str, address: *const ffi::c_void) {
-            self.executor.register_symbol(name, address);
+        fn set_symbol_addr(&mut self, name: &str, addr: RawPointer) {
+            self.executor.set_symbol_addr(name, addr);
         }
 
         fn get_external_function_ptr(
@@ -134,14 +145,18 @@ mod llvm_engine_impl {
                 .exports
                 .find_function_name(function_idx)
                 .ok_or(EngineError::FunctionNotFound(function_idx))?;
-            Ok(unsafe { std::mem::transmute_copy(&self.executor.get_raw_by_name(func_name)?) })
+            Ok(unsafe { std::mem::transmute_copy(&self.executor.get_symbol_addr(func_name)?) })
         }
 
         fn get_internal_function_ptr(
             &self,
             function_idx: FuncIdx,
-        ) -> Result<RawFunctionPtr, EngineError> {
-            Ok(self.executor.get_raw_by_name(&function_idx.to_string())?)
+        ) -> Result<RawPointer, EngineError> {
+            Ok(self.executor.get_symbol_addr(&function_idx.to_string())?)
+        }
+
+        fn set_global_addr(&mut self, global_idx: GlobalIdx, addr: RawPointer) {
+            self.executor.set_global_addr(global_idx, addr);
         }
     }
 }
@@ -165,12 +180,16 @@ mod interpreter_engine_impl {
 
     impl WasmEngine for InterpreterEngine {
         // this is to set the module to be run so it does not have to be provided when the Engine is created
-        fn init(&mut self, wasm_module: Rc<WasmModule>) -> Result<(), EngineError> {
+        fn init(
+            &mut self,
+            wasm_module: Rc<WasmModule>,
+            _c_loader: Option<&CwasmLoader>,
+        ) -> Result<(), EngineError> {
             self.interpreter.set_module(wasm_module);
             Ok(())
         }
 
-        fn register_symbol(&mut self, name: &str, address: *const ffi::c_void) {
+        fn set_symbol_addr(&mut self, name: &str, address: RawPointer) {
             self.interpreter.register_symbol(name, address)
         }
 
@@ -184,12 +203,16 @@ mod interpreter_engine_impl {
         fn get_internal_function_ptr(
             &self,
             function_idx: FuncIdx,
-        ) -> Result<RawFunctionPtr, EngineError> {
+        ) -> Result<RawPointer, EngineError> {
             todo!("Interpreter engine internal function pointers")
         }
 
         fn get_global_value(&self, global_idx: GlobalIdx) -> Result<ValueRaw, EngineError> {
             todo!("Interpreter engine global values")
+        }
+
+        fn set_global_addr(&mut self, global_idx: GlobalIdx, addr: RawPointer) {
+            todo!("Interpreter engine set global address")
         }
     }
 }

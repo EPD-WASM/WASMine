@@ -15,6 +15,7 @@ wasmedge-sdk = { version = "0.13.0", default-features = false, features = ["stan
 iai-callgrind = "0.12.3"
 gag = "1.0.0"
 wasmtime-wasi = "23.0.1"
+once_cell = "1.19.0"
 
 [[bin]]
 name = "benches_dummy_bin"

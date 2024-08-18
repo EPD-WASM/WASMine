@@ -1,10 +1,11 @@
 use super::*;
 use crate::{basic_block::BasicBlockID, DecodingError, InstructionDecoder, InstructionEncoder};
+use serde::{Deserialize, Serialize};
 use wasm_types::InstructionType;
 
 use super::{Instruction, VariableID};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PhiNode {
     pub inputs: Vec<(BasicBlockID, VariableID)>,
     pub out: VariableID,

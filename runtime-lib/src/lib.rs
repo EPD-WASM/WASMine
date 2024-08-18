@@ -11,6 +11,7 @@ use ir::{
     structs::value::{Number, Value},
     utils::numeric_transmutes::{Bit32, Bit64},
 };
+use loader::SourceFormat;
 pub use objects::engine::Engine;
 pub use objects::instance_handle::InstanceHandle;
 use std::{path::Path, rc::Rc};
@@ -34,7 +35,7 @@ pub use linker::{BoundLinker, Linker};
 // reexports
 pub use config::{Config, ConfigBuilder};
 pub use ir::structs::module::Module as WasmModule;
-pub use loader::Loader;
+pub use loader::{CwasmLoader, WasmLoader};
 pub use parser::{Parser, ParserError, ValidationError};
 
 pub const WASM_PAGE_SIZE: u32 = 2_u32.pow(16);
@@ -47,8 +48,10 @@ pub const WASM_RESERVED_MEMORY_SIZE: u64 = WASM_MAX_ADDRESS.next_multiple_of(INT
 // x86 small page size = 4KiB
 pub const INTL_PAGE_SIZE: u32 = 2_u32.pow(12);
 
-fn parse_input_params_for_function(function_type: &FuncType) -> Result<Vec<Value>, RuntimeError> {
-    let args = std::env::args().skip(2);
+fn parse_input_params_for_function(
+    args: Vec<String>,
+    function_type: FuncType,
+) -> Result<Vec<Value>, RuntimeError> {
     let num_args = args.len();
     if num_args != function_type.num_params() {
         return Err(RuntimeError::ArgumentNumberMismatch(
@@ -97,23 +100,29 @@ fn parse_input_params_for_function(function_type: &FuncType) -> Result<Vec<Value
     Ok(values)
 }
 
-fn run_internal(path: &Path, config: Config) -> Result<Vec<Value>, RuntimeError> {
+fn run_internal(
+    path: &Path,
+    config: Config,
+    mut engine: Engine,
+    function_args: Vec<String>,
+) -> Result<Vec<Value>, RuntimeError> {
     log::debug!("run_internal: {:?}", config);
 
-    let loader = loader::Loader::from_file(path);
-    let parser = parser::Parser::default();
-    let module = Rc::new(parser.parse(loader).unwrap());
-
-    let mut engine;
-    #[cfg(feature = "llvm")]
-    {
-        engine = Engine::llvm()?;
-    }
-    #[cfg(all(not(feature = "llvm"), feature = "interp"))]
-    {
-        engine = Engine::interpreter()?;
-    }
-    engine.init(module.clone())?;
+    let module = match SourceFormat::from_path(path)? {
+        SourceFormat::Wasm => {
+            let loader = loader::WasmLoader::from_file(path)?;
+            let parser = parser::Parser::default();
+            let module = Rc::new(parser.parse(loader).unwrap());
+            engine.init(module.clone(), None)?;
+            module
+        }
+        SourceFormat::Cwasm => {
+            let loader = loader::CwasmLoader::from_file(path)?;
+            let module = loader.wasm_module();
+            engine.init(module.clone(), Some(&loader))?;
+            module
+        }
+    };
 
     let start_function = config.start_function.clone();
 
@@ -121,7 +130,7 @@ fn run_internal(path: &Path, config: Config) -> Result<Vec<Value>, RuntimeError>
     let linker = Linker::new();
 
     let linker = linker.bind_to(&cluster);
-    let module_handle = if config.enable_wasi {
+    let module_handle = if config.wasi_enabled {
         let mut wasi_ctxt_builder = wasi::WasiContextBuilder::new();
         wasi_ctxt_builder.args(config.wasi_args.clone());
         wasi_ctxt_builder.inherit_stdio();
@@ -161,21 +170,65 @@ fn run_internal(path: &Path, config: Config) -> Result<Vec<Value>, RuntimeError>
             }
         },
     };
+    let function_type = module_handle.get_function_type_from_func_idx(start_function);
+    let function_args = parse_input_params_for_function(function_args, function_type)?;
+
     let func = module_handle.get_function_by_idx(start_function)?;
     func.call(&[])
 }
 
-pub fn run(path: &Path, config: Config) -> u8 {
-    match run_internal(path, config) {
+pub fn run(path: &Path, config: Config, engine: Engine, function_args: Vec<String>) -> u8 {
+    match run_internal(path, config, engine, function_args) {
         Ok(return_values) => {
-            for v in return_values {
-                log::info!("Result: {}", v);
-            }
+            log::info!(
+                "Result: [{}]",
+                return_values
+                    .iter()
+                    .map(|v| format!("{}", v))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
             0
         }
         Err(e) => {
             log::error!("Error: {}", e);
             1
+        }
+    }
+}
+
+#[cfg(feature = "llvm")]
+mod c_wasm_compilation {
+    use super::*;
+
+    pub fn compile_internal(in_path: &Path, out_path: &Path) -> Result<(), RuntimeError> {
+        if SourceFormat::from_path(in_path)? == SourceFormat::Cwasm {
+            return Err(RuntimeError::Msg(
+                "Cwasm files can't be compiled AGAIN... Please provide a wasm file.".to_owned(),
+            ));
+        }
+        let loader = loader::WasmLoader::from_file(in_path)?;
+        let parser = parser::Parser::default();
+        let module = Rc::new(parser.parse(loader)?);
+
+        let context = Rc::new(llvm_gen::Context::create());
+        let mut executor = llvm_gen::JITExecutor::new(context.clone())?;
+        let mut translator = llvm_gen::Translator::new(context.clone())?;
+
+        let llvm_module = translator.translate_module(module.clone())?;
+        executor.add_module(llvm_module)?;
+        let llvm_module_object_buf = executor.get_module_as_object_buffer(0)?;
+        CwasmLoader::write(out_path, module, llvm_module_object_buf)?;
+        Ok(())
+    }
+
+    pub fn compile(in_path: &Path, out_path: &Path) -> u8 {
+        match compile_internal(in_path, out_path) {
+            Ok(_) => 0,
+            Err(e) => {
+                log::error!("Error: {}", e);
+                1
+            }
         }
     }
 }

@@ -1,20 +1,21 @@
 #![allow(dead_code)]
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput};
-use loader::Loader;
+use loader::WasmLoader;
+use once_cell::sync::Lazy;
 use runtime_lib::{
     wasi::{PreopenDirInheritPerms, PreopenDirPerms, WasiContextBuilder},
     ClusterConfig,
 };
-use std::{path::PathBuf, rc::Rc, sync::LazyLock};
+use std::{path::PathBuf, rc::Rc};
 
-pub static PATH_505: LazyLock<PathBuf> =
-    LazyLock::new(|| PathBuf::from(std::env::var_os("PATH_505").unwrap()));
-pub static PATH_508: LazyLock<PathBuf> =
-    LazyLock::new(|| PathBuf::from(std::env::var_os("PATH_508").unwrap()));
-pub static PATH_519: LazyLock<PathBuf> =
-    LazyLock::new(|| PathBuf::from(std::env::var_os("PATH_519").unwrap()));
-pub static PATH_557: LazyLock<PathBuf> =
-    LazyLock::new(|| PathBuf::from(std::env::var_os("PATH_557").unwrap()));
+pub static PATH_505: Lazy<PathBuf> =
+    Lazy::new(|| PathBuf::from(std::env::var_os("PATH_505").unwrap()));
+pub static PATH_508: Lazy<PathBuf> =
+    Lazy::new(|| PathBuf::from(std::env::var_os("PATH_508").unwrap()));
+pub static PATH_519: Lazy<PathBuf> =
+    Lazy::new(|| PathBuf::from(std::env::var_os("PATH_519").unwrap()));
+pub static PATH_557: Lazy<PathBuf> =
+    Lazy::new(|| PathBuf::from(std::env::var_os("PATH_557").unwrap()));
 
 #[derive(Debug, Clone)]
 pub struct SpeccpuBenchmark {
@@ -24,7 +25,7 @@ pub struct SpeccpuBenchmark {
     pub args: Vec<String>,
 }
 
-pub static SPECCPU_505: LazyLock<SpeccpuBenchmark> = LazyLock::new(|| SpeccpuBenchmark {
+pub static SPECCPU_505: Lazy<SpeccpuBenchmark> = Lazy::new(|| SpeccpuBenchmark {
     name: "505.mcf_r".into(),
     wasm_path: PATH_505.join("unpatched.wasm"),
     dirs: vec![(PATH_505.clone(), ".".to_string())],
@@ -34,7 +35,7 @@ pub static SPECCPU_505: LazyLock<SpeccpuBenchmark> = LazyLock::new(|| SpeccpuBen
     ],
 });
 
-pub static SPECCPU_508: LazyLock<SpeccpuBenchmark> = LazyLock::new(|| SpeccpuBenchmark {
+pub static SPECCPU_508: Lazy<SpeccpuBenchmark> = Lazy::new(|| SpeccpuBenchmark {
     name: "508.namd_r".into(),
     wasm_path: PATH_508.join("unpatched.wasm"),
     dirs: vec![(PATH_508.clone(), ".".to_string())],
@@ -49,7 +50,7 @@ pub static SPECCPU_508: LazyLock<SpeccpuBenchmark> = LazyLock::new(|| SpeccpuBen
     ],
 });
 
-pub static SPECCPU_519: LazyLock<SpeccpuBenchmark> = LazyLock::new(|| SpeccpuBenchmark {
+pub static SPECCPU_519: Lazy<SpeccpuBenchmark> = Lazy::new(|| SpeccpuBenchmark {
     name: "519.lbm_r".into(),
     wasm_path: PATH_519.join("unpatched.wasm"),
     dirs: vec![(PATH_519.clone(), ".".to_string())],
@@ -63,7 +64,7 @@ pub static SPECCPU_519: LazyLock<SpeccpuBenchmark> = LazyLock::new(|| SpeccpuBen
     ],
 });
 
-pub static SPECCPU_557: LazyLock<SpeccpuBenchmark> = LazyLock::new(|| {
+pub static SPECCPU_557: Lazy<SpeccpuBenchmark> = Lazy::new(|| {
     SpeccpuBenchmark {
     name: "557.xz_r".into(),
     wasm_path: PATH_557.join("unpatched.wasm"),
@@ -97,12 +98,12 @@ pub fn wasmine_llvm_speccpu_criterion(bm: SpeccpuBenchmark, c: &mut Criterion) {
 
                 let wasmine_module = Rc::new(
                     parser::parser::Parser::default()
-                        .parse(Loader::from_buf(wasm_bytes))
+                        .parse(WasmLoader::from_buf(wasm_bytes))
                         .unwrap(),
                 );
                 let wasmine_cluster = runtime_lib::Cluster::new(ClusterConfig::default());
                 let mut wasmine_engine = runtime_lib::Engine::llvm().unwrap();
-                wasmine_engine.init(wasmine_module.clone()).unwrap();
+                wasmine_engine.init(wasmine_module.clone(), None).unwrap();
 
                 let wasi_ctxt = {
                     let mut builder = WasiContextBuilder::new();
@@ -151,12 +152,12 @@ pub fn wasmine_llvm_speccpu_iai(bm: SpeccpuBenchmark) {
     let wasm_bytes = std::fs::read(wasm_file_path).unwrap();
     let wasmine_module = Rc::new(
         parser::parser::Parser::default()
-            .parse(Loader::from_buf(wasm_bytes.clone()))
+            .parse(WasmLoader::from_buf(wasm_bytes.clone()))
             .unwrap(),
     );
     let wasmine_cluster = runtime_lib::Cluster::new(ClusterConfig::default());
     let mut wasmine_engine = runtime_lib::Engine::llvm().unwrap();
-    wasmine_engine.init(wasmine_module.clone()).unwrap();
+    wasmine_engine.init(wasmine_module.clone(), None).unwrap();
 
     let wasmine_instance = runtime_lib::BoundLinker::new(&wasmine_cluster)
         .instantiate_and_link(wasmine_module.clone(), wasmine_engine)

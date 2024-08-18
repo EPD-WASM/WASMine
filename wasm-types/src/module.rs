@@ -1,18 +1,18 @@
 use crate::*;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct TableType {
     pub ref_type: RefType,
     pub lim: Limits,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum GlobalType {
     Mut(ValType),
     Const(ValType),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ExternType {
     Func(FuncType),
     Table(TableType),
@@ -20,7 +20,7 @@ pub enum ExternType {
     Global(GlobalType),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ImportDesc {
     Func(TypeIdx),
     Table(TableType),
@@ -30,7 +30,7 @@ pub enum ImportDesc {
 
 pub type Name = String;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Section {
     Custom,
     Type,

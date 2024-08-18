@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use loader::Loader;
+use loader::WasmLoader;
 use std::path::PathBuf;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
@@ -27,7 +27,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                 b.iter(|| {
                     black_box(
                         parser::parser::Parser::default()
-                            .parse(black_box(Loader::from_buf(wasm_bytes.clone()))),
+                            .parse(black_box(WasmLoader::from_buf(wasm_bytes.clone()))),
                     )
                 })
             },

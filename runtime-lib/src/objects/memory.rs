@@ -256,7 +256,7 @@ impl<'a> MemoryStorage<'a> {
                     ConstantValue::V(Value::Number(Number::I32(offset))) => *offset,
                     ConstantValue::V(v) => return Err(MemoryError::InvalidOffsetType(v.r#type())),
                     ConstantValue::Global(idx) => {
-                        unsafe { *globals.globals[*idx as usize].addr }.as_u32()
+                        unsafe { globals.globals[*idx as usize].addr.as_ref() }.as_u32()
                     }
                     ConstantValue::FuncPtr(_) => {
                         unimplemented!()

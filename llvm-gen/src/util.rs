@@ -7,7 +7,7 @@ use ir::structs::module::Module;
 use wasm_types::FuncIdx;
 
 // piratet from the inkwell library
-pub(crate) fn to_c_str(mut s: &str) -> Cow<'_, CStr> {
+pub(crate) fn c_str(mut s: &str) -> Cow<'_, CStr> {
     if s.is_empty() {
         s = "\0";
     }

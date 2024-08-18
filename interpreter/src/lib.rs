@@ -3,7 +3,7 @@
 use control_flow::GlueHandler;
 use core::ffi;
 use ir::structs::value::{Number, ValueRaw};
-use runtime_interface::{ExecutionContext, RawFunctionPtr};
+use runtime_interface::{ExecutionContext, RawPointer};
 use std::{collections::HashMap, rc::Rc};
 use table::execute_table_instruction;
 use thiserror::Error;
@@ -128,7 +128,7 @@ impl<'a> InterpreterContext<'a> {
 pub struct Interpreter {
     // ctx: InterpreterContext,
     module: Option<Rc<Module>>,
-    imported_functions: HashMap<String, *const ffi::c_void>,
+    imported_functions: HashMap<String, RawPointer>,
 }
 
 impl Interpreter {
@@ -143,7 +143,7 @@ impl Interpreter {
         self.module = Some(module);
     }
 
-    pub fn register_symbol(&mut self, name: &str, address: *const ffi::c_void) {
+    pub fn register_symbol(&mut self, name: &str, address: RawPointer) {
         self.imported_functions.insert(name.to_string(), address);
     }
 

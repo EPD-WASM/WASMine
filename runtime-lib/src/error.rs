@@ -9,7 +9,7 @@ use crate::{
 use thiserror::Error;
 use wasm_types::ValType;
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Default)]
 pub enum RuntimeError {
     #[error("Runtime Error: {0}")]
     Msg(String),
@@ -33,6 +33,14 @@ pub enum RuntimeError {
     #[error("Engine error: {0}")]
     EngineError(#[from] EngineError),
 
+    #[cfg(feature = "llvm")]
+    #[error("LLVM execution error: {0}")]
+    LLVMExecutionError(#[from] llvm_gen::ExecutionError),
+
+    #[cfg(feature = "llvm")]
+    #[error("LLVM translation error: {0}")]
+    LLVMTranslationError(#[from] llvm_gen::TranslationError),
+
     #[error("Linking error: {0}")]
     LinkingError(#[from] LinkingError),
 
@@ -50,4 +58,14 @@ pub enum RuntimeError {
 
     #[error("Wasi error: {0}")]
     WasiError(#[from] WasiError),
+
+    #[error("Loader error: {0}")]
+    LoaderError(#[from] loader::LoaderError),
+
+    #[error("Parser error: {0}")]
+    ParserError(#[from] parser::ParserError),
+
+    #[default]
+    #[error("No error.")]
+    None,
 }

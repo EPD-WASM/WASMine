@@ -1,7 +1,7 @@
 use crate::abstraction::context::Context;
 use crate::abstraction::function::Function;
 use crate::abstraction::module::Module;
-use crate::util::{build_llvm_function_name, to_c_str};
+use crate::util::{build_llvm_function_name, c_str};
 use crate::{abstraction::builder::Builder, error::TranslationError};
 use ir::function::{Function as WasmFunction, FunctionSource};
 use ir::function::{FunctionImport, FunctionInternal as WasmFunctionInternal};
@@ -475,7 +475,7 @@ impl Translator {
                             self.builder.get(),
                             ret_val,
                             i as u32,
-                            to_c_str("asdf").as_ptr(),
+                            c_str("asdf").as_ptr(),
                         )
                     };
                     self.builder.build_store(ret_val_elem, ret_val_output_ptr);

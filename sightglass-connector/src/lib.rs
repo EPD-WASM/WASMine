@@ -1,10 +1,10 @@
 extern crate anyhow;
 extern crate runtime_lib;
 use anyhow::{Context, Result};
+use loader::WasmLoader;
 use runtime_lib::wasi::{PreopenDirInheritPerms, PreopenDirPerms, WasiContext, WasiContextBuilder};
 use runtime_lib::{
-    Cluster, ClusterConfig, Engine, InstanceHandle, Linker, Loader, Parser, RuntimeError,
-    WasmModule,
+    Cluster, ClusterConfig, Engine, InstanceHandle, Linker, Parser, RuntimeError, WasmModule,
 };
 use std::ffi::c_void;
 use std::os::fd::IntoRawFd;
@@ -287,7 +287,7 @@ impl<'a> BenchState<'a> {
         );
 
         (self.compilation_start)(self.compilation_timer);
-        let loader = Loader::from_buf(bytes.to_vec());
+        let loader = WasmLoader::from_buf(bytes.to_vec());
         let parser = Parser::default();
         let module = parser.parse(loader)?;
         (self.compilation_end)(self.compilation_timer);
@@ -305,7 +305,7 @@ impl<'a> BenchState<'a> {
         (self.instantiation_start)(self.instantiation_timer);
         let wasi_ctxt = (self.make_wasi_cx)()?;
         let mut engine = Engine::llvm()?;
-        engine.init(module.clone())?;
+        engine.init(module.clone(), None)?;
 
         let instance = self
             .linker

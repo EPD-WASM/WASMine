@@ -42,8 +42,6 @@ macro_invoke_for_each_function_signature!(impl_into_func_trait);
 #[repr(transparent)]
 pub struct HostFuncRawContainer(Box<dyn Any>);
 
-type TestCall = unsafe extern "C" fn(*mut ExecutionContext, *const ValueRaw, *const ValueRaw) -> ();
-
 impl HostFuncRawContainer {
     fn from_closure<Closure, ParamTypes, RetType>(closure: Closure) -> Function
     where
@@ -123,11 +121,7 @@ pub enum FunctionKind {
     /// A generated and exported wasm function
     /// Calling Convention:
     ///     - BoundaryCC (for calls from rust code)
-    ///     - WasmCC (for calls from wasm code)
-    ///         (TODO: this effectively prevents calling interpreted functions from llvm code,
-    ///                because the interpreter can not dynamically generated arbitrary function
-    ///                signatures)
-    Wasm(BoundaryCCFuncTy, NonNull<ffi::c_void>, CalleeCtxt, FuncType),
+    Wasm(BoundaryCCFuncTy, CalleeCtxt, FuncType),
 
     /// A function that is part of the runtime
     /// Calling Convention:
@@ -143,8 +137,9 @@ pub enum FunctionKind {
 impl Function {
     pub fn call(&self, params: &[Value]) -> Result<Vec<Value>, RuntimeError> {
         let (func, ctxt, ty) = match &self.0 {
-            FunctionKind::Host(func, ctxt, ty) => (func, ctxt, ty),
-            FunctionKind::Wasm(func, _, ctxt, ty) => (func, ctxt, ty),
+            FunctionKind::Host(func, ctxt, ty) | FunctionKind::Wasm(func, ctxt, ty) => {
+                (func, ctxt, ty)
+            }
             FunctionKind::Runtime(..) => {
                 return Err(RuntimeError::Msg(
                     "Internal runtime functions can only be called from wasm code".into(),
@@ -175,7 +170,7 @@ impl Function {
             0
         });
         if jmp_res != 0 {
-            return Err(RuntimeError::Trap(ExecutionContextWrapper::take_trap_msg()));
+            return Err(ExecutionContextWrapper::take_trap());
         }
         Ok(ret_values
             .iter()
@@ -200,11 +195,9 @@ impl Function {
         execution_context: *mut ExecutionContext,
         ty: FuncType,
         boundary_func_ptr: BoundaryCCFuncTy,
-        wasm_func_ptr: NonNull<ffi::c_void>,
     ) -> Self {
         Function(FunctionKind::Wasm(
             boundary_func_ptr,
-            wasm_func_ptr,
             CalleeCtxt { execution_context },
             ty,
         ))

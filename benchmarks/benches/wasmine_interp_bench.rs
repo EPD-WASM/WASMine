@@ -1,6 +1,6 @@
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
 use ir::structs::value::{Number, Value};
-use loader::Loader;
+use loader::WasmLoader;
 use runtime_lib::ClusterConfig;
 use std::{path::PathBuf, rc::Rc};
 
@@ -29,12 +29,12 @@ pub fn wasmine_interp_fibonacci(c: &mut Criterion) {
                 |wasm_bytes| {
                     let wasmine_module = Rc::new(
                         parser::parser::Parser::default()
-                            .parse(Loader::from_buf(wasm_bytes))
+                            .parse(WasmLoader::from_buf(wasm_bytes))
                             .unwrap(),
                     );
                     let wasmine_cluster = runtime_lib::Cluster::new(ClusterConfig::default());
                     let mut wasmine_engine = runtime_lib::Engine::interpreter().unwrap();
-                    wasmine_engine.init(wasmine_module.clone()).unwrap();
+                    wasmine_engine.init(wasmine_module.clone(), None).unwrap();
 
                     let wasmine_instance = runtime_lib::BoundLinker::new(&wasmine_cluster)
                         .instantiate_and_link(wasmine_module.clone(), wasmine_engine)

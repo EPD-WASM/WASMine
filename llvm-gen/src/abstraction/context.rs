@@ -1,5 +1,5 @@
 use super::{builder::Builder, module::Module};
-use crate::util::to_c_str;
+use crate::util::c_str;
 use llvm_sys::{
     core::{LLVMAppendBasicBlockInContext, LLVMContextCreate, LLVMContextDispose},
     prelude::{LLVMBasicBlockRef, LLVMContextRef, LLVMValueRef},
@@ -26,7 +26,7 @@ impl Context {
     }
 
     pub(crate) fn append_basic_block(&self, func: LLVMValueRef, name: &str) -> LLVMBasicBlockRef {
-        unsafe { LLVMAppendBasicBlockInContext(self.inner, func, to_c_str(name).as_ptr()) }
+        unsafe { LLVMAppendBasicBlockInContext(self.inner, func, c_str(name).as_ptr()) }
     }
 }
 

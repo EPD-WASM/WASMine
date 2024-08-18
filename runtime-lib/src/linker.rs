@@ -11,8 +11,8 @@ use crate::{
 };
 use ir::structs::{module::Module as WasmModule, value::ValueRaw};
 use once_cell::sync::Lazy;
-use runtime_interface::{ExecutionContext, RawFunctionPtr};
-use std::{collections::HashMap, rc::Rc};
+use runtime_interface::{ExecutionContext, RawPointer};
+use std::{collections::HashMap, ptr::NonNull, rc::Rc};
 use wasm_types::{FuncType, GlobalIdx, GlobalType, ImportDesc, Limits, MemType, TableType};
 
 #[derive(thiserror::Error, Debug)]
@@ -381,85 +381,85 @@ impl Linker {
 
 static MEMORY_GROW_RT_FUNC: Lazy<Function> = Lazy::new(|| {
     Function::from_runtime_func(unsafe {
-        RawFunctionPtr::new_unchecked(runtime_interface::memory_grow as _)
+        RawPointer::new_unchecked(runtime_interface::memory_grow as _)
     })
 });
 
 static MEMORY_COPY_RT_FUNC: Lazy<Function> = Lazy::new(|| {
     Function::from_runtime_func(unsafe {
-        RawFunctionPtr::new_unchecked(runtime_interface::memory_copy as _)
+        RawPointer::new_unchecked(runtime_interface::memory_copy as _)
     })
 });
 
 static MEMORY_INIT_RT_FUNC: Lazy<Function> = Lazy::new(|| {
     Function::from_runtime_func(unsafe {
-        RawFunctionPtr::new_unchecked(runtime_interface::memory_init as _)
+        RawPointer::new_unchecked(runtime_interface::memory_init as _)
     })
 });
 
 static MEMORY_FILL_RT_FUNC: Lazy<Function> = Lazy::new(|| {
     Function::from_runtime_func(unsafe {
-        RawFunctionPtr::new_unchecked(runtime_interface::memory_fill as _)
+        RawPointer::new_unchecked(runtime_interface::memory_fill as _)
     })
 });
 
 static DATA_DROP_RT_FUNC: Lazy<Function> = Lazy::new(|| {
     Function::from_runtime_func(unsafe {
-        RawFunctionPtr::new_unchecked(runtime_interface::data_drop as _)
+        RawPointer::new_unchecked(runtime_interface::data_drop as _)
     })
 });
 
 static INDIRECT_CALL_RT_FUNC: Lazy<Function> = Lazy::new(|| {
     Function::from_runtime_func(unsafe {
-        RawFunctionPtr::new_unchecked(runtime_interface::indirect_call as _)
+        RawPointer::new_unchecked(runtime_interface::indirect_call as _)
     })
 });
 
 static TABLE_SET_RT_FUNC: Lazy<Function> = Lazy::new(|| {
     Function::from_runtime_func(unsafe {
-        RawFunctionPtr::new_unchecked(runtime_interface::table_set as _)
+        RawPointer::new_unchecked(runtime_interface::table_set as _)
     })
 });
 
 static TABLE_GET_RT_FUNC: Lazy<Function> = Lazy::new(|| {
     Function::from_runtime_func(unsafe {
-        RawFunctionPtr::new_unchecked(runtime_interface::table_get as _)
+        RawPointer::new_unchecked(runtime_interface::table_get as _)
     })
 });
 
 static TABLE_GROW_RT_FUNC: Lazy<Function> = Lazy::new(|| {
     Function::from_runtime_func(unsafe {
-        RawFunctionPtr::new_unchecked(runtime_interface::table_grow as _)
+        RawPointer::new_unchecked(runtime_interface::table_grow as _)
     })
 });
 
 static TABLE_SIZE_RT_FUNC: Lazy<Function> = Lazy::new(|| {
     Function::from_runtime_func(unsafe {
-        RawFunctionPtr::new_unchecked(runtime_interface::table_size as _)
+        RawPointer::new_unchecked(runtime_interface::table_size as _)
     })
 });
 
 static TABLE_FILL_RT_FUNC: Lazy<Function> = Lazy::new(|| {
     Function::from_runtime_func(unsafe {
-        RawFunctionPtr::new_unchecked(runtime_interface::table_fill as _)
+        RawPointer::new_unchecked(runtime_interface::table_fill as _)
     })
 });
 
 static TABLE_COPY_RT_FUNC: Lazy<Function> = Lazy::new(|| {
     Function::from_runtime_func(unsafe {
-        RawFunctionPtr::new_unchecked(runtime_interface::table_copy as _)
+        RawPointer::new_unchecked(runtime_interface::table_copy as _)
     })
 });
 
 static TABLE_INIT_RT_FUNC: Lazy<Function> = Lazy::new(|| {
     Function::from_runtime_func(unsafe {
-        RawFunctionPtr::new_unchecked(runtime_interface::table_init as _)
+        RawPointer::new_unchecked(runtime_interface::table_init as _)
     })
 });
 
 static ELEM_DROP_RT_FUNC: Lazy<Function> = Lazy::new(|| {
     Function::from_runtime_func(unsafe {
-        RawFunctionPtr::new_unchecked(runtime_interface::elem_drop as _)
+        RawPointer::new_unchecked(runtime_interface::elem_drop as _)
     })
 });
 
@@ -603,7 +603,7 @@ pub(crate) struct RTMemoryImport {
 
 #[derive(Clone)]
 pub(crate) struct RTGlobalImport {
-    pub(crate) addr: *mut ValueRaw,
+    pub(crate) addr: NonNull<ValueRaw>,
     pub(crate) r#type: GlobalType,
     pub(crate) idx: GlobalIdx,
 }

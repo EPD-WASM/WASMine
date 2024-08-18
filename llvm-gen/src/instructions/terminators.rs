@@ -1,4 +1,4 @@
-use crate::{abstraction::function::Function, util::to_c_str, TranslationError, Translator};
+use crate::{abstraction::function::Function, util::c_str, TranslationError, Translator};
 use ir::basic_block::BasicBlockGlue;
 use llvm_sys::{
     core::LLVMBuildExtractValue,
@@ -99,7 +99,7 @@ impl Translator {
                                     self.builder.get(),
                                     call_res_val,
                                     i as u32,
-                                    to_c_str("extract_res").as_ptr(),
+                                    c_str("extract_res").as_ptr(),
                                 )
                             };
                         }
@@ -178,7 +178,7 @@ impl Translator {
                                     self.builder.get(),
                                     indirect_func_call_res,
                                     i as u32,
-                                    to_c_str("extract_res").as_ptr(),
+                                    c_str("extract_res").as_ptr(),
                                 )
                             };
                         }

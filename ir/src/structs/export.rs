@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use serde::{Deserialize, Serialize};
 use wasm_types::{FuncIdx, GlobalIdx, MemIdx, Name, TableIdx};
 
 #[derive(Debug, Clone)]
@@ -34,7 +35,7 @@ pub enum Export {
     Global(GlobalExport),
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct WasmExports {
     pub functions: HashMap<String, FuncIdx>,
     pub functions_rev: HashMap<FuncIdx, String>,
