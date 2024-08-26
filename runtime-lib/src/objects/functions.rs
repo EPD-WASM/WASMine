@@ -131,7 +131,7 @@ pub enum FunctionKind {
     /// Note: The first argument is the current function's `ExecutionContext` parameter
     Runtime(NonNull<ffi::c_void>),
 
-    Wasi(BoundaryCCFuncTy),
+    Wasi(BoundaryCCFuncTy, FuncType),
 }
 
 impl Function {
@@ -207,7 +207,16 @@ impl Function {
         Function(FunctionKind::Runtime(ptr))
     }
 
-    pub(crate) fn from_wasi_func(boundary_func_ptr: BoundaryCCFuncTy) -> Self {
-        Function(FunctionKind::Wasi(boundary_func_ptr))
+    pub(crate) fn from_wasi_func(boundary_func_ptr: BoundaryCCFuncTy, func_type: FuncType) -> Self {
+        Function(FunctionKind::Wasi(boundary_func_ptr, func_type))
+    }
+
+    pub(crate) fn functype(&self) -> FuncType {
+        match &self.0 {
+            FunctionKind::Host(_, _, ty) | FunctionKind::Wasm(_, _, ty) => *ty,
+            FunctionKind::Wasi(_, ty) => *ty,
+            // we panic here, as this code path should never be taken (but it could, through a programmer error)
+            FunctionKind::Runtime(_) => unreachable!("Runtime functions have no function type"),
+        }
     }
 }

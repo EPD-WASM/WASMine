@@ -1,13 +1,13 @@
 use crate::WASM_PAGE_SIZE;
 
 use super::{
+    context::WasiContext,
     types::{Errno, Ptr},
-    WasiContext,
 };
 use core::slice;
 
 impl WasiContext {
-    pub(crate) fn get_memory_slice<T>(&self, ptr: Ptr<T>, len: usize) -> Result<&mut [T], Errno> {
+    pub(super) fn get_memory_slice<T>(&self, ptr: Ptr<T>, len: usize) -> Result<&mut [T], Errno> {
         let memory = unsafe { &*(*self.execution_context).memories_ptr.add(0) };
         if std::mem::size_of::<T>() * len + ptr.get() as usize
             > (memory.size * WASM_PAGE_SIZE) as usize
@@ -22,7 +22,7 @@ impl WasiContext {
     }
 }
 
-pub(crate) fn errno(o: Result<(), Errno>) -> Errno {
+pub(super) fn errno(o: Result<(), Errno>) -> Errno {
     match o {
         Ok(_) => Errno::Success,
         Err(e) => {

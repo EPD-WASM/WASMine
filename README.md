@@ -142,22 +142,16 @@ Globals:
 
 ### LLVM Calling Conventions and Function Signatures
 
-**All** functions that are accessed from outside the generated code (= exports) use C calling convention with a special signature:
+**All** functions that are supposed to be callable directly and across compilation backend boundaries (e.g. exports, host functions, runtime functions) use the C calling convention with a special signature:
 ```rust
-// Returning Void
-fn exported_function(execution_context_ptr: *mut ExecutionContext, parameters_arr_ptr: *const Value) -> ();
-// Returning a single wasm value
-fn exported_function(execution_context_ptr: *mut ExecutionContext, parameters_arr_ptr: *const Value) -> Value;
-// Returning multiple wasm values
-fn exported_function(execution_context_ptr: *mut ExecutionContext, parameters_arr_ptr: *const Value, return_values: *mut Value) -> ();
+fn exported_function(context_ptr: *mut CalleeCtxt, parameters_arr_ptr: *const ValueRaw, return_values: *mut ValueRaw) -> ();
 ```
 
-All internal function calls use an internal calling convention which might differ from the C calling convention. All parameters are passed as parameters, multiple return values are returned in structs.
+All internal function calls, e.g. functions that are only called by LLVM generated code and not from the outside, may use different calling conventions and function signatures.
 
-Wrapper functions to convert between the different calling conventions and call signatures are automatically generated for all exported and imported functions.
+The llvm backend automatically generates wrapper functions to convert between the different calling conventions and call signatures for all exported and imported functions.
 
 # TODO
 
- * add typecheck for host functions
  * add option to compile via llvm to elf binary where runtime-lib is loaded as interpreter
  * llvm: generate call_indirect in code (-> generate function in LLVM IR and call) (prevent RT call) and bench

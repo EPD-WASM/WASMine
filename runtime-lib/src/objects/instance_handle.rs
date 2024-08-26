@@ -91,7 +91,7 @@ impl<'a> InstanceHandle<'a> {
                         unsafe { NonNull::new_unchecked(ctxt.execution_context).cast() },
                     );
                 }
-                FunctionKind::Wasi(ptr) => {
+                FunctionKind::Wasi(ptr, _) => {
                     if let Some(ref wc) = wasi_context {
                         engine.set_symbol_addr(
                             &format!("__import__{}__", f.name.symbol_name()),

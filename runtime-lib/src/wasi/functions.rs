@@ -1,4 +1,8 @@
-use super::{types::*, utils::errno, FileDescriptor, WasiContext};
+use super::{
+    context::{FileDescriptor, WasiContext},
+    types::*,
+    utils::errno,
+};
 use crate::objects::functions::CalleeCtxt;
 use ir::structs::value::ValueRaw;
 use std::{

@@ -250,9 +250,17 @@ impl FuncTypeBuilder {
         Self::default()
     }
 
-    pub fn with_params(mut self, params: Vec<ValType>) -> Self {
+    /// Shorthand for `FuncTypeBuilder::new().with_params(params).with_results(results).finish()`
+    pub fn create(params: &[ValType], results: &[ValType]) -> FuncType {
+        FuncTypeBuilder::new()
+            .with_params(params)
+            .with_results(results)
+            .finish()
+    }
+
+    pub fn with_params(mut self, params: &[ValType]) -> Self {
         for param in params {
-            self = self.add_param(param);
+            self = self.add_param(*param);
         }
         self
     }
@@ -280,9 +288,9 @@ impl FuncTypeBuilder {
         self
     }
 
-    pub fn with_results(mut self, results: Vec<ValType>) -> Self {
+    pub fn with_results(mut self, results: &[ValType]) -> Self {
         for result in results {
-            self = self.add_result(result);
+            self = self.add_result(*result);
         }
         self
     }

@@ -19,23 +19,34 @@ use wasm_types::{FuncType, GlobalIdx, GlobalType, ImportDesc, Limits, MemType, T
 pub enum LinkingError {
     #[error("Module cluster mismatch. Bound linker received module from foreign cluster.")]
     ClusterMismatch,
-    #[error("Function type mismatch. Requested: {requested}, Actual: {actual}.")]
+    #[error("Function type mismatch for module \"{module_name}\", function \"{function_name}\". Requested: {requested}, Actual: {actual}.")]
     FunctionTypeMismatch {
         requested: FuncType,
         actual: FuncType,
+        module_name: String,
+        function_name: String,
     },
-    #[error("Global type mismatch. Requested: {requested:?}, Actual: {actual:?}.")]
+    #[error("Global type mismatch for module \"{module_name}\", global \"{global_name}\". Requested: {requested:?}, Actual: {actual:?}.")]
     GlobalTypeMismatch {
         requested: GlobalType,
         actual: GlobalType,
+        module_name: String,
+        global_name: String,
     },
-    #[error("Table type mismatch. Requested: {requested:?}, Actual: {actual:?}.")]
+    #[error("Table type mismatch for module \"{module_name}\", table \"{table_name}\". Requested: {requested:?}, Actual: {actual:?}.")]
     TableTypeMismatch {
         requested: TableType,
         actual: TableType,
+        module_name: String,
+        table_name: String,
     },
-    #[error("Memory type mismatch. Requested: {requested:?}, Actual: {actual:?}.")]
-    MemoryTypeMismatch { requested: MemType, actual: MemType },
+    #[error("Memory type mismatch for module \"{module_name}\", memory \"{memory_name}\". Requested: {requested:?}, Actual: {actual:?}.")]
+    MemoryTypeMismatch {
+        requested: MemType,
+        actual: MemType,
+        module_name: String,
+        memory_name: String,
+    },
     #[error("Global '{global_name}' not found in module '{module_name}'.")]
     GlobalNotFound {
         global_name: String,
@@ -155,68 +166,51 @@ impl<'a> BoundLinker<'a> {
                 name: import.name.clone(),
             };
 
-            // filter out host & wasi function imports early
-            if matches!(import.desc, ImportDesc::Func(_)) {
-                #[allow(clippy::borrow_interior_mutable_const)]
-                if WASI_FUNCS.contains(&(import.module.as_str(), import.name.as_str())) {
-                    imports.functions.push(FunctionDependency {
-                        name,
-                        func: self.cluster.alloc_function(WasiContext::get_func_by_name(
-                            &import.module,
-                            &import.name,
-                        )),
-                    });
-                    continue;
-                }
-                if let Some(host_func_import) =
-                    self.host_functions.get(&import.module, &import.name)
-                {
-                    imports.functions.push(FunctionDependency {
-                        name,
-                        func: host_func_import,
-                    });
-                    continue;
-                }
-            }
-
-            let exporting_module = match self.registered_modules.get(&import.module) {
-                Some(m) => m,
-                None => {
-                    return Err(LinkingError::FunctionNotFound {
-                        module_name: import.module.clone(),
-                        name: import.name.clone(),
-                    })
-                }
+            let exporting_module = || match self.registered_modules.get(&import.module) {
+                Some(m) => Ok(m),
+                None => Err(LinkingError::FunctionNotFound {
+                    module_name: import.module.clone(),
+                    name: import.name.clone(),
+                }),
             };
 
             match &import.desc {
                 ImportDesc::Func(type_idx) => {
                     let requested_function_type = module.function_types[*type_idx as usize];
-                    let actual_function_type =
-                        match exporting_module.get_function_type_from_name(&import.name) {
-                            Some(t) => t,
-                            None => {
-                                return Err(LinkingError::FunctionNotFound {
-                                    name: import.name.clone(),
-                                    module_name: import.module.clone(),
-                                })
-                            }
-                        };
-                    if requested_function_type != actual_function_type {
-                        return Err(LinkingError::FunctionTypeMismatch {
-                            requested: requested_function_type,
-                            actual: actual_function_type,
-                        });
-                    }
 
-                    let import_func_idx = exporting_module
-                        .wasm_module()
-                        .exports
-                        .find_function_idx(&import.name)
-                        .unwrap();
-                    imports.functions.push(FunctionDependency {
-                        name,
-                        func: match exporting_module.get_export_by_name(&import.name) {
+                    let func;
+                    let actual_functype;
+
+                    // filter out host & wasi function imports early: Option 1 = Host supplied function
+                    #[allow(clippy::borrow_interior_mutable_const)]
+                    if let Some(host_func_import) =
+                        self.host_functions.get(&import.module, &import.name)
+                    {
+                        func = host_func_import;
+                        actual_functype = func.functype();
+                    }
+                    // Option 2 = WASI function
+                    else if WASI_FUNCS.contains(&(import.module.as_str(), import.name.as_str())) {
+                        func = WasiContext::get_func_by_name(&import.module, &import.name);
+                        actual_functype = func.functype()
+                    } else {
+                        let exporting_module = (exporting_module)()?;
+                        actual_functype =
+                            match exporting_module.get_function_type_from_name(&import.name) {
+                                Some(t) => t,
+                                None => {
+                                    return Err(LinkingError::FunctionNotFound {
+                                        name: import.name.clone(),
+                                        module_name: import.module.clone(),
+                                    })
+                                }
+                            };
+                        let import_func_idx = exporting_module
+                            .wasm_module()
+                            .exports
+                            .find_function_idx(&import.name)
+                            .unwrap();
+                        func = match exporting_module.get_export_by_name(&import.name) {
                             Ok(f) => f,
                             Err(e) => {
                                 return Err(LinkingError::FunctionNotFound {
@@ -224,10 +218,20 @@ impl<'a> BoundLinker<'a> {
                                     name: import.name.clone(),
                                 });
                             }
-                        },
-                    });
+                        };
+                    }
+                    if requested_function_type != actual_functype {
+                        return Err(LinkingError::FunctionTypeMismatch {
+                            requested: requested_function_type,
+                            actual: actual_functype,
+                            module_name: import.module.clone(),
+                            function_name: import.name.clone(),
+                        });
+                    }
+                    imports.functions.push(FunctionDependency { name, func });
                 }
                 ImportDesc::Global((requested_type, idx)) => {
+                    let exporting_module = (exporting_module)()?;
                     let exported_global_idx = match exporting_module
                         .wasm_module()
                         .exports
@@ -248,6 +252,8 @@ impl<'a> BoundLinker<'a> {
                         return Err(LinkingError::GlobalTypeMismatch {
                             requested: *requested_type,
                             actual: *actual_type,
+                            module_name: import.module.clone(),
+                            global_name: import.name.clone(),
                         });
                     }
                     imports.globals.push(RTGlobalImport {
@@ -257,6 +263,7 @@ impl<'a> BoundLinker<'a> {
                     });
                 }
                 ImportDesc::Mem(expected_limits) => {
+                    let exporting_module = (exporting_module)()?;
                     let exported_memory_idx = match exporting_module
                         .wasm_module()
                         .exports
@@ -288,6 +295,8 @@ impl<'a> BoundLinker<'a> {
                         return Err(LinkingError::MemoryTypeMismatch {
                             requested: *expected_limits,
                             actual: actual_limits,
+                            module_name: import.module.clone(),
+                            memory_name: import.name.clone(),
                         });
                     }
                     imports.memories.push(RTMemoryImport {
@@ -296,6 +305,7 @@ impl<'a> BoundLinker<'a> {
                     });
                 }
                 ImportDesc::Table(expected_type) => {
+                    let exporting_module = (exporting_module)()?;
                     let exported_table_idx = match exporting_module
                         .wasm_module()
                         .exports
@@ -324,6 +334,8 @@ impl<'a> BoundLinker<'a> {
                         return Err(LinkingError::TableTypeMismatch {
                             requested: *expected_type,
                             actual: *actual_type,
+                            module_name: import.module.clone(),
+                            table_name: import.name.clone(),
                         });
                     }
                     let vals = &exporting_module.tables(exported_table_idx).values;
