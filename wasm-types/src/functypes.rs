@@ -1,12 +1,12 @@
 use crate::{NumType, RefType, ValType};
 use once_cell::sync::Lazy;
-use serde::{Deserialize, Serialize};
+use bitcode::{Encode, Decode};
 use std::fmt::{self, Display, Formatter};
 use std::sync::RwLock;
 use std::{collections::HashMap, sync::atomic::AtomicU64};
 
 // https://webassembly.github.io/spec/core/syntax/types.html#result-types
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Decode, Encode)]
 pub struct FuncType(u64);
 
 #[derive(Default)]

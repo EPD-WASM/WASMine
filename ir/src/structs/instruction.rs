@@ -1,9 +1,9 @@
-use serde::{Deserialize, Serialize};
+use bitcode::{Encode, Decode};
 use wasm_types::{BlockType, FuncIdx, LabelIdx, TableIdx, TypeIdx};
 
 pub enum Instructon {}
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Decode, Encode)]
 pub enum ControlInstruction {
     Nop,
     #[default]

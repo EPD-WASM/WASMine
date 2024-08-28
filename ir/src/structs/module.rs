@@ -3,12 +3,12 @@ use super::{
     memory::Memory, table::Table,
 };
 use crate::IR;
-use serde::{Deserialize, Serialize};
+use bitcode::{Decode, Encode};
 use std::fmt::Debug;
 use wasm_types::{FuncIdx, FuncType};
 
 /// A WebAssembly module
-#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, Decode, Encode)]
 pub struct Module {
     /// Wasm functions (code)
     pub ir: IR,

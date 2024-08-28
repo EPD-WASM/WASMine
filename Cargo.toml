@@ -1,4 +1,4 @@
-workspace = { members = [ "fuzz", "runtime-lib", "interpreter", "ir", "parser", "tests/gen_util", "wasm-types", "loader", "runtime-interface", "llvm-gen", "sightglass-connector", "benchmarks", "utils/max-func-type"] }
+workspace = { members = [ "fuzz", "runtime-lib", "interpreter", "ir", "parser", "tests/gen_util", "wasm-types", "loader", "runtime-interface", "llvm-gen", "benchmarks/sightglass-connector", "benchmarks/speccpu", "benchmarks/polybench", "utils/max-func-type"] }
 
 [package]
 name = "wasm_rt"
@@ -17,7 +17,7 @@ runtime-interface = { version = "0.1.0", path = "runtime-interface" }
 log = "0.4.22"
 
 [dev-dependencies]
-wast = "206.0.0"
+wast = "216.0.0"
 gen_util = { path = "./tests/gen_util" }
 test-log = "0.2.16"
 
@@ -26,7 +26,8 @@ name = "wasm_rt"
 path = "./bin/main.rs"
 
 [profile.release]
-debug = true
+strip = true
 
 [profile.bench]
 debug = true
+strip = false

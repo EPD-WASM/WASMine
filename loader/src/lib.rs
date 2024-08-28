@@ -11,7 +11,7 @@ pub enum LoaderError {
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
     #[error("CBOR error: {0}")]
-    CBORError(#[from] serde_cbor::Error),
+    BitcodeError(#[from] bitcode::Error),
 }
 
 #[derive(Clone)]
@@ -104,9 +104,7 @@ impl CwasmLoader {
         let llvm_memory_buffer_offset =
             u32::from_be_bytes(file_mmap[4..8].try_into().unwrap()) as usize;
 
-        let wasm_module = Rc::new(serde_cbor::from_slice(
-            &file_mmap[8..8 + wasm_module_buffer_size],
-        )?);
+        let wasm_module = Rc::new(bitcode::decode(&file_mmap[8..8 + wasm_module_buffer_size])?);
         Ok(Self {
             wasm_module,
             llvm_memory_buffer_offset,
@@ -122,7 +120,7 @@ impl CwasmLoader {
         llvm_memory_buffer: &[u8],
     ) -> Result<(), LoaderError> {
         let mut file: File = std::fs::File::create(path)?;
-        let wasm_module_buffer = serde_cbor::to_vec(wasm_module.as_ref())?;
+        let wasm_module_buffer = bitcode::encode(wasm_module.as_ref());
         let llvm_obj_offset: u32 =
             (2 * std::mem::size_of::<u32>() + wasm_module_buffer.len()).next_multiple_of(2) as u32;
 

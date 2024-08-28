@@ -121,8 +121,7 @@ static WASI_SNAPSHOT_PREVIEW1__PROC_EXIT: Lazy<Function> = Lazy::new(|| {
         FuncTypeBuilder::create(
             // rval
             &[ValType::Number(NumType::I32)],
-            // errno
-            &[ValType::Number(NumType::I32)],
+            &[],
         ),
     )
 });
@@ -177,7 +176,7 @@ static WASI_SNAPSHOT_PREVIEW1__FD_SEEK: Lazy<Function> = Lazy::new(|| {
                 ValType::Number(NumType::I32),
                 ValType::Number(NumType::I64),
                 ValType::Number(NumType::I32),
-                ValType::Number(NumType::I64),
+                ValType::Number(NumType::I32),
             ],
             // errno
             &[ValType::Number(NumType::I32)],

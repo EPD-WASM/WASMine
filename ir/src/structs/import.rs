@@ -1,7 +1,7 @@
-use serde::{Deserialize, Serialize};
+use bitcode::{Encode, Decode};
 use wasm_types::{ImportDesc, Name};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Decode, Encode)]
 pub struct Import {
     pub module: Name,
     pub name: Name,

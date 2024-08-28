@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+bitcode = "0.6.3"
 ir = { version = "0.1.0", path = "../ir" }
 memmap2 = "0.9.4"
-serde_cbor = "0.11.2"
 thiserror = "1.0.63"

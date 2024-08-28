@@ -1,6 +1,8 @@
+#![allow(unreachable_code)] // rustc otherwise reports unreachable code for the InstructionType::Vector variant
+
 use crate::*;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Decode, Encode)]
 pub enum InstructionType {
     Numeric(NumericInstructionCategory),
     Reference(ReferenceInstructionType),
@@ -13,7 +15,7 @@ pub enum InstructionType {
     Meta(MetaInstructionType),
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Decode, Encode)]
 pub enum NumericInstructionCategory {
     /// Constants: return a static constant.
     Constant,
@@ -33,14 +35,14 @@ pub enum NumericInstructionCategory {
     FRelational(FRelationalOp),
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Decode, Encode)]
 pub enum IUnaryOp {
     Clz,
     Ctz,
     Popcnt,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Decode, Encode)]
 pub enum FUnaryOp {
     Abs,
     Neg,
@@ -51,7 +53,7 @@ pub enum FUnaryOp {
     Nearest,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Decode, Encode)]
 pub enum IBinaryOp {
     Add,
     Sub,
@@ -70,7 +72,7 @@ pub enum IBinaryOp {
     Rotr,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Decode, Encode)]
 pub enum FBinaryOp {
     Add,
     Sub,
@@ -81,12 +83,12 @@ pub enum FBinaryOp {
     Copysign,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Decode, Encode)]
 pub enum ITestOp {
     Eqz,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Decode, Encode)]
 pub enum IRelationalOp {
     Eq,
     Ne,
@@ -100,7 +102,7 @@ pub enum IRelationalOp {
     GeU,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Decode, Encode)]
 pub enum FRelationalOp {
     Eq,
     Ne,
@@ -110,7 +112,7 @@ pub enum FRelationalOp {
     Ge,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Decode, Encode)]
 pub enum ConversionOp {
     Wrap,
     ExtendBits,
@@ -123,18 +125,18 @@ pub enum ConversionOp {
     Reinterpret,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Decode, Encode)]
 pub enum VectorInstructionCategory {
     // TODO: add vector instructions
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Decode, Encode)]
 pub enum ParametricInstructionType {
     Drop,
     Select,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Decode, Encode)]
 pub enum VariableInstructionType {
     LocalGet,
     LocalSet,
@@ -143,7 +145,7 @@ pub enum VariableInstructionType {
     GlobalSet,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Decode, Encode)]
 pub enum TableInstructionCategory {
     Get,
     Set,
@@ -155,14 +157,14 @@ pub enum TableInstructionCategory {
     Drop,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Decode, Encode)]
 pub enum MemoryInstructionCategory {
     Load(LoadOp),
     Store(StoreOp),
     Memory(MemoryOp),
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Decode, Encode)]
 pub enum LoadOp {
     INNLoad,
     FNNLoad,
@@ -175,7 +177,7 @@ pub enum LoadOp {
     // TODO: add vector instructions
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Decode, Encode)]
 pub enum StoreOp {
     INNStore,
     FNNStore,
@@ -185,7 +187,7 @@ pub enum StoreOp {
     // TODO: add vector instructions
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Decode, Encode)]
 pub enum MemoryOp {
     Size,
     Grow,
@@ -195,7 +197,7 @@ pub enum MemoryOp {
     Drop,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Decode, Encode)]
 pub enum ControlInstructionType {
     Nop,
     Unreachable,
@@ -214,20 +216,20 @@ pub enum ControlInstructionType {
     Else,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Decode, Encode)]
 pub enum ReferenceInstructionType {
     RefNull,
     RefIsNull,
     RefFunc,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Decode, Encode)]
 pub enum MetaInstructionType {
     PhiNode,
 }
 
 // https://webassembly.github.io/spec/core/bikeshed/#syntax-blocktype
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Decode, Encode)]
 pub enum BlockType {
     FunctionSig(TypeIdx),
     ShorthandFunc(ValType),

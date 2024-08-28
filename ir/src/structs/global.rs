@@ -1,8 +1,8 @@
 use super::value::ConstantValue;
-use serde::{Deserialize, Serialize};
+use bitcode::{Decode, Encode};
 use wasm_types::{GlobalType, ValType};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Decode, Encode)]
 pub struct Global {
     pub r#type: GlobalType,
     // the appropriate type transmuted to a u64

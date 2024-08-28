@@ -13,9 +13,9 @@ pub mod fmt;
 pub use decoder::{DecodingError, InstructionDecoder};
 pub use encoder::InstructionEncoder;
 
-use serde::{Deserialize, Serialize};
+use bitcode::{Decode, Encode};
 
-#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, Decode, Encode)]
 pub struct IR {
     pub functions: Vec<function::Function>,
 }

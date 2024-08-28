@@ -1,0 +1,78 @@
+[package]
+name = "speccpu"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ir = { version = "0.1.0", path = "../../ir" }
+loader = { version = "0.1.0", path = "../../loader" }
+parser = { version = "0.1.0", path = "../../parser" }
+runtime-lib = { version = "0.1.0", path = "../../runtime-lib" }
+criterion = "0.5"
+wasmparser = "0.216.0"
+wasmtime = "24.0.0"
+wasmedge-sdk = { version = "0.14.0", default-features = false, features = ["standalone"] }
+iai-callgrind = "0.13.0"
+gag = "1.0.0"
+wasmtime-wasi = "24.0.0"
+once_cell = "1.19.0"
+
+[[bench]]
+name = "wasmine_llvm_bench_criterion_speccpu_505"
+path = "benches/speccpu/wasmine_llvm_bench_criterion_505.rs"
+harness = false
+
+[[bench]]
+name = "wasmine_llvm_bench_criterion_speccpu_508"
+path = "benches/speccpu/wasmine_llvm_bench_criterion_508.rs"
+harness = false
+
+[[bench]]
+name = "wasmine_llvm_bench_criterion_speccpu_519"
+path = "benches/speccpu/wasmine_llvm_bench_criterion_519.rs"
+harness = false
+
+[[bench]]
+name = "wasmine_llvm_bench_criterion_speccpu_557"
+path = "benches/speccpu/wasmine_llvm_bench_criterion_557.rs"
+harness = false
+
+[[bench]]
+name = "wasmtime_criterion_speccpu_505"
+path = "benches/speccpu/wasmtime_criterion_505.rs"
+harness = false
+
+[[bench]]
+name = "wasmtime_criterion_speccpu_508"
+path = "benches/speccpu/wasmtime_criterion_508.rs"
+harness = false
+
+[[bench]]
+name = "wasmtime_criterion_speccpu_519"
+path = "benches/speccpu/wasmtime_criterion_519.rs"
+harness = false
+
+[[bench]]
+name = "wasmtime_criterion_speccpu_557"
+path = "benches/speccpu/wasmtime_criterion_557.rs"
+harness = false
+
+[[bench]]
+name = "wasmine_llvm_bench_iai_speccpu_505"
+path = "benches/speccpu/wasmine_llvm_bench_iai_505.rs"
+harness = false
+
+[[bench]]
+name = "wasmine_llvm_bench_iai_speccpu_508"
+path = "benches/speccpu/wasmine_llvm_bench_iai_508.rs"
+harness = false
+
+[[bench]]
+name = "wasmine_llvm_bench_iai_speccpu_519"
+path = "benches/speccpu/wasmine_llvm_bench_iai_519.rs"
+harness = false
+
+[[bench]]
+name = "wasmine_llvm_bench_iai_speccpu_557"
+path = "benches/speccpu/wasmine_llvm_bench_iai_557.rs"
+harness = false

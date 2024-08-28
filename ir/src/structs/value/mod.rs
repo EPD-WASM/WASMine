@@ -1,14 +1,14 @@
 // https://webassembly.github.io/spec/core/exec/runti`me`.html
 
 use crate::utils::numeric_transmutes::{Bit32, Bit64};
-use serde::{Deserialize, Serialize};
+use bitcode::{Encode, Decode};
 use std::fmt::{Display, Formatter};
 use wasm_types::{FuncIdx, GlobalIdx, NumType, RefType, ValType};
 
 mod number_impls;
 mod number_ops;
 
-#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Decode, Encode)]
 pub enum Number {
     I32(u32),
     I64(u64),
@@ -46,7 +46,7 @@ pub type Vector = [u8; 16];
 pub type FunctionReference = FuncIdx;
 pub type ExternReference = u32;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Decode, Encode)]
 pub enum Reference {
     Null,
     Function(FuncIdx),
@@ -63,7 +63,7 @@ impl Display for Reference {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Decode, Encode)]
 pub enum Value {
     Number(Number),
     Vector(Vector),
@@ -363,7 +363,7 @@ impl Value {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Decode, Encode)]
 pub enum ConstantValue {
     V(Value),
     // we can't resolve the value of imported globals at parsing time

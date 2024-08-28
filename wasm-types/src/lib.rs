@@ -2,7 +2,7 @@ mod functypes;
 mod instruction;
 mod module;
 
-use serde::{Deserialize, Serialize};
+use bitcode::{Encode, Decode};
 use std::fmt::{self, Display, Formatter};
 
 pub use functypes::{FuncType, FuncTypeBuilder};
@@ -10,7 +10,7 @@ pub use instruction::*;
 pub use module::*;
 
 /// https://webassembly.github.io/spec/core/syntax/types.html#number-types
-#[derive(Debug, Clone, PartialEq, Copy, Default, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Copy, Default, Eq, Hash, Decode, Encode)]
 pub enum NumType {
     #[default]
     I32,
@@ -20,7 +20,7 @@ pub enum NumType {
 }
 
 /// https://webassembly.github.io/spec/core/syntax/types.html#reference-types
-#[derive(Debug, Clone, PartialEq, Copy, Default, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Copy, Default, Eq, Hash, Decode, Encode)]
 pub enum RefType {
     #[default]
     FunctionReference,
@@ -28,7 +28,7 @@ pub enum RefType {
 }
 
 /// https://webassembly.github.io/spec/core/syntax/types.html#value-types
-#[derive(Debug, Clone, PartialEq, Default, Copy, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Copy, Eq, Hash, Decode, Encode)]
 pub enum ValType {
     Number(NumType),
     Reference(RefType),
@@ -40,7 +40,7 @@ pub enum ValType {
 /// https://webassembly.github.io/spec/core/syntax/types.html#result-types
 pub type ResType = Vec<ValType>;
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Decode, Encode)]
 pub struct Limits {
     pub min: u32,
     pub max: Option<u32>,
