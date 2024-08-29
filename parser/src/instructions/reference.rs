@@ -13,7 +13,7 @@ pub(crate) fn ref_is_null(
             "ref.is_null expects a reference type on stack".into(),
         )),
     }
-    let out = ctxt.create_var(ValType::Number(NumType::I32));
+    let out = ctxt.create_var(ValType::i32());
     o.write(ReferenceIsNullInstruction {
         in1: val.id,
         in1_type: val.type_,
@@ -44,7 +44,7 @@ pub(crate) fn ref_func(
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     let func_idx = FuncIdx::parse(i)?;
-    let out = ctxt.create_var(ValType::Reference(RefType::FunctionReference));
+    let out = ctxt.create_var(ValType::funcref());
     o.write(ReferenceFunctionInstruction {
         out1: out.id,
         func_idx,

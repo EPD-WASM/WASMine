@@ -19,7 +19,7 @@ use ir::{
 };
 use wasm_types::{
     BlockType, FuncIdx, FuncType, FuncTypeBuilder, GlobalIdx, GlobalType, ImportDesc, Limits,
-    MemIdx, MemType, Name, NumType, RefType, Section, TableIdx, TableType, TypeIdx, ValType,
+    MemIdx, MemType, Name, RefType, Section, TableIdx, TableType, TypeIdx, ValType,
 };
 
 pub(crate) trait Parse {
@@ -52,15 +52,15 @@ impl Parse for ValType {
     fn parse(i: &mut WasmStreamReader) -> Result<ValType, ParserError> {
         let prefix = i.read_byte()?;
         match prefix {
-            0x7F => Ok(ValType::Number(NumType::I32)),
-            0x7E => Ok(ValType::Number(NumType::I64)),
-            0x7D => Ok(ValType::Number(NumType::F32)),
-            0x7C => Ok(ValType::Number(NumType::F64)),
+            0x7F => Ok(ValType::i32()),
+            0x7E => Ok(ValType::i64()),
+            0x7D => Ok(ValType::f32()),
+            0x7C => Ok(ValType::f64()),
 
-            0x7B => Ok(ValType::VecType),
+            0x7B => Ok(ValType::vec()),
 
-            0x70 => Ok(ValType::Reference(RefType::FunctionReference)),
-            0x6F => Ok(ValType::Reference(RefType::ExternReference)),
+            0x70 => Ok(ValType::funcref()),
+            0x6F => Ok(ValType::externref()),
 
             _ => Err(ParserError::Msg(format!("invalid value type prefix. Expected 0x7F, 0x7E, 0x7D, 0x7C, 0x7B, 0x70, or 0x6F, got 0x{} at position {:x}", prefix, i.pos))),
         }

@@ -1,7 +1,7 @@
 use crate::{TranslationError, Translator};
 use ir::{instructions::SelectInstruction, InstructionDecoder};
 use llvm_sys::prelude::LLVMValueRef;
-use wasm_types::{InstructionType, NumType, ParametricInstructionType, ValType};
+use wasm_types::{InstructionType, ParametricInstructionType, ValType};
 
 impl Translator {
     pub(crate) fn translate_parametric(
@@ -21,7 +21,7 @@ impl Translator {
                 let select_val = self.builder.build_icmp(
                     llvm_sys::LLVMIntPredicate::LLVMIntNE,
                     select_val,
-                    self.builder.const_zero(ValType::Number(NumType::I32)),
+                    self.builder.const_zero(ValType::i32()),
                     "ToBool",
                 );
                 variable_map[instr.out1 as usize] = self

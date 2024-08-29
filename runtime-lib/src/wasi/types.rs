@@ -1,5 +1,5 @@
 use bitflags::bitflags;
-use ir::structs::value::{Number, Value, ValueRaw};
+use ir::structs::value::{Value, ValueRaw};
 use std::os::{fd::FromRawFd, unix::fs::FileTypeExt};
 
 /// Wasm pointer type
@@ -444,7 +444,7 @@ impl From<Errno> for ValueRaw {
 
 impl From<Errno> for Value {
     fn from(value: Errno) -> Self {
-        Value::Number(Number::I32(value as u32))
+        Value::i32(value as u32)
     }
 }
 

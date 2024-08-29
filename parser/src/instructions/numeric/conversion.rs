@@ -6,8 +6,8 @@ pub(crate) fn i32_wrap_i64(
     _: &mut WasmStreamReader,
     o: &mut InstructionEncoder,
 ) -> ParseResult {
-    let in_ = ctxt.pop_var_with_type(&ValType::Number(NumType::I64));
-    let out = ctxt.create_var(ValType::Number(NumType::I32));
+    let in_ = ctxt.pop_var_with_type(&ValType::i64());
+    let out = ctxt.create_var(ValType::i32());
     o.write(WrapInstruction {
         in1: in_.id,
         out1: out.id,
@@ -120,8 +120,8 @@ pub(crate) fn parse_extend_type(
     o: &mut InstructionEncoder,
     signed: bool,
 ) -> ParseResult {
-    let in_ = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
-    let out = ctxt.create_var(ValType::Number(NumType::I64));
+    let in_ = ctxt.pop_var_with_type(&ValType::i32());
+    let out = ctxt.create_var(ValType::i64());
     o.write(ExtendTypeInstruction {
         signed,
         out1: out.id,
@@ -145,8 +145,8 @@ pub(crate) fn f32_demote_f64(
     _: &mut WasmStreamReader,
     o: &mut InstructionEncoder,
 ) -> ParseResult {
-    let in_ = ctxt.pop_var_with_type(&ValType::Number(NumType::F64));
-    let out = ctxt.create_var(ValType::Number(NumType::F32));
+    let in_ = ctxt.pop_var_with_type(&ValType::f64());
+    let out = ctxt.create_var(ValType::f32());
     o.write(DemoteInstruction {
         in1: in_.id,
         out1: out.id,
@@ -160,8 +160,8 @@ pub(crate) fn f64_promote_f32(
     _: &mut WasmStreamReader,
     o: &mut InstructionEncoder,
 ) -> ParseResult {
-    let in_ = ctxt.pop_var_with_type(&ValType::Number(NumType::F32));
-    let out = ctxt.create_var(ValType::Number(NumType::F64));
+    let in_ = ctxt.pop_var_with_type(&ValType::f32());
+    let out = ctxt.create_var(ValType::f64());
     o.write(PromoteInstruction {
         in1: in_.id,
         out1: out.id,

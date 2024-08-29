@@ -7,7 +7,7 @@ use llvm_sys::{
     prelude::{LLVMTypeRef, LLVMValueRef},
 };
 use runtime_interface::{ExecutionContext, MemoryInstance};
-use wasm_types::{DataIdx, ElemIdx, MemIdx, RefType, TableIdx, ValType};
+use wasm_types::{DataIdx, ElemIdx, MemIdx, TableIdx, ValType};
 
 impl Translator {
     pub(crate) fn ec_memories_ptr(&self, ec_ptr: LLVMValueRef) -> LLVMValueRef {
@@ -349,8 +349,7 @@ impl Translator {
                 self.builder.i32(),
                 self.builder.i32(),
                 self.builder.i32(),
-                self.builder
-                    .valtype2llvm(ValType::Reference(RefType::FunctionReference)),
+                self.builder.valtype2llvm(ValType::funcref()),
             ],
         );
         let table_fill_fn = self.get_rt_func("__wasmine_runtime.table_fill", func_type);
@@ -369,8 +368,7 @@ impl Translator {
         _: LLVMTypeRef,
     ) -> LLVMValueRef {
         let func_type = Module::create_func_type(
-            self.builder
-                .valtype2llvm(ValType::Reference(RefType::FunctionReference)),
+            self.builder.valtype2llvm(ValType::funcref()),
             &mut [self.builder.ptr(), self.builder.i32(), self.builder.i32()],
         );
         let table_get_fn = self.get_rt_func("__wasmine_runtime.table_get", func_type);
@@ -393,8 +391,7 @@ impl Translator {
             &mut [
                 self.builder.ptr(),
                 self.builder.i32(),
-                self.builder
-                    .valtype2llvm(ValType::Reference(RefType::FunctionReference)),
+                self.builder.valtype2llvm(ValType::funcref()),
                 self.builder.i32(),
             ],
         );
@@ -432,8 +429,7 @@ impl Translator {
                 self.builder.ptr(),
                 self.builder.i32(),
                 self.builder.i32(),
-                self.builder
-                    .valtype2llvm(ValType::Reference(RefType::FunctionReference)),
+                self.builder.valtype2llvm(ValType::funcref()),
             ],
         );
         let table_grow_fn = self.get_rt_func("__wasmine_runtime.table_grow", func_type);

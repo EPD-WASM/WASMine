@@ -9,7 +9,7 @@ fn parse_store(
 ) -> ParseResult {
     let memarg = MemArg::parse(i)?;
     let value_in = ctxt.pop_var_with_type(&ValType::Number(input_type));
-    let addr_in = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
+    let addr_in = ctxt.pop_var_with_type(&ValType::i32());
     o.write(StoreInstruction {
         memarg,
         addr_in: addr_in.id,

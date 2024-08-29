@@ -4,7 +4,7 @@
 use crate::objects::functions::Function;
 use once_cell::sync::Lazy;
 use std::{collections::HashSet, path::PathBuf};
-use wasm_types::{FuncTypeBuilder, NumType, ValType};
+use wasm_types::{FuncTypeBuilder, ValType};
 
 pub use context::{PreopenDirInheritPerms, PreopenDirPerms, WasiContext, WasiContextBuilder};
 
@@ -72,9 +72,9 @@ static WASI_SNAPSHOT_PREVIEW1__ARGS_GET: Lazy<Function> = Lazy::new(|| {
         WasiContext::args_get,
         FuncTypeBuilder::create(
             // argv, argv_buf
-            &[ValType::Number(NumType::I32), ValType::Number(NumType::I32)],
+            &[ValType::i32(), ValType::i32()],
             // errno
-            &[ValType::Number(NumType::I32)],
+            &[ValType::i32()],
         ),
     )
 });
@@ -84,9 +84,9 @@ static WASI_SNAPSHOT_PREVIEW1__ARGS_SIZES_GET: Lazy<Function> = Lazy::new(|| {
         WasiContext::args_sizes_get,
         FuncTypeBuilder::create(
             // num_args_out, size_args_out
-            &[ValType::Number(NumType::I32), ValType::Number(NumType::I32)],
+            &[ValType::i32(), ValType::i32()],
             // errno
-            &[ValType::Number(NumType::I32)],
+            &[ValType::i32()],
         ),
     )
 });
@@ -96,9 +96,9 @@ static WASI_SNAPSHOT_PREVIEW1__ENVIRON_GET: Lazy<Function> = Lazy::new(|| {
         WasiContext::environ_get,
         FuncTypeBuilder::create(
             // environ, environ_buf
-            &[ValType::Number(NumType::I32), ValType::Number(NumType::I32)],
+            &[ValType::i32(), ValType::i32()],
             // errno
-            &[ValType::Number(NumType::I32)],
+            &[ValType::i32()],
         ),
     )
 });
@@ -108,9 +108,9 @@ static WASI_SNAPSHOT_PREVIEW1__ENVIRON_SIZES_GET: Lazy<Function> = Lazy::new(|| 
         WasiContext::environ_sizes_get,
         FuncTypeBuilder::create(
             // num_env_vars_out, size_env_vars_out
-            &[ValType::Number(NumType::I32), ValType::Number(NumType::I32)],
+            &[ValType::i32(), ValType::i32()],
             // errno
-            &[ValType::Number(NumType::I32)],
+            &[ValType::i32()],
         ),
     )
 });
@@ -120,7 +120,7 @@ static WASI_SNAPSHOT_PREVIEW1__PROC_EXIT: Lazy<Function> = Lazy::new(|| {
         WasiContext::proc_exit,
         FuncTypeBuilder::create(
             // rval
-            &[ValType::Number(NumType::I32)],
+            &[ValType::i32()],
             &[],
         ),
     )
@@ -132,13 +132,13 @@ static WASI_SNAPSHOT_PREVIEW1__FD_WRITE: Lazy<Function> = Lazy::new(|| {
         FuncTypeBuilder::create(
             // fd, iovs, num_iovs, written_bytes_out
             &[
-                ValType::Number(NumType::I32),
-                ValType::Number(NumType::I32),
-                ValType::Number(NumType::I32),
-                ValType::Number(NumType::I32),
+                ValType::i32(),
+                ValType::i32(),
+                ValType::i32(),
+                ValType::i32(),
             ],
             // errno
-            &[ValType::Number(NumType::I32)],
+            &[ValType::i32()],
         ),
     )
 });
@@ -148,9 +148,9 @@ static WASI_SNAPSHOT_PREVIEW1__FD_CLOSE: Lazy<Function> = Lazy::new(|| {
         WasiContext::fd_close,
         FuncTypeBuilder::create(
             // fd
-            &[ValType::Number(NumType::I32)],
+            &[ValType::i32()],
             // errno
-            &[ValType::Number(NumType::I32)],
+            &[ValType::i32()],
         ),
     )
 });
@@ -160,9 +160,9 @@ static WASI_SNAPSHOT_PREVIEW1__FD_FDSTAT_GET: Lazy<Function> = Lazy::new(|| {
         WasiContext::fd_fdstat_get,
         FuncTypeBuilder::create(
             // fd, buf
-            &[ValType::Number(NumType::I32), ValType::Number(NumType::I32)],
+            &[ValType::i32(), ValType::i32()],
             // errno
-            &[ValType::Number(NumType::I32)],
+            &[ValType::i32()],
         ),
     )
 });
@@ -173,13 +173,13 @@ static WASI_SNAPSHOT_PREVIEW1__FD_SEEK: Lazy<Function> = Lazy::new(|| {
         FuncTypeBuilder::create(
             // fd, offset, whence, newoffset_out
             &[
-                ValType::Number(NumType::I32),
-                ValType::Number(NumType::I64),
-                ValType::Number(NumType::I32),
-                ValType::Number(NumType::I32),
+                ValType::i32(),
+                ValType::i64(),
+                ValType::i32(),
+                ValType::i32(),
             ],
             // errno
-            &[ValType::Number(NumType::I32)],
+            &[ValType::i32()],
         ),
     )
 });
@@ -189,9 +189,9 @@ static WASI_SNAPSHOT_PREVIEW1__FD_FDSTAT_SET_FLAGS: Lazy<Function> = Lazy::new(|
         WasiContext::fd_fdstat_set_flags,
         FuncTypeBuilder::create(
             // fd, flags
-            &[ValType::Number(NumType::I32), ValType::Number(NumType::I32)],
+            &[ValType::i32(), ValType::i32()],
             // errno
-            &[ValType::Number(NumType::I32)],
+            &[ValType::i32()],
         ),
     )
 });
@@ -201,9 +201,9 @@ static WASI_SNAPSHOT_PREVIEW1__FD_PRESTAT_GET: Lazy<Function> = Lazy::new(|| {
         WasiContext::fd_prestat_get,
         FuncTypeBuilder::create(
             // fd, buf
-            &[ValType::Number(NumType::I32), ValType::Number(NumType::I32)],
+            &[ValType::i32(), ValType::i32()],
             // errno
-            &[ValType::Number(NumType::I32)],
+            &[ValType::i32()],
         ),
     )
 });
@@ -213,13 +213,9 @@ static WASI_SNAPSHOT_PREVIEW1__FD_PRESTAT_DIR_NAME: Lazy<Function> = Lazy::new(|
         WasiContext::fd_prestat_dir_name,
         FuncTypeBuilder::create(
             // fd, path, path_len
-            &[
-                ValType::Number(NumType::I32),
-                ValType::Number(NumType::I32),
-                ValType::Number(NumType::I32),
-            ],
+            &[ValType::i32(), ValType::i32(), ValType::i32()],
             // errno
-            &[ValType::Number(NumType::I32)],
+            &[ValType::i32()],
         ),
     )
 });
@@ -230,13 +226,13 @@ static WASI_SNAPSHOT_PREVIEW1__FD_READ: Lazy<Function> = Lazy::new(|| {
         FuncTypeBuilder::create(
             // fd, iovs, num_iovs, nread_out
             &[
-                ValType::Number(NumType::I32),
-                ValType::Number(NumType::I32),
-                ValType::Number(NumType::I32),
-                ValType::Number(NumType::I32),
+                ValType::i32(),
+                ValType::i32(),
+                ValType::i32(),
+                ValType::i32(),
             ],
             // errno
-            &[ValType::Number(NumType::I32)],
+            &[ValType::i32()],
         ),
     )
 });
@@ -247,18 +243,18 @@ static WASI_SNAPSHOT_PREVIEW1__PATH_OPEN: Lazy<Function> = Lazy::new(|| {
         FuncTypeBuilder::create(
             // dirfd, dirflags, path, path_len, oflags, fs_rights_base, fs_rights_inheriting, fs_flags, fd_out
             &[
-                ValType::Number(NumType::I32),
-                ValType::Number(NumType::I32),
-                ValType::Number(NumType::I32),
-                ValType::Number(NumType::I32),
-                ValType::Number(NumType::I32),
-                ValType::Number(NumType::I64),
-                ValType::Number(NumType::I64),
-                ValType::Number(NumType::I32),
-                ValType::Number(NumType::I32),
+                ValType::i32(),
+                ValType::i32(),
+                ValType::i32(),
+                ValType::i32(),
+                ValType::i32(),
+                ValType::i64(),
+                ValType::i64(),
+                ValType::i32(),
+                ValType::i32(),
             ],
             // errno
-            &[ValType::Number(NumType::I32)],
+            &[ValType::i32()],
         ),
     )
 });
@@ -269,14 +265,14 @@ static WASI_SNAPSHOT_PREVIEW1__PATH_FILESTAT_GET: Lazy<Function> = Lazy::new(|| 
         FuncTypeBuilder::create(
             // fd, flags, path, path_len, buf
             &[
-                ValType::Number(NumType::I32),
-                ValType::Number(NumType::I32),
-                ValType::Number(NumType::I32),
-                ValType::Number(NumType::I32),
-                ValType::Number(NumType::I32),
+                ValType::i32(),
+                ValType::i32(),
+                ValType::i32(),
+                ValType::i32(),
+                ValType::i32(),
             ],
             // errno
-            &[ValType::Number(NumType::I32)],
+            &[ValType::i32()],
         ),
     )
 });
@@ -286,9 +282,9 @@ static WASI_SNAPSHOT_PREVIEW1__FD_FILESTAT_GET: Lazy<Function> = Lazy::new(|| {
         WasiContext::fd_filestat_get,
         FuncTypeBuilder::create(
             // fd, buf
-            &[ValType::Number(NumType::I32), ValType::Number(NumType::I32)],
+            &[ValType::i32(), ValType::i32()],
             // errno
-            &[ValType::Number(NumType::I32)],
+            &[ValType::i32()],
         ),
     )
 });

@@ -1,7 +1,7 @@
 // https://webassembly.github.io/spec/core/exec/runti`me`.html
 
 use crate::utils::numeric_transmutes::{Bit32, Bit64};
-use bitcode::{Encode, Decode};
+use bitcode::{Decode, Encode};
 use std::fmt::{Display, Formatter};
 use wasm_types::{FuncIdx, GlobalIdx, NumType, RefType, ValType};
 
@@ -99,6 +99,41 @@ impl Value {
             Value::Reference(Reference::Null) => ValType::Reference(RefType::FunctionReference),
         }
     }
+
+    #[inline]
+    pub const fn i32(value: u32) -> Self {
+        Value::Number(Number::I32(value))
+    }
+
+    #[inline]
+    pub const fn i64(value: u64) -> Self {
+        Value::Number(Number::I64(value))
+    }
+
+    #[inline]
+    pub const fn f32(value: f32) -> Self {
+        Value::Number(Number::F32(value))
+    }
+
+    #[inline]
+    pub const fn f64(value: f64) -> Self {
+        Value::Number(Number::F64(value))
+    }
+
+    #[inline]
+    pub const fn funcref(value: FuncIdx) -> Self {
+        Value::Reference(Reference::Function(value))
+    }
+
+    #[inline]
+    pub const fn externref(value: u64) -> Self {
+        Value::Reference(Reference::Extern(value))
+    }
+
+    #[inline]
+    pub const fn v128(value: [u8; 16]) -> Self {
+        Value::Vector(value)
+    }
 }
 
 /// Like Value, but without the tag to decrease size and ffi compatible
@@ -134,37 +169,37 @@ impl ValueRaw {
     }
 
     #[inline]
-    pub fn u32(value: u32) -> Self {
+    pub const fn u32(value: u32) -> Self {
         ValueRaw { i32: value }
     }
 
     #[inline]
-    pub fn u64(value: u64) -> Self {
+    pub const fn u64(value: u64) -> Self {
         ValueRaw { i64: value }
     }
 
     #[inline]
-    pub fn f32(value: u32) -> Self {
+    pub const fn f32(value: u32) -> Self {
         ValueRaw { f32: value }
     }
 
     #[inline]
-    pub fn f64(value: u64) -> Self {
+    pub const fn f64(value: u64) -> Self {
         ValueRaw { f64: value }
     }
 
     #[inline]
-    pub fn v128(value: [u8; 16]) -> Self {
+    pub const fn v128(value: [u8; 16]) -> Self {
         ValueRaw { v128: value }
     }
 
     #[inline]
-    pub fn funcref(value: FuncIdx) -> Self {
+    pub const fn funcref(value: FuncIdx) -> Self {
         ValueRaw { funcref: value }
     }
 
     #[inline]
-    pub fn externref(value: u64) -> Self {
+    pub const fn externref(value: u64) -> Self {
         ValueRaw { externref: value }
     }
 
@@ -179,37 +214,37 @@ impl ValueRaw {
     }
 
     #[inline]
-    pub fn as_u32(self) -> u32 {
+    pub const fn as_u32(self) -> u32 {
         unsafe { self.i32 }
     }
 
     #[inline]
-    pub fn as_u64(self) -> u64 {
+    pub const fn as_u64(self) -> u64 {
         unsafe { self.i64 }
     }
 
     #[inline]
-    pub fn as_f32(self) -> u32 {
+    pub const fn as_f32(self) -> u32 {
         unsafe { self.f32 }
     }
 
     #[inline]
-    pub fn as_f64(self) -> u64 {
+    pub const fn as_f64(self) -> u64 {
         unsafe { self.f64 }
     }
 
     #[inline]
-    pub fn as_v128(self) -> [u8; 16] {
+    pub const fn as_v128(self) -> [u8; 16] {
         unsafe { self.v128 }
     }
 
     #[inline]
-    pub fn as_funcref(self) -> FuncIdx {
+    pub const fn as_funcref(self) -> FuncIdx {
         unsafe { self.funcref }
     }
 
     #[inline]
-    pub fn as_externref(self) -> u64 {
+    pub const fn as_externref(self) -> u64 {
         unsafe { self.externref }
     }
 }
@@ -332,21 +367,17 @@ impl From<ValueRaw> for [u8; 16] {
 impl Value {
     pub fn from_raw(raw: ValueRaw, val_ty: ValType) -> Self {
         match val_ty {
-            ValType::Number(NumType::I32) => Value::Number(Number::I32(raw.as_u32())),
-            ValType::Number(NumType::I64) => Value::Number(Number::I64(raw.as_u64())),
-            ValType::Number(NumType::F32) => {
-                Value::Number(Number::F32(f32::from_bits(raw.as_f32())))
-            }
-            ValType::Number(NumType::F64) => {
-                Value::Number(Number::F64(f64::from_bits(raw.as_f64())))
-            }
+            ValType::Number(NumType::I32) => Value::i32(raw.as_u32()),
+            ValType::Number(NumType::I64) => Value::i64(raw.as_u64()),
+            ValType::Number(NumType::F32) => Value::f32(f32::from_bits(raw.as_f32())),
+            ValType::Number(NumType::F64) => Value::f64(f64::from_bits(raw.as_f64())),
             ValType::Reference(RefType::ExternReference) => {
                 if raw.as_externref()
                     == ValueRaw::from(Value::Reference(Reference::Null)).as_externref()
                 {
                     Value::Reference(Reference::Null)
                 } else {
-                    Value::Reference(Reference::Extern(raw.as_externref()))
+                    Value::externref(raw.as_externref())
                 }
             }
             ValType::Reference(RefType::FunctionReference) => {
@@ -355,10 +386,10 @@ impl Value {
                 {
                     Value::Reference(Reference::Null)
                 } else {
-                    Value::Reference(Reference::Function(raw.as_funcref()))
+                    Value::funcref(raw.as_funcref())
                 }
             }
-            ValType::VecType => Value::Vector(raw.as_v128()),
+            ValType::VecType => Value::v128(raw.as_v128()),
         }
     }
 }

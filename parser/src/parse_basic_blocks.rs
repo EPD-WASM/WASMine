@@ -9,7 +9,7 @@ use ir::{
     structs::instruction::ControlInstruction,
 };
 use wasm_types::BlockType;
-use wasm_types::{NumType, RefType, ResType, ValType};
+use wasm_types::{RefType, ResType, ValType};
 
 struct BTWrapper(BlockType);
 
@@ -248,7 +248,7 @@ fn parse_terminator(
         ControlInstruction::IfElse(block_type) => {
             let block_type = BTWrapper(block_type);
             let pred_bb_id = builder.current_bb_get().id;
-            let cond_var = ctxt.pop_var_with_type(&ValType::Number(NumType::I32)).id;
+            let cond_var = ctxt.pop_var_with_type(&ValType::i32()).id;
 
             let if_else_exit_bb = BasicBlock::next_id();
             builder.reserve_bb_with_phis(if_else_exit_bb, ctxt, block_type.block_returns(ctxt));
@@ -350,7 +350,7 @@ fn parse_terminator(
         }
 
         ControlInstruction::BrIf(label_idx) => {
-            let cond_var = ctxt.pop_var_with_type(&ValType::Number(NumType::I32)).id;
+            let cond_var = ctxt.pop_var_with_type(&ValType::i32()).id;
             let target_if_false = BasicBlock::next_id();
             let target_if_true = labels[labels.len() - label_idx as usize - 1].clone();
             let output_vars =
@@ -367,7 +367,7 @@ fn parse_terminator(
         }
 
         ControlInstruction::BrTable(default_label, label_table) => {
-            let selector_var = ctxt.pop_var_with_type(&ValType::Number(NumType::I32)).id;
+            let selector_var = ctxt.pop_var_with_type(&ValType::i32()).id;
             let default_bb = if default_label >= labels.len() as u32 {
                 return Err(ParserError::Msg("label index out of bounds".to_string()));
             } else {
@@ -469,7 +469,7 @@ fn parse_terminator(
                 ))
             }
 
-            let selector_var = ctxt.pop_var_with_type(&ValType::Number(NumType::I32)).id;
+            let selector_var = ctxt.pop_var_with_type(&ValType::i32()).id;
             let func_type = ctxt.module.function_types.get(type_idx as usize).unwrap();
             let call_params =
                 validate_and_extract_result_from_stack(ctxt, &func_type.params(), false);

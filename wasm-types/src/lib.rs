@@ -2,7 +2,7 @@ mod functypes;
 mod instruction;
 mod module;
 
-use bitcode::{Encode, Decode};
+use bitcode::{Decode, Encode};
 use std::fmt::{self, Display, Formatter};
 
 pub use functypes::{FuncType, FuncTypeBuilder};
@@ -35,6 +35,43 @@ pub enum ValType {
     /// https://webassembly.github.io/spec/core/syntax/types.html#vector-types
     #[default]
     VecType,
+}
+
+impl ValType {
+    #[inline]
+    pub const fn i32() -> Self {
+        ValType::Number(NumType::I32)
+    }
+
+    #[inline]
+    pub const fn i64() -> Self {
+        ValType::Number(NumType::I64)
+    }
+
+    #[inline]
+    pub const fn f32() -> Self {
+        ValType::Number(NumType::F32)
+    }
+
+    #[inline]
+    pub const fn f64() -> Self {
+        ValType::Number(NumType::F64)
+    }
+
+    #[inline]
+    pub const fn funcref() -> Self {
+        ValType::Reference(RefType::FunctionReference)
+    }
+
+    #[inline]
+    pub const fn externref() -> Self {
+        ValType::Reference(RefType::ExternReference)
+    }
+
+    #[inline]
+    pub const fn vec() -> Self {
+        ValType::VecType
+    }
 }
 
 /// https://webassembly.github.io/spec/core/syntax/types.html#result-types

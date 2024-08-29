@@ -4,7 +4,7 @@ use wasm_types::*;
 fn i_arith(ctxt: &mut C, o: &mut O, op: IRelationalOp, type_: NumType) -> PR {
     let in2 = ctxt.pop_var_with_type(&ValType::Number(type_));
     let in1 = ctxt.pop_var_with_type(&ValType::Number(type_));
-    let out = ctxt.create_var(ValType::Number(NumType::I32));
+    let out = ctxt.create_var(ValType::i32());
     o.write(IRelationalInstruction {
         input_types: type_,
         op,
@@ -19,7 +19,7 @@ fn i_arith(ctxt: &mut C, o: &mut O, op: IRelationalOp, type_: NumType) -> PR {
 fn f_arith(ctxt: &mut C, o: &mut O, op: FRelationalOp, type_: NumType) -> PR {
     let in2 = ctxt.pop_var_with_type(&ValType::Number(type_));
     let in1 = ctxt.pop_var_with_type(&ValType::Number(type_));
-    let out = ctxt.create_var(ValType::Number(NumType::I32));
+    let out = ctxt.create_var(ValType::i32());
     o.write(FRelationalInstruction {
         input_types: type_,
         op,

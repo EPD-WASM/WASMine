@@ -169,12 +169,10 @@ impl TableInstance<'_> {
             return Err(TableError::TableIndexOutOfBounds);
         }
         match self.values.0[idx as usize] {
-            TableItem::FunctionReference { func_idx, .. } => {
-                Ok(Value::Reference(Reference::Function(func_idx)))
-            }
-            TableItem::ExternReference { func_ptr } => Ok(Value::Reference(Reference::Extern(
+            TableItem::FunctionReference { func_idx, .. } => Ok(Value::funcref(func_idx)),
+            TableItem::ExternReference { func_ptr } => Ok(Value::externref(
                 func_ptr.map(|ptr| ptr.as_ptr() as u64).unwrap_or(0),
-            ))),
+            )),
             TableItem::Null => Ok(Value::Reference(Reference::Null)),
         }
     }
@@ -326,9 +324,7 @@ impl TableInstance<'_> {
                             engine.get_global_value(idx)?,
                             wasm_module.globals[idx as usize].val_type(),
                         ),
-                        ConstantValue::FuncPtr(func_idx) => {
-                            Value::Reference(Reference::Function(func_idx))
-                        }
+                        ConstantValue::FuncPtr(func_idx) => Value::funcref(func_idx),
                     };
                     self.values.0[(dst_offset as usize) + i] = match val {
                         Value::Number(Number::I32(func_idx))

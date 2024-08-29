@@ -3,7 +3,7 @@ use wasm_types::*;
 
 fn i_arith(ctxt: &mut C, o: &mut O, op: ITestOp, type_: NumType) -> PR {
     let in_ = ctxt.pop_var_with_type(&ValType::Number(type_));
-    let out = ctxt.create_var(ValType::Number(NumType::I32));
+    let out = ctxt.create_var(ValType::i32());
     o.write(ITestInstruction {
         input_type: type_,
         op,

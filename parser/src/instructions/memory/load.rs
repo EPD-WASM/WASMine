@@ -21,7 +21,7 @@ fn parse_load(
         return Err(ParserError::AlignmentLargerThanNatural);
     }
 
-    let in_ = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
+    let in_ = ctxt.pop_var_with_type(&ValType::i32());
     let out = ctxt.create_var(ValType::Number(out_type));
     o.write(LoadInstruction {
         memarg,

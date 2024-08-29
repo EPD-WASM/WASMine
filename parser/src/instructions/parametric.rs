@@ -16,7 +16,7 @@ pub(crate) fn select_numeric(
     _: &mut WasmStreamReader,
     o: &mut InstructionEncoder,
 ) -> ParseResult {
-    let select_val = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
+    let select_val = ctxt.pop_var_with_type(&ValType::i32());
 
     let val2 = ctxt.pop_var();
     let val1 = ctxt.pop_var();
@@ -57,7 +57,7 @@ pub(crate) fn select_generic(
         )))
     }
     let val_type = ValType::parse(i)?;
-    let select_val = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
+    let select_val = ctxt.pop_var_with_type(&ValType::i32());
 
     let val2 = ctxt.pop_var_with_type(&val_type);
     let val1 = ctxt.pop_var_with_type(&val_type);

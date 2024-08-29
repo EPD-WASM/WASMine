@@ -4,7 +4,7 @@ use llvm_sys::{
     core::LLVMBuildExtractValue,
     prelude::{LLVMBasicBlockRef, LLVMValueRef},
 };
-use wasm_types::{NumType, ValType};
+use wasm_types::ValType;
 
 #[cfg(debug_assertions)]
 use crate::util::build_llvm_function_name;
@@ -31,7 +31,7 @@ impl Translator {
                 let jmp_bool = self.builder.build_icmp(
                     llvm_sys::LLVMIntPredicate::LLVMIntNE,
                     variable_map[*cond_var as usize],
-                    self.builder.const_zero(ValType::Number(NumType::I32)),
+                    self.builder.const_zero(ValType::i32()),
                     "ToBool",
                 );
                 self.builder.build_conditional_branch(

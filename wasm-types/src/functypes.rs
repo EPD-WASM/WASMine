@@ -1,6 +1,6 @@
 use crate::{NumType, RefType, ValType};
+use bitcode::{Decode, Encode};
 use once_cell::sync::Lazy;
-use bitcode::{Encode, Decode};
 use std::fmt::{self, Display, Formatter};
 use std::sync::RwLock;
 use std::{collections::HashMap, sync::atomic::AtomicU64};
@@ -341,13 +341,13 @@ const fn idx_of_valtype(ty: ValType) -> u64 {
 
 const fn valtype_of_idx(idx: u64) -> ValType {
     match idx {
-        0 => ValType::Number(NumType::I32),
-        1 => ValType::Number(NumType::I64),
-        2 => ValType::Number(NumType::F32),
-        3 => ValType::Number(NumType::F64),
-        4 => ValType::Reference(RefType::FunctionReference),
-        5 => ValType::Reference(RefType::ExternReference),
-        6 => ValType::VecType,
+        0 => ValType::i32(),
+        1 => ValType::i64(),
+        2 => ValType::f32(),
+        3 => ValType::f64(),
+        4 => ValType::funcref(),
+        5 => ValType::externref(),
+        6 => ValType::vec(),
         _ => panic!("invalid idx"),
     }
 }
@@ -403,15 +403,15 @@ mod tests {
         // default test
         assert_eq!(
             FuncTypeBuilder::new()
-                .add_param(ValType::Number(NumType::I32))
-                .add_param(ValType::Number(NumType::I64))
-                .add_result(ValType::Number(NumType::F32))
-                .add_result(ValType::Number(NumType::F64))
+                .add_param(ValType::i32())
+                .add_param(ValType::i64())
+                .add_result(ValType::f32())
+                .add_result(ValType::f64())
                 .finish()
                 .r#type(),
             (
-                vec![ValType::Number(NumType::I32), ValType::Number(NumType::I64)],
-                vec![ValType::Number(NumType::F32), ValType::Number(NumType::F64)]
+                vec![ValType::i32(), ValType::i64()],
+                vec![ValType::f32(), ValType::f64()]
             )
         );
         assert_eq!(FuncTypeBuilder::new().finish().params(), vec![]);
@@ -419,21 +419,18 @@ mod tests {
         // full functype test
         let mut builder = FuncTypeBuilder::new();
         for _ in 0..MAX_NUM_PARAMS {
-            builder = builder.add_param(ValType::Number(NumType::I32));
+            builder = builder.add_param(ValType::i32());
         }
         let t = builder.finish();
         assert_eq!(t.num_params(), MAX_NUM_PARAMS);
         assert_eq!(t.num_results(), 0);
-        assert_eq!(
-            t.r#type(),
-            (vec![ValType::Number(NumType::I32); MAX_NUM_PARAMS], vec![])
-        );
+        assert_eq!(t.r#type(), (vec![ValType::i32(); MAX_NUM_PARAMS], vec![]));
 
         // overflow test
         let mut builder = FuncTypeBuilder::new();
         for _ in 0..MAX_NUM_PARAMS + 5 {
-            builder = builder.add_param(ValType::VecType);
-            builder = builder.add_result(ValType::VecType);
+            builder = builder.add_param(ValType::vec());
+            builder = builder.add_result(ValType::vec());
         }
         let t = builder.finish();
         assert_eq!(t.num_params(), MAX_NUM_PARAMS + 5);
@@ -441,25 +438,25 @@ mod tests {
         assert_eq!(
             t.r#type(),
             (
-                vec![ValType::VecType; MAX_NUM_PARAMS + 5],
-                vec![ValType::VecType; MAX_NUM_PARAMS + 5]
+                vec![ValType::vec(); MAX_NUM_PARAMS + 5],
+                vec![ValType::vec(); MAX_NUM_PARAMS + 5]
             )
         );
 
         // test mixed overflow
         let mut builder = FuncTypeBuilder::new();
         let params = [
-            ValType::Reference(RefType::FunctionReference),
-            ValType::Reference(RefType::FunctionReference),
-            ValType::Number(NumType::I64),
-            ValType::VecType,
-            ValType::Number(NumType::F64),
-            ValType::Number(NumType::I32),
-            ValType::Number(NumType::I32),
-            ValType::Number(NumType::F64),
-            ValType::Number(NumType::I32),
-            ValType::Reference(RefType::ExternReference),
-            ValType::Number(NumType::I64),
+            ValType::funcref(),
+            ValType::funcref(),
+            ValType::i64(),
+            ValType::vec(),
+            ValType::f64(),
+            ValType::i32(),
+            ValType::i32(),
+            ValType::f64(),
+            ValType::i32(),
+            ValType::externref(),
+            ValType::i64(),
         ];
         for param in params.iter() {
             builder = builder.add_param(*param);

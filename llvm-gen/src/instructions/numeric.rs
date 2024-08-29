@@ -114,7 +114,7 @@ impl Translator {
                 let src = variable_map[instr.in1 as usize];
                 variable_map[instr.out1 as usize] = self.builder.build_float_cast(
                     src,
-                    self.builder.valtype2llvm(ValType::Number(NumType::F32)),
+                    self.builder.valtype2llvm(ValType::f32()),
                     "demote",
                 );
             }
@@ -138,7 +138,7 @@ impl Translator {
                 let src = variable_map[instr.in1 as usize];
                 variable_map[instr.out1 as usize] = self.builder.build_int_cast(
                     src,
-                    self.builder.valtype2llvm(ValType::Number(NumType::I64)),
+                    self.builder.valtype2llvm(ValType::i64()),
                     instr.signed,
                     "convert",
                 );
@@ -190,7 +190,7 @@ impl Translator {
                 let src = variable_map[instr.in1 as usize];
                 variable_map[instr.out1 as usize] = self.builder.build_int_cast(
                     src,
-                    self.builder.valtype2llvm(ValType::Number(NumType::I32)),
+                    self.builder.valtype2llvm(ValType::i32()),
                     false,
                     "wrap",
                 );

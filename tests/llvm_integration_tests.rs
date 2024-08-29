@@ -15,7 +15,7 @@ use runtime_lib::{
 };
 use std::{collections::HashMap, path::PathBuf, rc::Rc};
 use test_log::test;
-use wasm_types::{NumType, ValType};
+use wasm_types::ValType;
 use wast::{
     core::{NanPattern, WastArgCore, WastRetCore},
     QuoteWat, Wast, WastExecute, Wat,
@@ -101,32 +101,24 @@ fn execute_via_llvm_backend(
     let mut input_params = Vec::new();
     for (i, input_type) in function_type.params_iter().enumerate() {
         match &invoke.args[i] {
-            &wast::WastArg::Core(WastArgCore::I32(i))
-                if input_type == ValType::Number(NumType::I32) =>
-            {
-                input_params.push(Value::Number(Number::I32(i.trans_u32())))
+            &wast::WastArg::Core(WastArgCore::I32(i)) if input_type == ValType::i32() => {
+                input_params.push(Value::i32(i.trans_u32()))
             }
-            &wast::WastArg::Core(WastArgCore::I64(i))
-                if input_type == ValType::Number(NumType::I64) =>
-            {
-                input_params.push(Value::Number(Number::I64(i.trans_u64())))
+            &wast::WastArg::Core(WastArgCore::I64(i)) if input_type == ValType::i64() => {
+                input_params.push(Value::i64(i.trans_u64()))
             }
-            &wast::WastArg::Core(WastArgCore::F32(f))
-                if input_type == ValType::Number(NumType::F32) =>
-            {
-                input_params.push(Value::Number(Number::F32(f32::from_bits(f.bits))))
+            &wast::WastArg::Core(WastArgCore::F32(f)) if input_type == ValType::f32() => {
+                input_params.push(Value::f32(f32::from_bits(f.bits)))
             }
-            &wast::WastArg::Core(WastArgCore::F64(f))
-                if input_type == ValType::Number(NumType::F64) =>
-            {
-                input_params.push(Value::Number(Number::F64(f64::from_bits(f.bits))))
+            &wast::WastArg::Core(WastArgCore::F64(f)) if input_type == ValType::f64() => {
+                input_params.push(Value::f64(f64::from_bits(f.bits)))
             }
             wast::WastArg::Core(WastArgCore::V128(_)) => unimplemented!(),
             wast::WastArg::Core(WastArgCore::RefExtern(r)) => {
-                input_params.push(Value::Reference(Reference::Extern(r.trans_u64() as _)))
+                input_params.push(Value::externref(r.trans_u64() as _))
             }
             wast::WastArg::Core(WastArgCore::RefHost(r)) => {
-                input_params.push(Value::Reference(Reference::Extern(r.trans_u64() as _)))
+                input_params.push(Value::externref(r.trans_u64() as _))
             }
             wast::WastArg::Core(WastArgCore::RefNull(_)) => {
                 input_params.push(Value::Reference(Reference::Null))
@@ -453,25 +445,15 @@ pub fn test_llvm(file_path: &str) {
     ) {
         match expected_result {
             &wast::WastRet::Core(WastRetCore::I32(i)) => {
-                assert_eq!(actual_type, ValType::Number(NumType::I32), "{}", prefix);
-                assert_eq!(
-                    *actual_result,
-                    Value::Number(Number::I32(i.trans_u32())),
-                    "{}",
-                    prefix
-                );
+                assert_eq!(actual_type, ValType::i32(), "{}", prefix);
+                assert_eq!(*actual_result, Value::i32(i.trans_u32()), "{}", prefix);
             }
             &wast::WastRet::Core(WastRetCore::I64(i)) => {
-                assert_eq!(actual_type, ValType::Number(NumType::I64), "{}", prefix);
-                assert_eq!(
-                    *actual_result,
-                    Value::Number(Number::I64(i.trans_u64())),
-                    "{}",
-                    prefix
-                );
+                assert_eq!(actual_type, ValType::i64(), "{}", prefix);
+                assert_eq!(*actual_result, Value::i64(i.trans_u64()), "{}", prefix);
             }
             &wast::WastRet::Core(WastRetCore::F32(NanPattern::Value(f_truth))) => {
-                assert_eq!(actual_type, ValType::Number(NumType::F32), "{}", prefix);
+                assert_eq!(actual_type, ValType::f32(), "{}", prefix);
                 let f_truth = f32::from_bits(f_truth.bits);
                 let f_calculated = match *actual_result {
                     Value::Number(Number::F32(f)) => f,
@@ -485,7 +467,7 @@ pub fn test_llvm(file_path: &str) {
                 }
             }
             &wast::WastRet::Core(WastRetCore::F64(NanPattern::Value(f_truth))) => {
-                assert_eq!(actual_type, ValType::Number(NumType::F64), "{}", prefix);
+                assert_eq!(actual_type, ValType::f64(), "{}", prefix);
                 let f_truth = f64::from_bits(f_truth.bits);
                 let f_calculated = match *actual_result {
                     Value::Number(Number::F64(f)) => f,
@@ -500,7 +482,7 @@ pub fn test_llvm(file_path: &str) {
             }
             &wast::WastRet::Core(WastRetCore::F32(NanPattern::CanonicalNan))
             | &wast::WastRet::Core(WastRetCore::F32(NanPattern::ArithmeticNan)) => {
-                assert_eq!(actual_type, ValType::Number(NumType::F32), "{}", prefix);
+                assert_eq!(actual_type, ValType::f32(), "{}", prefix);
                 match actual_result {
                     Value::Number(Number::F32(f)) => {
                         assert!(f.is_nan(), "{}", prefix);
@@ -512,7 +494,7 @@ pub fn test_llvm(file_path: &str) {
             }
             &wast::WastRet::Core(WastRetCore::F64(NanPattern::CanonicalNan))
             | &wast::WastRet::Core(WastRetCore::F64(NanPattern::ArithmeticNan)) => {
-                assert_eq!(actual_type, ValType::Number(NumType::F64), "{}", prefix);
+                assert_eq!(actual_type, ValType::f64(), "{}", prefix);
                 match actual_result {
                     Value::Number(Number::F64(f)) => {
                         assert!(f.is_nan(), "{}", prefix);
@@ -532,7 +514,7 @@ pub fn test_llvm(file_path: &str) {
                 );
                 assert_eq!(
                     *actual_result,
-                    Value::Reference(Reference::Extern(r.unwrap().trans_u64() as _)),
+                    Value::externref(r.unwrap().trans_u64() as _),
                     "{}",
                     prefix
                 );
@@ -546,7 +528,7 @@ pub fn test_llvm(file_path: &str) {
                 );
                 assert_eq!(
                     *actual_result,
-                    Value::Reference(Reference::Extern(r.trans_u64() as _)),
+                    Value::externref(r.trans_u64() as _),
                     "{}",
                     prefix
                 );

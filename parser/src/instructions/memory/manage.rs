@@ -11,7 +11,7 @@ pub(crate) fn memory_size(
         ));
     }
 
-    let out = ctxt.create_var(ValType::Number(NumType::I32));
+    let out = ctxt.create_var(ValType::i32());
     o.write(MemorySizeInstruction { out1: out.id });
     ctxt.push_var(out);
     Ok(())
@@ -28,8 +28,8 @@ pub(crate) fn memory_grow(
         ));
     }
 
-    let size_in = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
-    let out = ctxt.create_var(ValType::Number(NumType::I32));
+    let size_in = ctxt.pop_var_with_type(&ValType::i32());
+    let out = ctxt.create_var(ValType::i32());
     o.write(MemoryGrowInstruction {
         in1: size_in.id,
         out1: out.id,
@@ -52,9 +52,9 @@ pub(crate) fn memory_copy(
         return Err(ParserError::Msg("unknown memory 0".into()));
     }
 
-    let n = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
-    let s = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
-    let d = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
+    let n = ctxt.pop_var_with_type(&ValType::i32());
+    let s = ctxt.pop_var_with_type(&ValType::i32());
+    let d = ctxt.pop_var_with_type(&ValType::i32());
     o.write(MemoryCopyInstruction {
         n: n.id,
         s: s.id,
@@ -77,9 +77,9 @@ pub(crate) fn memory_fill(
         return Err(ParserError::Msg("unknown memory 0".into()));
     }
 
-    let n = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
-    let val = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
-    let d = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
+    let n = ctxt.pop_var_with_type(&ValType::i32());
+    let val = ctxt.pop_var_with_type(&ValType::i32());
+    let d = ctxt.pop_var_with_type(&ValType::i32());
     o.write(MemoryFillInstruction {
         n: n.id,
         val: val.id,
@@ -112,9 +112,9 @@ pub(crate) fn memory_init(
             "memory init instruction invalid encoding".into(),
         ));
     }
-    let n = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
-    let s = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
-    let d = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
+    let n = ctxt.pop_var_with_type(&ValType::i32());
+    let s = ctxt.pop_var_with_type(&ValType::i32());
+    let d = ctxt.pop_var_with_type(&ValType::i32());
 
     o.write(MemoryInitInstruction {
         data_idx,

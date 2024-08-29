@@ -23,7 +23,7 @@ pub(crate) fn table_set(
             "table value to set must be of reference type".into(),
         )),
     }
-    let idx = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
+    let idx = ctxt.pop_var_with_type(&ValType::i32());
     o.write(TableSetInstruction {
         table_idx,
         in1: value_to_set.id,
@@ -50,7 +50,7 @@ pub(crate) fn table_get(
         }
     };
     let table_ref_type = table.r#type.ref_type;
-    let idx = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
+    let idx = ctxt.pop_var_with_type(&ValType::i32());
     let out = ctxt.create_var(ValType::Reference(table_ref_type));
     o.write(TableGetInstruction {
         table_idx,
@@ -79,7 +79,7 @@ pub(crate) fn table_grow(
     };
     let table_type = ValType::Reference(table.r#type.ref_type);
 
-    let size = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
+    let size = ctxt.pop_var_with_type(&ValType::i32());
     let value_to_fill = ctxt.pop_var_with_type(&table_type);
     match value_to_fill.type_ {
         ValType::Reference(_) => {}
@@ -88,7 +88,7 @@ pub(crate) fn table_grow(
             value_to_fill.type_, table_type
         ))),
     }
-    let out = ctxt.create_var(ValType::Number(NumType::I32));
+    let out = ctxt.create_var(ValType::i32());
     o.write(TableGrowInstruction {
         table_idx,
         size: size.id,
@@ -111,7 +111,7 @@ pub(crate) fn table_size(
             table_idx
         )))
     }
-    let out = ctxt.create_var(ValType::Number(NumType::I32));
+    let out = ctxt.create_var(ValType::i32());
     o.write(TableSizeInstruction {
         table_idx,
         out1: out.id,
@@ -126,9 +126,9 @@ pub(crate) fn table_fill(
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     let table_idx = TableIdx::parse(i)?;
-    let n = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
+    let n = ctxt.pop_var_with_type(&ValType::i32());
     let ref_value = ctxt.pop_var();
-    let i = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
+    let i = ctxt.pop_var_with_type(&ValType::i32());
 
     // validate
     let ref_value_type = match ref_value.type_ {
@@ -174,9 +174,9 @@ pub(crate) fn table_copy(
 ) -> ParseResult {
     let table_idx_x = TableIdx::parse(i)?;
     let table_idx_y = TableIdx::parse(i)?;
-    let n = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
-    let s = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
-    let d = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
+    let n = ctxt.pop_var_with_type(&ValType::i32());
+    let s = ctxt.pop_var_with_type(&ValType::i32());
+    let d = ctxt.pop_var_with_type(&ValType::i32());
 
     // validate
     let table_type_x = match ctxt
@@ -229,9 +229,9 @@ pub(crate) fn table_init(
 ) -> ParseResult {
     let elem_idx = ElemIdx::parse(i)?;
     let table_idx = TableIdx::parse(i)?;
-    let n = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
-    let s = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
-    let d = ctxt.pop_var_with_type(&ValType::Number(NumType::I32));
+    let n = ctxt.pop_var_with_type(&ValType::i32());
+    let s = ctxt.pop_var_with_type(&ValType::i32());
+    let d = ctxt.pop_var_with_type(&ValType::i32());
 
     // validate
     let table_type = match ctxt
