@@ -155,3 +155,7 @@ The llvm backend automatically generates wrapper functions to convert between th
 
  * add option to compile via llvm to elf binary where runtime-lib is loaded as interpreter
  * llvm: generate call_indirect in code (-> generate function in LLVM IR and call) (prevent RT call) and bench
+ * add sigaltstack to maybe solve resource exhaustion detection problem
+ * split runtime into (linking / instance handling / cluster) and (resource management / execution context / tables / memories / etc.)
+ * rebuild parsing to only parse everything except code aot. Code should be split to "function pointers" which could be parsed on demand
+ * rebuild public api to only ever hand out empty "handle"-types (except cluster) which always just store the index of a slab resource in a cluster. E.e. "Module" does not follow this principle currently.

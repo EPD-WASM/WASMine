@@ -1,9 +1,14 @@
 use crate::{objects::execution_context::ExecutionContextWrapper, RuntimeError};
-use nix::sys::signal::{self, SaFlags, SigAction, SigHandler, SigSet, Signal};
+use nix::{
+    errno::Errno,
+    sys::signal::{self, SaFlags, SigAction, SigHandler, SigSet, Signal},
+};
 use once_cell::sync::Lazy;
 use std::{
     collections::HashMap,
     ffi::CStr,
+    mem::MaybeUninit,
+    ptr,
     sync::{
         atomic::{AtomicBool, AtomicI32},
         Mutex,
@@ -18,9 +23,34 @@ static SIGNAL_HANDLER_REGISTER_COUNT: Lazy<AtomicI32> = Lazy::new(|| AtomicI32::
 
 thread_local! {
     static THREAD_CURRENTLY_EXECUTES_WASM: AtomicBool = const {AtomicBool::new(false)};
+    static SIGNAL_ALT_STACK: SigAltStack = SigAltStack::new();
 }
 
 pub(crate) struct SignalHandler;
+
+fn is_stack_overflow(sig_code: i32, addr: *mut libc::c_void) -> bool {
+    if sig_code != libc::SIGSEGV && sig_code != libc::SIGBUS {
+        return false;
+    }
+    let thread_id = unsafe { libc::pthread_self() };
+    let mut thread_attrs = MaybeUninit::uninit();
+    assert!(0 == unsafe { libc::pthread_getattr_np(thread_id, thread_attrs.as_mut_ptr()) });
+    let attr = unsafe { thread_attrs.assume_init() };
+
+    let mut stack_addr = MaybeUninit::uninit();
+    let mut stack_size = MaybeUninit::uninit();
+    assert!(
+        0 == unsafe {
+            libc::pthread_attr_getstack(&attr, stack_addr.as_mut_ptr(), stack_size.as_mut_ptr())
+        }
+    );
+    let stack_addr = unsafe { stack_addr.assume_init() };
+    let stack_size = unsafe { stack_size.assume_init() };
+
+    // check that fault address is within +-8 bytes of the stack boundary
+    addr < unsafe { stack_addr.add(stack_size + 8) }
+        || addr < unsafe { stack_addr.add(stack_size - 8) }
+}
 
 impl SignalHandler {
     extern "C" fn handle_signal(
@@ -29,10 +59,14 @@ impl SignalHandler {
         ucontext: *mut libc::c_void,
     ) {
         if THREAD_CURRENTLY_EXECUTES_WASM.with(|b| b.load(std::sync::atomic::Ordering::Relaxed)) {
-            ExecutionContextWrapper::trap(RuntimeError::Trap(format!(
-                "execution triggered {:?} signal",
-                unsafe { CStr::from_ptr(libc::strsignal(sig)) }
-            )))
+            if is_stack_overflow(sig, unsafe { (*info).si_addr() }) {
+                ExecutionContextWrapper::trap(RuntimeError::Exhaustion);
+            } else {
+                ExecutionContextWrapper::trap(RuntimeError::Trap(format!(
+                    "execution triggered {:?} signal",
+                    unsafe { CStr::from_ptr(libc::strsignal(sig)) }
+                )))
+            }
         }
 
         let signal = Signal::try_from(sig).unwrap();
@@ -72,7 +106,9 @@ impl SignalHandler {
 
             let sig_action = SigAction::new(
                 handle_signal,
-                SaFlags::SA_NODEFER | SaFlags::SA_SIGINFO,
+                // SA_SIGINFO is set by nix
+                // SA_ONSTACK: the sigaltstack is allocated as a thread_local, so we are guaranteed that it is always available
+                SaFlags::SA_NODEFER | SaFlags::SA_ONSTACK,
                 SigSet::empty(),
             );
 
@@ -131,5 +167,59 @@ impl SignalHandler {
     pub(crate) fn unset_thread_executing_wasm() {
         THREAD_CURRENTLY_EXECUTES_WASM
             .with(|b| b.store(false, std::sync::atomic::Ordering::Relaxed));
+    }
+}
+
+struct SigAltStack {
+    addr: *mut libc::c_void,
+    size: usize,
+}
+
+impl SigAltStack {
+    fn new() -> Self {
+        const ALT_STACK_SIZE: usize = libc::SIGSTKSZ;
+        let alt_stack = unsafe {
+            libc::mmap(
+                std::ptr::null_mut(),
+                ALT_STACK_SIZE,
+                libc::PROT_READ | libc::PROT_WRITE,
+                libc::MAP_PRIVATE | libc::MAP_ANON,
+                -1,
+                0,
+            )
+        };
+        assert!(
+            alt_stack != libc::MAP_FAILED,
+            "failed to allocate signal stack: {}",
+            Errno::last()
+        );
+        let instance = Self {
+            addr: alt_stack,
+            size: ALT_STACK_SIZE,
+        };
+        instance.register_for_current_thread();
+        instance
+    }
+
+    fn register_for_current_thread(&self) {
+        let sig_stack = libc::stack_t {
+            ss_sp: self.addr,
+            ss_flags: 0,
+            ss_size: self.size,
+        };
+        let res = unsafe { libc::sigaltstack(&sig_stack, ptr::null_mut()) };
+        assert_eq!(res, 0, "failed to register signal stack: {}", Errno::last());
+    }
+}
+
+impl Drop for SigAltStack {
+    fn drop(&mut self) {
+        let res = unsafe { libc::munmap(self.addr, self.size) };
+        assert_eq!(
+            res,
+            0,
+            "failed to deallocate signal stack: {}",
+            Errno::last()
+        );
     }
 }

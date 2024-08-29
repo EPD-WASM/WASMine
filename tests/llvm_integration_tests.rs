@@ -394,13 +394,12 @@ pub fn test_llvm(file_path: &str) {
             wast::WastDirective::AssertException { .. } => {
                 unimplemented!("AssertException");
             }
-            wast::WastDirective::AssertExhaustion { .. } => {
-                // TODO
-                // match execute_via_llvm_backend(file_path, line, col, &call, &mut declared_modules) {
-                //     Err(RuntimeError::Exhaustion) => {}
-                //     Err(e) => panic!("Expected Exhaustion, Got {:?}", e),
-                //     Ok(_) => panic!("Expected Exhaustion, Got Ok"),
-                // };
+            wast::WastDirective::AssertExhaustion { call, .. } => {
+                match execute_via_llvm_backend(file_path, line, col, &call, &mut declared_modules) {
+                    Err(RuntimeError::Exhaustion) => {}
+                    Err(e) => panic!("Expected Exhaustion, Got {:?}", e),
+                    Ok(_) => panic!("Expected Exhaustion, Got Ok"),
+                };
             }
             wast::WastDirective::AssertUnlinkable { mut module, .. } => {
                 let binary_mod: Vec<u8> = module.encode().unwrap_or_else(|e| {
