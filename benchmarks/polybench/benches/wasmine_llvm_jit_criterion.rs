@@ -1,7 +1,8 @@
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
 use loader::WasmLoader;
-use runtime_lib::{wasi::WasiContextBuilder, ClusterConfig};
+use runtime_lib::ClusterConfig;
 use std::rc::Rc;
+use wasi::WasiContextBuilder;
 
 mod utils;
 use utils::*;

@@ -2,7 +2,6 @@ extern crate anyhow;
 extern crate runtime_lib;
 use anyhow::{Context, Result};
 use loader::WasmLoader;
-use runtime_lib::wasi::{PreopenDirInheritPerms, PreopenDirPerms, WasiContext, WasiContextBuilder};
 use runtime_lib::{
     Cluster, ClusterConfig, Engine, InstanceHandle, Linker, Parser, RuntimeError, WasmModule,
 };
@@ -12,6 +11,7 @@ use std::path::PathBuf;
 use std::pin::Pin;
 use std::rc::Rc;
 use std::slice;
+use wasi::{PreopenDirInheritPerms, PreopenDirPerms, WasiContext, WasiContextBuilder};
 
 #[repr(C)]
 pub struct WasmBenchConfig {

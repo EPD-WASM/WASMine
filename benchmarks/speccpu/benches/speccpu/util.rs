@@ -2,11 +2,9 @@
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput};
 use loader::WasmLoader;
 use once_cell::sync::Lazy;
-use runtime_lib::{
-    wasi::{PreopenDirInheritPerms, PreopenDirPerms, WasiContextBuilder},
-    ClusterConfig,
-};
+use runtime_lib::ClusterConfig;
 use std::{path::PathBuf, rc::Rc};
+use wasi::{PreopenDirInheritPerms, PreopenDirPerms, WasiContextBuilder};
 
 pub static PATH_505: Lazy<PathBuf> =
     Lazy::new(|| PathBuf::from(std::env::var_os("PATH_505").unwrap()));

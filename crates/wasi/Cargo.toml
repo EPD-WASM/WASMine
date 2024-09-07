@@ -1,0 +1,19 @@
+[package]
+name = "wasi"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+thiserror = { workspace = true }
+runtime-interface = { workspace = true }
+bitflags = { workspace = true }
+ir = { workspace = true }
+log = { workspace = true }
+wasm-types = { workspace = true }
+once_cell = { workspace = true }
+libc = { workspace = true }

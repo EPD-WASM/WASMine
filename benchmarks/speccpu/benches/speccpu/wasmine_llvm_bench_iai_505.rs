@@ -1,6 +1,4 @@
-use iai_callgrind::{
-    library_benchmark, library_benchmark_group, main, FlamegraphConfig, LibraryBenchmarkConfig,
-};
+use iai_callgrind::{library_benchmark, library_benchmark_group, main, LibraryBenchmarkConfig};
 use util::SPECCPU_505;
 mod util;
 

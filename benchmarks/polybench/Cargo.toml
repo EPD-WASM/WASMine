@@ -4,19 +4,20 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-ir = { version = "0.1.0", path = "../../ir" }
-loader = { version = "0.1.0", path = "../../loader" }
-parser = { version = "0.1.0", path = "../../parser" }
-runtime-lib = { version = "0.1.0", path = "../../runtime-lib" }
+ir = { workspace = true }
+loader = { workspace = true }
+parser = { workspace = true }
+runtime-lib = { workspace = true }
+llvm-gen = { workspace = true }
+wasi = { workspace = true }
 criterion = "0.5"
 wasmparser = "0.216.0"
 wasmtime = { version = "24.0.0", features = ["winch"] }
 wasmedge-sdk = { version = "0.14.0", default-features = false, features = ["standalone"] }
-iai-callgrind = "0.13.0"
+iai-callgrind = "0.13.2"
 gag = "1.0.0"
 wasmtime-wasi = "24.0.0"
 once_cell = "1.19.0"
-llvm-gen = { version = "0.1.0", path = "../../llvm-gen" }
 tempfile = "3.12.0"
 
 [[bench]]

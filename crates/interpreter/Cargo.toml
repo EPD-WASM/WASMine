@@ -1,0 +1,16 @@
+[package]
+name = "interpreter"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+thiserror = { workspace = true }
+wasm-types = { workspace = true }
+parser = { workspace = true }
+ir = { workspace = true }
+runtime-interface = { workspace = true }

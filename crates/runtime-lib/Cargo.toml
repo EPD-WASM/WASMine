@@ -1,0 +1,36 @@
+[package]
+name = "runtime-lib"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+nix = { workspace = true }
+wasm-types = { workspace = true }
+ir = { workspace = true }
+parser = { workspace = true }
+wasi = { workspace = true }
+loader = { workspace = true }
+interpreter = { workspace = true, optional=true }
+libc = { workspace = true }
+log = { workspace = true }
+llvm-gen = { workspace = true, optional=true }
+runtime-interface = { workspace = true }
+cee-scape = { workspace = true }
+uuid = { workspace = true }
+once_cell = { workspace = true }
+bitflags = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+rand = { workspace = true }
+
+[features]
+default = ["llvm", "interp"]
+llvm = ["dep:llvm-gen"]
+interp = ["dep:interpreter"]
+asm = []

@@ -1,0 +1,14 @@
+[package]
+name = "wasm-types"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+once_cell = { workspace = true }
+rand = { workspace = true }
+bitcode = { workspace = true }

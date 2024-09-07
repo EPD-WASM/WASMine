@@ -2,9 +2,10 @@ use std::rc::Rc;
 
 use iai_callgrind::{library_benchmark, library_benchmark_group, main, LibraryBenchmarkConfig};
 mod utils;
-use runtime_lib::{wasi::WasiContextBuilder, ClusterConfig};
+use runtime_lib::ClusterConfig;
 use tempfile::NamedTempFile;
 use utils::*;
+use wasi::WasiContextBuilder;
 
 fn setup_for_compile(bm: &str) -> Vec<u8> {
     let bm_path = get_bm_path(bm);
