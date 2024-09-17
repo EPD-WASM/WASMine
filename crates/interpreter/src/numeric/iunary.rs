@@ -5,7 +5,7 @@ use {
         InterpreterError::{self, TypeMismatch},
         StackFrame,
     },
-    ir::instructions::IUnaryInstruction,
+    module::instructions::IUnaryInstruction,
 };
 
 impl Executable for IUnaryInstruction {

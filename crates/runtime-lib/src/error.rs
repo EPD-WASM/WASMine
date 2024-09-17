@@ -59,11 +59,14 @@ pub enum RuntimeError {
     #[error("Wasi error: {0}")]
     WasiError(#[from] WasiError),
 
-    #[error("Loader error: {0}")]
-    LoaderError(#[from] loader::LoaderError),
+    #[error("ResourceBuffer error: {0}")]
+    ResourceBufferError(#[from] resource_buffer::ResourceBufferError),
 
     #[error("Parser error: {0}")]
     ParserError(#[from] parser::ParserError),
+
+    #[error("Module error: {0}")]
+    ModuleError(#[from] module::ModuleError),
 
     #[default]
     #[error("No error.")]

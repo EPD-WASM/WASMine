@@ -1,5 +1,5 @@
 use crate::{TranslationError, Translator};
-use ir::{instructions::SelectInstruction, InstructionDecoder};
+use module::{instructions::SelectInstruction, InstructionDecoder};
 use llvm_sys::prelude::LLVMValueRef;
 use wasm_types::{InstructionType, ParametricInstructionType, ValType};
 

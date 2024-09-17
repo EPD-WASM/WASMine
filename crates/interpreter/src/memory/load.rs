@@ -1,5 +1,5 @@
-use ir::{
-    instructions::LoadInstruction, structs::value::ValueRaw, utils::numeric_transmutes::Bit64,
+use module::{
+    instructions::LoadInstruction, objects::value::ValueRaw, utils::numeric_transmutes::Bit64,
 };
 use wasm_types::{LoadOp, NumType};
 

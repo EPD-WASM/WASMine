@@ -1,5 +1,5 @@
 use crate::{Executable, InterpreterContext, InterpreterError};
-use ir::instructions::TableCopyInstruction;
+use module::instructions::TableCopyInstruction;
 
 impl Executable for TableCopyInstruction {
     fn execute(&mut self, ctx: &mut InterpreterContext) -> Result<(), InterpreterError> {

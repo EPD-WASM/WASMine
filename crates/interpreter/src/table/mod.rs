@@ -1,5 +1,5 @@
 use crate::{Executable, InterpreterContext, InterpreterError};
-use ir::instructions::{
+use module::instructions::{
     ElemDropInstruction, Instruction, TableCopyInstruction, TableFillInstruction,
     TableGetInstruction, TableGrowInstruction, TableInitInstruction, TableSetInstruction,
     TableSizeInstruction,

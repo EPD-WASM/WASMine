@@ -2,7 +2,7 @@ use super::module::Module;
 use crate::abstraction::target_machine::TargetMachine;
 use crate::util::c_str;
 use crate::ExecutionError;
-use ir::structs::value::ValueRaw;
+use module::objects::value::ValueRaw;
 use llvm_sys::core::{
     LLVMCreateMemoryBufferWithMemoryRangeCopy, LLVMGetBufferSize, LLVMGetBufferStart,
 };

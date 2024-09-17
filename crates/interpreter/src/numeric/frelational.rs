@@ -1,5 +1,5 @@
 use crate::Executable;
-use ir::instructions::FRelationalInstruction;
+use module::instructions::FRelationalInstruction;
 use wasm_types::FRelationalOp;
 
 impl Executable for FRelationalInstruction {

@@ -2,16 +2,16 @@
 #![allow(warnings)]
 use control_flow::GlueHandler;
 use core::ffi;
-use ir::structs::value::{Number, ValueRaw};
+use module::objects::value::{Number, ValueRaw};
 use runtime_interface::{ExecutionContext, RawPointer};
 use std::{collections::HashMap, rc::Rc};
 use table::execute_table_instruction;
 use thiserror::Error;
 use wasm_types::{FuncIdx, InstructionType, NumType, ValType};
 use {
-    ir::instructions::VariableID,
-    ir::structs::{module::Module, value::Value},
-    ir::{DecodingError, InstructionDecoder},
+    module::instructions::VariableID,
+    module::objects::{module::Module, value::Value},
+    module::{DecodingError, InstructionDecoder},
     parser::error::ParserError,
 };
 
@@ -161,7 +161,7 @@ impl Interpreter {
         ctx.stack = Vec::new();
         let entry_fn = ctx
             .module
-            .ir
+            .meta
             .functions
             .get(function_idx as usize)
             // TODO: make this check only for debug builds. We KNOW that this function exists
@@ -184,7 +184,7 @@ impl Interpreter {
             vars: VariableStore::new(Vec::new()),
         });
 
-        let ret_types = ctx.module.function_types[entry_fn.type_idx as usize].results();
+        let ret_types = ctx.module.meta.function_types[entry_fn.type_idx as usize].results();
         // println!("return types: {:?}", ret_types);
         // println!("decoded instructions: {:#?}", self.ctx.stack.last().unwrap().decoder);
         // println!("entry_fn: {:#?}", entry_fn);
@@ -205,7 +205,7 @@ impl Interpreter {
                     // println!("stack: {:#?}", self.ctx.stack);
 
                     let current_frame = ctx.stack.last_mut().unwrap();
-                    let func = &ctx.module.ir.functions[current_frame.fn_idx as usize];
+                    let func = &ctx.module.meta.functions[current_frame.fn_idx as usize];
                     let bbs = util::get_bbs_from_function(func);
                     // println!("func basic blocks: {:#?}", func.basic_blocks);
 
@@ -266,7 +266,7 @@ impl Interpreter {
             InstructionType::Control(_) => unreachable!(
                 "Control instructions are not serialized and can therefore not be deserialized."
             ),
-            InstructionType::Vector(_) => todo!(),
+            InstructionType::Vector => todo!(),
         }
     }
 }

@@ -1,5 +1,5 @@
 use crate::{util, InterpreterContext, StackFrame, VariableStore};
-use ir::{basic_block::BasicBlockID, InstructionDecoder};
+use module::{basic_block::BasicBlockID, InstructionDecoder};
 
 pub(super) fn break_util(ctx: &mut InterpreterContext, target: BasicBlockID) {
     let stack_frame = ctx.stack.last_mut().unwrap();
@@ -9,7 +9,7 @@ pub(super) fn break_util(ctx: &mut InterpreterContext, target: BasicBlockID) {
     stack_frame.last_bb_id = last_bb_idx;
 
     let function_idx = stack_frame.fn_idx;
-    let current_fn = &ctx.module.ir.functions[function_idx as usize];
+    let current_fn = &ctx.module.meta.functions[function_idx as usize];
 
     // TODO: store pointer to entry block. This is currently always BB0, but this might change in the future
 
@@ -31,7 +31,7 @@ pub(super) fn call_util(
     return_vars: &[u32],
 ) {
     let stack_frame = ctx.stack.last_mut().unwrap();
-    let func = &ctx.module.ir.functions[func_idx as usize];
+    let func = &ctx.module.meta.functions[func_idx as usize];
 
     let bbs = util::get_bbs_from_function(func);
     let mut new_stack_frame = StackFrame {

@@ -1,4 +1,4 @@
-use ir::instructions::{
+use module::instructions::{
     Instruction, LoadInstruction, MemoryCopyInstruction, MemoryFillInstruction,
     MemoryGrowInstruction, MemoryInitInstruction, MemorySizeInstruction, StoreInstruction,
 };

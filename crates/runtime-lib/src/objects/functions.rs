@@ -9,7 +9,7 @@ use crate::{
 };
 use cee_scape::call_with_sigsetjmp;
 use core::ffi;
-use ir::structs::value::{Value, ValueRaw};
+use module::objects::value::{Value, ValueRaw};
 use runtime_interface::ExecutionContext;
 use std::{any::Any, mem::MaybeUninit, ptr::NonNull};
 use wasi::WasiContext;

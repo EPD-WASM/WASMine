@@ -4,4 +4,5 @@ pub(crate) mod functions;
 pub(crate) mod globals;
 pub(crate) mod instance_handle;
 pub(crate) mod memory;
+pub(crate) mod module;
 pub(crate) mod tables;

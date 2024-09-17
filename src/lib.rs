@@ -1,5 +1,4 @@
-use ir::structs::value::Value;
-use loader::SourceFormat;
+use module::{objects::value::Value, Module};
 use runtime_lib::{Cluster, Config, Engine, Linker, RuntimeError};
 use std::{path::Path, rc::Rc};
 use utils::parse_input_params_for_function;
@@ -18,21 +17,12 @@ fn run_internal(
 ) -> Result<Vec<Value>, RuntimeError> {
     log::debug!("run_internal: {:?}", config);
 
-    let module = match SourceFormat::from_path(path)? {
-        SourceFormat::Wasm => {
-            let loader = loader::WasmLoader::from_file(path)?;
-            let parser = parser::Parser::default();
-            let module = Rc::new(parser.parse(loader).unwrap());
-            engine.init(module.clone(), None)?;
-            module
-        }
-        SourceFormat::Cwasm => {
-            let loader = loader::CwasmLoader::from_file(path)?;
-            let module = loader.wasm_module();
-            engine.init(module.clone(), Some(&loader))?;
-            module
-        }
-    };
+    let buffer = resource_buffer::ResourceBuffer::from_file(path)?;
+    let mut module = Module::new(buffer);
+    module.load_meta(parser::ModuleMetaLoader)?;
+    module.load_all_functions(parser::FunctionLoader)?;
+    let module = Rc::new(module);
+    engine.init(module.clone())?;
 
     let start_function = config.start_function.clone();
 
@@ -60,7 +50,7 @@ fn run_internal(
     };
 
     let start_function = match start_function {
-        Some(name) => match module.exports.find_function_idx(&name) {
+        Some(name) => match module.meta.exports.find_function_idx(&name) {
             Some(idx) => idx,
             None => {
                 log::error!(
@@ -109,11 +99,9 @@ pub fn run(path: &Path, config: Config, engine: Engine, function_args: Vec<Strin
 
 #[cfg(feature = "llvm")]
 mod c_wasm_compilation {
-    use std::rc::Rc;
-
-    use loader::CwasmLoader;
-
     use super::*;
+    use resource_buffer::SourceFormat;
+    use std::rc::Rc;
 
     pub fn compile_internal(in_path: &Path, out_path: &Path) -> Result<(), RuntimeError> {
         if SourceFormat::from_path(in_path)? == SourceFormat::Cwasm {
@@ -121,18 +109,19 @@ mod c_wasm_compilation {
                 "Cwasm files can't be compiled AGAIN... Please provide a wasm file.".to_owned(),
             ));
         }
-        let loader = loader::WasmLoader::from_file(in_path)?;
-        let parser = parser::Parser::default();
-        let module = Rc::new(parser.parse(loader)?);
+        let source = resource_buffer::ResourceBuffer::from_file(in_path)?;
+        let mut module = module::Module::new(source);
+        module.load_meta(parser::ModuleMetaLoader)?;
+        module.load_all_functions(parser::FunctionLoader)?;
+        let module = Rc::new(module);
 
         let context = Rc::new(llvm_gen::Context::create());
         let mut executor = llvm_gen::JITExecutor::new(context.clone())?;
-        let mut translator = llvm_gen::Translator::new(context.clone())?;
 
-        let llvm_module = translator.translate_module(module.clone())?;
+        let llvm_module = llvm_gen::Translator::translate_module(context.clone(), module.clone())?;
         executor.add_module(llvm_module)?;
         let llvm_module_object_buf = executor.get_module_as_object_buffer(0)?;
-        CwasmLoader::write(out_path, module, llvm_module_object_buf)?;
+        module.store(parser::ModuleStorer, llvm_module_object_buf, out_path)?;
         Ok(())
     }
 

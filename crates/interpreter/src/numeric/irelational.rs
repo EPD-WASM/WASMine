@@ -1,4 +1,4 @@
-use ir::instructions::IRelationalInstruction;
+use module::instructions::IRelationalInstruction;
 use wasm_types::IRelationalOp;
 
 use crate::{Executable, InterpreterError};

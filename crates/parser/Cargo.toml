@@ -12,6 +12,8 @@ workspace = true
 log ={  workspace = true }
 thiserror = { workspace = true }
 wasm-types = { workspace = true }
-ir = { workspace = true }
-loader = { workspace = true }
+module = { workspace = true }
+resource-buffer = { workspace = true }
 itertools = { workspace = true }
+smallvec = { workspace = true }
+rkyv = { workspace = true }

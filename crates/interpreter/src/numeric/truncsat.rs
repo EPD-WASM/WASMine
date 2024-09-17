@@ -1,7 +1,7 @@
 use crate::{Executable, InterpreterContext, InterpreterError};
-use ir::{
+use module::{
     instructions::TruncSaturationInstruction,
-    structs::value::{Number, ValueRaw},
+    objects::value::{Number, ValueRaw},
     utils::numeric_transmutes::{Bit128, Bit64},
 };
 use wasm_types::NumType;

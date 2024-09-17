@@ -1,12 +1,12 @@
 use crate::{TranslationError, Translator};
-use ir::{
+use llvm_sys::prelude::{LLVMTypeRef, LLVMValueRef};
+use module::{
     instructions::{
         GlobalGetInstruction, GlobalSetInstruction, LocalGetInstruction, LocalSetInstruction,
         LocalTeeInstruction,
     },
     InstructionDecoder,
 };
-use llvm_sys::prelude::{LLVMTypeRef, LLVMValueRef};
 use wasm_types::{GlobalType, InstructionType, VariableInstructionType};
 
 impl Translator {
@@ -40,7 +40,7 @@ impl Translator {
             }
             VariableInstructionType::GlobalGet => {
                 let instr = decoder.read::<GlobalGetInstruction>(instruction)?;
-                let wasm_global = &self.wasm_module.globals[instr.global_idx as usize];
+                let wasm_global = &self.wasm_module.meta.globals[instr.global_idx as usize];
                 let global_type = match wasm_global.r#type {
                     GlobalType::Const(ty) => ty,
                     GlobalType::Mut(ty) => ty,

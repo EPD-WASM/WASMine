@@ -1,4 +1,4 @@
-use ir::{instructions::VariableID, structs::value::ValueRaw, InstructionDecoder};
+use module::{instructions::VariableID, objects::value::ValueRaw, InstructionDecoder};
 
 use crate::{util::get_bbs_from_function, InterpreterContext, InterpreterError};
 
@@ -36,7 +36,7 @@ pub(super) fn handle_return(
     //     "returning to bb: {} of function: {}",
     //     stack_frame.bb_id, stack_frame.fn_idx
     // );
-    let bbs = get_bbs_from_function(&ctx.module.ir.functions[stack_frame.fn_idx as usize]);
+    let bbs = get_bbs_from_function(&ctx.module.meta.functions[stack_frame.fn_idx as usize]);
     let new_decoder = InstructionDecoder::new(
         bbs.iter()
             .find(|bb| bb.id == stack_frame.bb_id)

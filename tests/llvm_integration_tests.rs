@@ -1,17 +1,17 @@
 use core::panic;
 use gen_util::generate_spec_test_cases;
-use ir::{
-    function::{Function, FunctionSource},
-    structs::{
+use module::{
+    objects::{
+        function::Function,
         module::Module,
         value::{Number, Reference, Value},
     },
     utils::numeric_transmutes::{Bit32, Bit64},
+    ModuleError,
 };
-use loader::WasmLoader;
-use parser::{error::ParserError, parser::Parser};
 use runtime_lib::{
-    BoundLinker, Cluster, ClusterConfig, Engine, InstanceHandle, Linker, RuntimeError,
+    BoundLinker, Cluster, ClusterConfig, Engine, InstanceHandle, Linker, ResourceBuffer,
+    RuntimeError,
 };
 use std::{collections::HashMap, path::PathBuf, rc::Rc};
 use test_log::test;
@@ -32,11 +32,11 @@ type DeclaredModulesMap<'a> = HashMap<
 generate_spec_test_cases!(test_llvm, llvm);
 
 pub fn translate_module<'a>(
-    module: Rc<ir::structs::module::Module>,
+    module: Rc<module::objects::module::Module>,
     linker: &mut BoundLinker<'a>,
 ) -> Result<(InstanceHandle<'a>, bool), RuntimeError> {
     let mut engine = Engine::llvm()?;
-    engine.init(module.clone(), None)?;
+    engine.init(module.clone())?;
     let instance_handle = linker.instantiate_and_link(module.clone(), engine)?;
     Ok((instance_handle, false))
 }
@@ -48,7 +48,7 @@ fn execute_via_llvm_backend(
     invoke: &wast::WastInvoke,
     declared_modules: &mut DeclaredModulesMap,
 ) -> Result<Vec<Value>, RuntimeError> {
-    let prefix = format!("{:?}:{}:{}\n", file_path, line, col);
+    let prefix = format!("{file_path:?}:{line}:{col}\n");
     let (instance, already_started) =
         match declared_modules.get_mut(&invoke.module.map(|m| m.name().to_owned())) {
             Some(m) => m,
@@ -57,15 +57,16 @@ fn execute_via_llvm_backend(
             }
         };
     if !*already_started {
-        if let Some(entry_point) = instance.wasm_module().entry_point {
+        if let Some(entry_point) = instance.wasm_module().meta.entry_point {
             // if the entry point is an import, we don't need to run it
-            if !matches!(
-                instance.wasm_module().ir.functions[entry_point as usize].src,
-                FunctionSource::Import(_)
-            ) {
-                let fn_name = Function::query_function_name(entry_point, instance.wasm_module())
-                    .map(|s| s.to_owned())
-                    .unwrap_or(format!("func_{}", entry_point));
+            if instance.wasm_module().meta.functions[entry_point as usize]
+                .get_import()
+                .is_none()
+            {
+                let fn_name =
+                    Function::query_function_name(entry_point, &instance.wasm_module().meta)
+                        .map(|s| s.to_owned())
+                        .unwrap_or(format!("func_{entry_point}",));
                 instance
                     .get_function_by_idx(instance.find_exported_func_idx(&fn_name).unwrap()).unwrap().call(&[])
                     .unwrap_or_else(|e| {
@@ -85,7 +86,7 @@ fn execute_via_llvm_backend(
                 "{}Error: {}, {:?}",
                 prefix,
                 e,
-                &instance.wasm_module().exports
+                &instance.wasm_module().meta.exports
             );
         }
     };
@@ -115,10 +116,10 @@ fn execute_via_llvm_backend(
             }
             wast::WastArg::Core(WastArgCore::V128(_)) => unimplemented!(),
             wast::WastArg::Core(WastArgCore::RefExtern(r)) => {
-                input_params.push(Value::externref(r.trans_u64() as _))
+                input_params.push(Value::externref(r.trans_u64()))
             }
             wast::WastArg::Core(WastArgCore::RefHost(r)) => {
-                input_params.push(Value::externref(r.trans_u64() as _))
+                input_params.push(Value::externref(r.trans_u64()))
             }
             wast::WastArg::Core(WastArgCore::RefNull(_)) => {
                 input_params.push(Value::Reference(Reference::Null))
@@ -136,13 +137,15 @@ fn execute_via_llvm_backend(
         .call(&input_params)
 }
 
-fn parse_module(module: &mut QuoteWat) -> Result<Module, ParserError> {
+fn parse_module(module: &mut QuoteWat) -> Result<Module, ModuleError> {
     let binary_mod = module
         .encode()
-        .map_err(|e| ParserError::Msg(e.to_string()))?;
-    let parser = Parser::default();
-    let loader = WasmLoader::from_buf(binary_mod.clone());
-    parser.parse(loader)
+        .map_err(|e| ModuleError::Msg(e.to_string()))?;
+    let source = ResourceBuffer::from_wasm_buf(binary_mod.clone());
+    let mut module = Module::new(source);
+    module.load_meta(parser::ModuleMetaLoader)?;
+    module.load_all_functions(parser::FunctionLoader)?;
+    Ok(module)
 }
 
 pub fn test_llvm(file_path: &str) {
@@ -169,10 +172,11 @@ pub fn test_llvm(file_path: &str) {
 
     let spectest_module_path =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/spectest.wasm");
-    let loader = WasmLoader::from_file(&spectest_module_path).unwrap();
-    let parser = Parser::default();
-    let res = parser.parse(loader);
-    let spectest_module = translate_module(Rc::new(res.unwrap()), &mut linker).unwrap();
+    let source = ResourceBuffer::from_file(&spectest_module_path).unwrap();
+    let mut module = Module::new(source);
+    module.load_meta(parser::ModuleMetaLoader).unwrap();
+    module.load_all_functions(parser::FunctionLoader).unwrap();
+    let spectest_module = translate_module(Rc::new(module), &mut linker).unwrap();
     linker.transfer("spectest", spectest_module.0).unwrap();
 
     for directive in wast_repr.directives.into_iter() {
@@ -311,7 +315,7 @@ pub fn test_llvm(file_path: &str) {
                 exec: wast::WastExecute::Invoke(invoke),
                 results,
             } => {
-                let prefix = format!("{:?}:{}:{}\n", file_path, line, col);
+                let prefix = format!("{file_path:?}:{line}:{col}\n");
                 let (instance, _) =
                     match declared_modules.get(&invoke.module.map(|m| m.name().to_owned())) {
                         Some(m) => m,
@@ -326,7 +330,7 @@ pub fn test_llvm(file_path: &str) {
                             "{}Error: {}, {:?}",
                             prefix,
                             e,
-                            &instance.wasm_module().exports
+                            &instance.wasm_module().meta.exports
                         );
                     }
                 };
@@ -379,7 +383,7 @@ pub fn test_llvm(file_path: &str) {
                         &expected_result,
                         &val,
                         val.r#type(),
-                        &format!("{:?}:{}:{}\n", file_path, line, col),
+                        &format!("{file_path:?}:{line}:{col}\n"),
                     )
                 }
             }
@@ -397,11 +401,14 @@ pub fn test_llvm(file_path: &str) {
                 let binary_mod: Vec<u8> = module.encode().unwrap_or_else(|e| {
                     panic!("Error during encoding: {:?} {file_path:?}:{line}:{col}", e);
                 });
-                let parser = Parser::default();
-                let loader = WasmLoader::from_buf(binary_mod.clone());
-                let module = parser.parse(loader).unwrap_or_else(|e| {
-                    panic!("Error during parsing: {:?} {file_path:?}:{line}:{col}", e)
-                });
+                let source = ResourceBuffer::from_wasm_buf(binary_mod.clone());
+                let mut module = Module::new(source);
+                module
+                    .load_meta(parser::ModuleMetaLoader)
+                    .and_then(|_| module.load_all_functions(parser::FunctionLoader))
+                    .unwrap_or_else(|e| {
+                        panic!("Error during parsing: {:?} {file_path:?}:{line}:{col}", e)
+                    });
                 let module = Rc::new(module);
 
                 let mut engine = Engine::llvm().unwrap_or_else(|e| {
@@ -410,7 +417,7 @@ pub fn test_llvm(file_path: &str) {
                         e
                     );
                 });
-                engine.init(module.clone(), None).unwrap_or_else(|e| {
+                engine.init(module.clone()).unwrap_or_else(|e| {
                     panic!(
                         "Error during engine init: {:?} {file_path:?}:{line}:{col}",
                         e
@@ -445,15 +452,15 @@ pub fn test_llvm(file_path: &str) {
     ) {
         match expected_result {
             &wast::WastRet::Core(WastRetCore::I32(i)) => {
-                assert_eq!(actual_type, ValType::i32(), "{}", prefix);
-                assert_eq!(*actual_result, Value::i32(i.trans_u32()), "{}", prefix);
+                assert_eq!(actual_type, ValType::i32(), "{prefix}");
+                assert_eq!(*actual_result, Value::i32(i.trans_u32()), "{prefix}");
             }
             &wast::WastRet::Core(WastRetCore::I64(i)) => {
-                assert_eq!(actual_type, ValType::i64(), "{}", prefix);
-                assert_eq!(*actual_result, Value::i64(i.trans_u64()), "{}", prefix);
+                assert_eq!(actual_type, ValType::i64(), "{prefix}");
+                assert_eq!(*actual_result, Value::i64(i.trans_u64()), "{prefix}");
             }
             &wast::WastRet::Core(WastRetCore::F32(NanPattern::Value(f_truth))) => {
-                assert_eq!(actual_type, ValType::f32(), "{}", prefix);
+                assert_eq!(actual_type, ValType::f32(), "{prefix}");
                 let f_truth = f32::from_bits(f_truth.bits);
                 let f_calculated = match *actual_result {
                     Value::Number(Number::F32(f)) => f,
@@ -461,13 +468,13 @@ pub fn test_llvm(file_path: &str) {
                         panic!("{}Expected F32 Nan, Got {:?}", prefix, actual_result);
                     }
                 };
-                assert_eq!(f_truth.is_nan(), f_calculated.is_nan(), "{}", prefix);
+                assert_eq!(f_truth.is_nan(), f_calculated.is_nan(), "{prefix}");
                 if !f_truth.is_nan() {
-                    assert_eq!(f_truth, f_calculated, "{}", prefix);
+                    assert_eq!(f_truth, f_calculated, "{prefix}");
                 }
             }
             &wast::WastRet::Core(WastRetCore::F64(NanPattern::Value(f_truth))) => {
-                assert_eq!(actual_type, ValType::f64(), "{}", prefix);
+                assert_eq!(actual_type, ValType::f64(), "{prefix}");
                 let f_truth = f64::from_bits(f_truth.bits);
                 let f_calculated = match *actual_result {
                     Value::Number(Number::F64(f)) => f,
@@ -475,14 +482,14 @@ pub fn test_llvm(file_path: &str) {
                         panic!("{}Expected F64 Nan, Got {:?}", prefix, actual_result);
                     }
                 };
-                assert_eq!(f_truth.is_nan(), f_calculated.is_nan(), "{}", prefix);
+                assert_eq!(f_truth.is_nan(), f_calculated.is_nan(), "{prefix}");
                 if !f_truth.is_nan() {
-                    assert_eq!(f_truth, f_calculated, "{}", prefix);
+                    assert_eq!(f_truth, f_calculated, "{prefix}");
                 }
             }
             &wast::WastRet::Core(WastRetCore::F32(NanPattern::CanonicalNan))
             | &wast::WastRet::Core(WastRetCore::F32(NanPattern::ArithmeticNan)) => {
-                assert_eq!(actual_type, ValType::f32(), "{}", prefix);
+                assert_eq!(actual_type, ValType::f32(), "{prefix}");
                 match actual_result {
                     Value::Number(Number::F32(f)) => {
                         assert!(f.is_nan(), "{}", prefix);
@@ -494,7 +501,7 @@ pub fn test_llvm(file_path: &str) {
             }
             &wast::WastRet::Core(WastRetCore::F64(NanPattern::CanonicalNan))
             | &wast::WastRet::Core(WastRetCore::F64(NanPattern::ArithmeticNan)) => {
-                assert_eq!(actual_type, ValType::f64(), "{}", prefix);
+                assert_eq!(actual_type, ValType::f64(), "{prefix}");
                 match actual_result {
                     Value::Number(Number::F64(f)) => {
                         assert!(f.is_nan(), "{}", prefix);
@@ -509,37 +516,28 @@ pub fn test_llvm(file_path: &str) {
                 assert_eq!(
                     actual_type,
                     ValType::Reference(wasm_types::RefType::ExternReference),
-                    "{}",
-                    prefix
+                    "{prefix}"
                 );
                 assert_eq!(
                     *actual_result,
-                    Value::externref(r.unwrap().trans_u64() as _),
-                    "{}",
-                    prefix
+                    Value::externref(r.unwrap().trans_u64()),
+                    "{prefix}"
                 );
             }
             wast::WastRet::Core(WastRetCore::RefHost(r)) => {
                 assert_eq!(
                     actual_type,
                     ValType::Reference(wasm_types::RefType::ExternReference),
-                    "{}",
-                    prefix
+                    "{prefix}"
                 );
-                assert_eq!(
-                    *actual_result,
-                    Value::externref(r.trans_u64() as _),
-                    "{}",
-                    prefix
-                );
+                assert_eq!(*actual_result, Value::externref(r.trans_u64()), "{prefix}");
             }
             wast::WastRet::Core(WastRetCore::RefNull(_)) => {
                 assert!(matches!(actual_type, ValType::Reference(_)), "{}", prefix);
                 assert_eq!(
                     *actual_result,
                     Value::Reference(Reference::Null),
-                    "{}",
-                    prefix
+                    "{prefix}"
                 );
             }
             wast::WastRet::Component(_) => unimplemented!(),

@@ -1,4 +1,4 @@
-use ir::instructions::DropInstruction;
+use module::instructions::DropInstruction;
 
 use crate::{Executable, InterpreterContext, InterpreterError};
 

@@ -1,4 +1,4 @@
-use ir::instructions::WrapInstruction;
+use module::instructions::WrapInstruction;
 
 use crate::{Executable, InterpreterContext, InterpreterError};
 

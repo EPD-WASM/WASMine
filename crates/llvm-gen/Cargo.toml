@@ -9,7 +9,7 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
-ir = { workspace = true }
+module = { workspace = true }
 thiserror = { workspace = true }
 wasm-types = { workspace = true }
 llvm-sys = { workspace = true }

@@ -1,5 +1,5 @@
 use crate::{Executable, InterpreterContext, InterpreterError};
-use ir::instructions::ReferenceIsNullInstruction;
+use module::instructions::ReferenceIsNullInstruction;
 
 impl Executable for ReferenceIsNullInstruction {
     fn execute(&mut self, ctx: &mut InterpreterContext) -> Result<(), InterpreterError> {

@@ -1,8 +1,8 @@
 use {
     crate::{Executable, InterpreterContext, InterpreterError},
-    ir::{
+    module::{
         instructions::FBinaryInstruction,
-        structs::value::{Number, Value},
+        objects::value::{Number, Value},
     },
 };
 

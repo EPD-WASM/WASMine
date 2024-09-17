@@ -3,7 +3,7 @@ use super::{
     types::*,
     utils::errno,
 };
-use ir::structs::value::ValueRaw;
+use module::objects::value::ValueRaw;
 use std::{
     ffi::{CString, OsStr},
     mem::MaybeUninit,

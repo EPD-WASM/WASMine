@@ -1,5 +1,5 @@
 use crate::{Executable, InterpreterContext, InterpreterError};
-use ir::{instructions::StoreInstruction, structs::value::ValueRaw};
+use module::{instructions::StoreInstruction, objects::value::ValueRaw};
 use wasm_types::{NumType, StoreOp};
 
 enum StoreSize {

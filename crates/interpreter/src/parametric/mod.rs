@@ -1,4 +1,4 @@
-use ir::instructions::{DropInstruction, Instruction, SelectInstruction};
+use module::instructions::{DropInstruction, Instruction, SelectInstruction};
 use wasm_types::{InstructionType, ParametricInstructionType, VariableInstructionType};
 
 use crate::{Executable, InterpreterContext, InterpreterError};

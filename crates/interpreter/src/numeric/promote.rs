@@ -1,5 +1,5 @@
 use crate::{Executable, InterpreterContext, InterpreterError};
-use ir::instructions::PromoteInstruction;
+use module::instructions::PromoteInstruction;
 
 impl Executable for PromoteInstruction {
     fn execute(&mut self, ctx: &mut InterpreterContext) -> Result<(), InterpreterError> {

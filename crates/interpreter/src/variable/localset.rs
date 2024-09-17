@@ -1,4 +1,4 @@
-use ir::instructions::LocalSetInstruction;
+use module::instructions::LocalSetInstruction;
 
 use crate::{util, Executable, InterpreterContext, InterpreterError};
 

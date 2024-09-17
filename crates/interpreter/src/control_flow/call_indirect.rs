@@ -1,5 +1,5 @@
 use crate::{InterpreterContext, InterpreterError};
-use ir::{basic_block::BasicBlockID, instructions::VariableID, structs::value::ValueRaw};
+use module::{basic_block::BasicBlockID, instructions::VariableID, objects::value::ValueRaw};
 use wasm_types::{TableIdx, TypeIdx};
 
 // type_idx,

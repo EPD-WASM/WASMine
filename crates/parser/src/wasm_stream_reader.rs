@@ -1,19 +1,18 @@
 use super::error::ParserError;
-use ir::utils::integer_traits::IsSigned;
-use std::io::{BufRead, Read};
+use module::utils::integer_traits::IsSigned;
 
-pub(crate) struct WasmStreamReader<'a> {
-    inner: Box<dyn BufRead + 'a>,
-    pub(crate) pos: u32,
+pub(crate) struct WasmBinaryReader<'a> {
+    binary_source: &'a [u8],
+    pub(crate) pos: usize,
 }
 
-impl<'a> WasmStreamReader<'a> {
-    pub(crate) fn new<R>(reader: R) -> Self
+impl<'a> WasmBinaryReader<'a> {
+    pub(crate) fn new<S>(reader: &'a S) -> Self
     where
-        R: BufRead + 'a,
+        S: AsRef<[u8]> + 'a,
     {
         Self {
-            inner: Box::new(reader),
+            binary_source: reader.as_ref(),
             pos: 0,
         }
     }
@@ -22,27 +21,45 @@ impl<'a> WasmStreamReader<'a> {
     ///
     /// @return true if the stream is at the end, false otherwise.
     pub(crate) fn eof(&mut self) -> Result<bool, ParserError> {
-        Ok(self.inner.fill_buf().map_err(ParserError::from)?.is_empty())
+        Ok(self.pos >= self.binary_source.len())
+    }
+
+    /// Advance the stream by n bytes.
+    ///
+    /// @param n the number of bytes to advance the stream by.
+    pub(crate) fn advance(&mut self, n: usize) {
+        self.pos += n;
+    }
+
+    /// Set the limit of the stream.
+    ///
+    /// This will truncate the stream to the given limit.
+    /// @param limit the new limit of the stream.
+    pub(crate) fn set_limit(&mut self, limit: usize) {
+        self.binary_source = &self.binary_source[..limit];
     }
 
     /// Read a single byte from the stream.
     ///
     /// @return the byte read from the stream.
     pub(crate) fn read_byte(&mut self) -> Result<u8, ParserError> {
-        self.pos += 1;
-        let mut byte: [u8; 1] = Default::default();
-        self.inner
-            .read_exact(&mut byte)
-            .map_err(ParserError::from)?;
-        Ok(byte[0])
+        self.binary_source
+            .get(self.pos)
+            .map(|b| {
+                self.pos += 1;
+                *b
+            })
+            .ok_or(ParserError::UnexpectedEOF)
     }
 
     /// Peek a single byte from the stream.
     ///
     /// @return the byte peeked from the stream.
     pub(crate) fn peek_byte(&mut self) -> Result<u8, ParserError> {
-        let byte = self.inner.fill_buf().map_err(ParserError::from)?[0];
-        Ok(byte)
+        self.binary_source
+            .get(self.pos)
+            .ok_or(ParserError::UnexpectedEOF)
+            .cloned()
     }
 
     /// Read a single 32-bit unsigned integer from the stream.
@@ -50,11 +67,13 @@ impl<'a> WasmStreamReader<'a> {
     /// @return the 32-bit unsigned integer read from the stream.
     // these could be made generic, but the const generic feature is still unstable
     pub(crate) fn read_u32(&mut self) -> Result<u32, ParserError> {
+        if self.pos + 4 > self.binary_source.len() {
+            return Err(ParserError::UnexpectedEOF);
+        }
+        let bytes: [u8; 4] = self.binary_source[self.pos..self.pos + 4]
+            .try_into()
+            .unwrap();
         self.pos += 4;
-        let mut bytes: [u8; 4] = Default::default();
-        self.inner
-            .read_exact(&mut bytes)
-            .map_err(ParserError::from)?;
         Ok(u32::from_le_bytes(bytes))
     }
 
@@ -63,11 +82,13 @@ impl<'a> WasmStreamReader<'a> {
     /// @return the 32-bit float read from the stream.
     // these could be made generic, but the const generic feature is still unstable
     pub(crate) fn read_f32(&mut self) -> Result<f32, ParserError> {
+        if self.pos + 4 > self.binary_source.len() {
+            return Err(ParserError::UnexpectedEOF);
+        }
+        let bytes: [u8; 4] = self.binary_source[self.pos..self.pos + 4]
+            .try_into()
+            .unwrap();
         self.pos += 4;
-        let mut bytes: [u8; 4] = Default::default();
-        self.inner
-            .read_exact(&mut bytes)
-            .map_err(ParserError::from)?;
         Ok(f32::from_le_bytes(bytes))
     }
 
@@ -76,11 +97,13 @@ impl<'a> WasmStreamReader<'a> {
     /// @return the 64-bit float read from the stream.
     // these could be made generic, but the const generic feature is still unstable
     pub(crate) fn read_f64(&mut self) -> Result<f64, ParserError> {
+        if self.pos + 8 > self.binary_source.len() {
+            return Err(ParserError::UnexpectedEOF);
+        }
+        let bytes: [u8; 8] = self.binary_source[self.pos..self.pos + 8]
+            .try_into()
+            .unwrap();
         self.pos += 8;
-        let mut bytes: [u8; 8] = Default::default();
-        self.inner
-            .read_exact(&mut bytes)
-            .map_err(ParserError::from)?;
         Ok(f64::from_le_bytes(bytes))
     }
 
@@ -142,52 +165,29 @@ impl<'a> WasmStreamReader<'a> {
     }
 }
 
-impl<'a> Read for WasmStreamReader<'a> {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        match self.inner.read(buf) {
-            Ok(s) => {
-                self.pos += s as u32;
-                Ok(s)
-            }
-            e => e,
-        }
-    }
-}
-
-impl<'a> BufRead for WasmStreamReader<'a> {
-    fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
-        self.inner.fill_buf()
-    }
-
-    fn consume(&mut self, amt: usize) {
-        self.inner.consume(amt)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::BufReader;
 
     #[test]
     fn test_eof() {
         let stream_data = [];
-        let mut reader = WasmStreamReader::new(BufReader::new(stream_data.as_slice()));
+        let mut reader = WasmBinaryReader::new(&stream_data);
         assert!(reader.eof().unwrap());
 
         let stream_data = [0x42];
-        let mut reader = WasmStreamReader::new(BufReader::new(stream_data.as_slice()));
+        let mut reader = WasmBinaryReader::new(&stream_data);
         assert!(!reader.eof().unwrap());
     }
 
     #[test]
     fn test_read_byte() {
         let stream_data = [];
-        let mut reader = WasmStreamReader::new(BufReader::new(stream_data.as_slice()));
+        let mut reader = WasmBinaryReader::new(&stream_data);
         assert!(reader.read_byte().is_err());
 
         let stream_data = [0x42, 0x43];
-        let mut reader = WasmStreamReader::new(BufReader::new(stream_data.as_slice()));
+        let mut reader = WasmBinaryReader::new(&stream_data);
 
         assert_eq!(reader.read_byte().unwrap(), 0x42);
         assert_eq!(reader.read_byte().unwrap(), 0x43);
@@ -197,23 +197,23 @@ mod tests {
     #[test]
     fn test_read_u32() {
         let stream_data = [];
-        let mut reader = WasmStreamReader::new(BufReader::new(stream_data.as_slice()));
+        let mut reader = WasmBinaryReader::new(&stream_data);
         assert!(reader.read_u32().is_err());
 
         let stream_data = [0x0];
-        let mut reader = WasmStreamReader::new(BufReader::new(stream_data.as_slice()));
+        let mut reader = WasmBinaryReader::new(&stream_data);
         assert!(reader.read_u32().is_err());
 
         let stream_data = [0x0, 0x0];
-        let mut reader = WasmStreamReader::new(BufReader::new(stream_data.as_slice()));
+        let mut reader = WasmBinaryReader::new(&stream_data);
         assert!(reader.read_u32().is_err());
 
         let stream_data = [0x0, 0x0, 0x0];
-        let mut reader = WasmStreamReader::new(BufReader::new(stream_data.as_slice()));
+        let mut reader = WasmBinaryReader::new(&stream_data);
         assert!(reader.read_u32().is_err());
 
         let stream_data = [0x1, 0x2, 0x3, 0x4, 0x0, 0x42, 0x0, 0x42];
-        let mut reader = WasmStreamReader::new(BufReader::new(stream_data.as_slice()));
+        let mut reader = WasmBinaryReader::new(&stream_data);
         assert_eq!(
             reader.read_u32().unwrap(),
             u32::from_le_bytes([0x1, 0x2, 0x3, 0x4])
@@ -228,7 +228,7 @@ mod tests {
     #[test]
     fn test_read_leb128_single_signed() {
         let stream_data = [0x8e, 0x7f];
-        let mut reader = WasmStreamReader::new(BufReader::new(stream_data.as_slice()));
+        let mut reader = WasmBinaryReader::new(&stream_data);
         assert_eq!(reader.read_leb128::<i32>().unwrap(), -114);
         assert!(reader.read_leb128::<u32>().is_err());
         assert!(reader.eof().unwrap());
@@ -243,7 +243,7 @@ mod tests {
             /* 24909 */ 0xcd, 0xc2, 0x01,
             /* -37 */ 0x5b
         ];
-        let mut reader = WasmStreamReader::new(BufReader::new(stream_data.as_slice()));
+        let mut reader = WasmBinaryReader::new(&stream_data);
         assert_eq!(reader.read_leb128::<i32>().unwrap(), 194751635);
         assert_eq!(reader.read_leb128::<i64>().unwrap(), -7280002181293982082);
         assert_eq!(reader.read_leb128::<i32>().unwrap(), 24909);
@@ -255,7 +255,7 @@ mod tests {
     #[test]
     fn test_read_leb128_single_unsigned() {
         let stream_data = [0xd9, 0x01];
-        let mut reader = WasmStreamReader::new(BufReader::new(stream_data.as_slice()));
+        let mut reader = WasmBinaryReader::new(&stream_data);
         assert_eq!(reader.read_leb128::<u32>().unwrap(), 217);
         assert!(reader.read_leb128::<u32>().is_err());
         assert!(reader.eof().unwrap());
@@ -270,7 +270,7 @@ mod tests {
             /* 7074 */ 0xa2, 0x37,
             /* 10794028799708388741 */ 0x85, 0xbb, 0xd1, 0xef, 0x90, 0x80, 0x86, 0xe6, 0x95, 0x01
         ];
-        let mut reader = WasmStreamReader::new(BufReader::new(stream_data.as_slice()));
+        let mut reader = WasmBinaryReader::new(&stream_data);
         assert_eq!(reader.read_leb128::<u32>().unwrap(), 64517);
         assert_eq!(reader.read_leb128::<u32>().unwrap(), 2387606507);
         assert_eq!(reader.read_leb128::<u32>().unwrap(), 7074);

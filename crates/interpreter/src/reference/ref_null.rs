@@ -1,7 +1,7 @@
 use crate::{Executable, InterpreterContext, InterpreterError};
-use ir::{
+use module::{
     instructions::ReferenceNullInstruction,
-    structs::value::{Reference, Value},
+    objects::value::{Reference, Value},
 };
 
 impl Executable for ReferenceNullInstruction {

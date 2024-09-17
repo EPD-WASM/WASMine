@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
-use runtime_lib::ClusterConfig;
+use runtime_lib::{ClusterConfig, ResourceBuffer};
 use std::rc::Rc;
 use wasi::WasiContextBuilder;
 
@@ -21,7 +21,10 @@ pub fn wasmine_llvm_aot_criterion(c: &mut Criterion) {
         let bm_path = get_bm_path(bm);
         let wasm_bytes = std::fs::read(bm_path).unwrap();
 
-        let compiled_file = tempfile::NamedTempFile::new().unwrap();
+        let compiled_file_path = tempfile::NamedTempFile::new()
+            .unwrap()
+            .into_temp_path()
+            .with_extension("cwasm");
         group.bench_with_input(
             BenchmarkId::new("wasmine_llvm_aot_compile", bm),
             &wasm_bytes,
@@ -32,24 +35,28 @@ pub fn wasmine_llvm_aot_criterion(c: &mut Criterion) {
                         let _stdout_dropper = gag::Gag::stdout().unwrap();
                         let _stderr_dropper = gag::Gag::stderr().unwrap();
 
-                        let loader = loader::WasmLoader::from_buf(wasm_bytes);
-                        let parser = parser::Parser::default();
-                        let module = Rc::new(parser.parse(loader).unwrap());
+                        let source = ResourceBuffer::from_wasm_buf(wasm_bytes);
+                        let mut module = module::Module::new(source);
+                        module.load_meta(parser::ModuleMetaLoader).unwrap();
+                        module.load_all_functions(parser::FunctionLoader).unwrap();
+                        let module = Rc::new(module);
 
                         let context = Rc::new(llvm_gen::Context::create());
                         let mut executor = llvm_gen::JITExecutor::new(context.clone()).unwrap();
-                        let mut translator = llvm_gen::Translator::new(context.clone()).unwrap();
 
-                        let llvm_module = translator.translate_module(module.clone()).unwrap();
+                        let llvm_module =
+                            llvm_gen::Translator::translate_module(context.clone(), module.clone())
+                                .unwrap();
                         executor.add_module(llvm_module).unwrap();
                         let llvm_module_object_buf =
                             executor.get_module_as_object_buffer(0).unwrap();
-                        loader::CwasmLoader::write(
-                            compiled_file.path(),
-                            module,
-                            llvm_module_object_buf,
-                        )
-                        .unwrap()
+                        module
+                            .store(
+                                parser::ModuleStorer,
+                                llvm_module_object_buf,
+                                &compiled_file_path,
+                            )
+                            .unwrap()
                     },
                     BatchSize::SmallInput,
                 )
@@ -58,19 +65,21 @@ pub fn wasmine_llvm_aot_criterion(c: &mut Criterion) {
 
         group.bench_with_input(
             BenchmarkId::new("wasmine_llvm_aot_execute", bm),
-            &compiled_file,
-            |b, compiled_file| {
+            &compiled_file_path,
+            |b, compiled_file_path| {
                 b.iter(|| {
                     let _stdout_dropper = gag::Gag::stdout().unwrap();
                     let _stderr_dropper = gag::Gag::stderr().unwrap();
 
-                    let loader = loader::CwasmLoader::from_file(compiled_file.path()).unwrap();
+                    let source = ResourceBuffer::from_file(compiled_file_path).unwrap();
                     let mut wasmine_engine = runtime_lib::Engine::llvm().unwrap();
                     let wasmine_cluster = runtime_lib::Cluster::new(ClusterConfig::default());
-                    let wasmine_module = loader.wasm_module();
-                    wasmine_engine
-                        .init(wasmine_module.clone(), Some(&loader))
-                        .unwrap();
+
+                    let mut module = module::Module::new(source);
+                    module.load_meta(parser::ModuleMetaLoader).unwrap();
+                    module.load_all_functions(parser::FunctionLoader).unwrap();
+                    let wasmine_module = Rc::new(module);
+                    wasmine_engine.init(wasmine_module.clone()).unwrap();
 
                     let wasi_ctxt = {
                         let mut builder = WasiContextBuilder::new();
@@ -94,6 +103,7 @@ pub fn wasmine_llvm_aot_criterion(c: &mut Criterion) {
                 });
             },
         );
+        std::fs::remove_file(compiled_file_path).unwrap();
     }
 }
 

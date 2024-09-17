@@ -1,4 +1,4 @@
-use ir::{instructions::GlobalGetInstruction, utils::numeric_transmutes::Bit64};
+use module::{instructions::GlobalGetInstruction, utils::numeric_transmutes::Bit64};
 
 use crate::{Executable, InterpreterContext, InterpreterError};
 

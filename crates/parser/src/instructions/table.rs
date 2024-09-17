@@ -1,11 +1,11 @@
 use super::*;
 use crate::parsable::Parse;
-use ir::structs::element::Element;
+use module::objects::element::Element;
 use wasm_types::*;
 
 pub(crate) fn table_set(
     ctxt: &mut Context,
-    i: &mut WasmStreamReader,
+    i: &mut WasmBinaryReader,
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     let table_idx = TableIdx::parse(i)?;
@@ -34,7 +34,7 @@ pub(crate) fn table_set(
 
 pub(crate) fn table_get(
     ctxt: &mut Context,
-    i: &mut WasmStreamReader,
+    i: &mut WasmBinaryReader,
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     let table_idx = TableIdx::parse(i)?;
@@ -61,7 +61,7 @@ pub(crate) fn table_get(
 
 pub(crate) fn table_grow(
     ctxt: &mut Context,
-    i: &mut WasmStreamReader,
+    i: &mut WasmBinaryReader,
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     let table_idx = TableIdx::parse(i)?;
@@ -98,7 +98,7 @@ pub(crate) fn table_grow(
 
 pub(crate) fn table_size(
     ctxt: &mut Context,
-    i: &mut WasmStreamReader,
+    i: &mut WasmBinaryReader,
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     let table_idx = TableIdx::parse(i)?;
@@ -118,7 +118,7 @@ pub(crate) fn table_size(
 
 pub(crate) fn table_fill(
     ctxt: &mut Context,
-    i: &mut WasmStreamReader,
+    i: &mut WasmBinaryReader,
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     let table_idx = TableIdx::parse(i)?;
@@ -163,7 +163,7 @@ pub(crate) fn table_fill(
 
 pub(crate) fn table_copy(
     ctxt: &mut Context,
-    i: &mut WasmStreamReader,
+    i: &mut WasmBinaryReader,
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     let table_idx_x = TableIdx::parse(i)?;
@@ -215,7 +215,7 @@ pub(crate) fn table_copy(
 
 pub(crate) fn table_init(
     ctxt: &mut Context,
-    i: &mut WasmStreamReader,
+    i: &mut WasmBinaryReader,
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     let elem_idx = ElemIdx::parse(i)?;
@@ -262,7 +262,7 @@ pub(crate) fn table_init(
 
 pub(crate) fn elem_drop(
     ctxt: &mut Context,
-    i: &mut WasmStreamReader,
+    i: &mut WasmBinaryReader,
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     let elem_idx = ElemIdx::parse(i)?;

@@ -1,4 +1,4 @@
-use ir::instructions::SelectInstruction;
+use module::instructions::SelectInstruction;
 
 use crate::{Executable, InterpreterContext, InterpreterError};
 

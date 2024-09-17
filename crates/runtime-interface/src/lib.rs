@@ -1,11 +1,10 @@
-use ir::structs::{module::Module as WasmModule, value::ValueRaw};
+use module::{objects::value::ValueRaw, Module as WasmModule};
 use std::{ffi, ptr::NonNull, rc::Rc};
 use wasm_types::{DataIdx, ElemIdx, MemIdx, TableIdx, TypeIdx};
 
 pub type RawPointer = NonNull<core::ffi::c_void>;
 
 /// The only top level datastructure always available to the executing WASM code
-#[derive(Debug)]
 #[repr(C)]
 pub struct ExecutionContext {
     // runtime-resource slices

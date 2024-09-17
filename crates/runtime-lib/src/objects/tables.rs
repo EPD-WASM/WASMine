@@ -8,8 +8,8 @@ use crate::{
     Cluster, Engine, InstanceHandle, RuntimeError,
 };
 use core::slice;
-use ir::{
-    structs::{
+use module::{
+    objects::{
         element::{ElemMode, Element, ElementInit},
         module::Module as WasmModule,
         table::Table,
@@ -148,11 +148,11 @@ impl TableInstance<'_> {
         match self.ty.ref_type {
             RefType::FunctionReference => {
                 let func_idx = value.as_funcref();
-                debug_assert!(func_idx < wasm_module.ir.functions.len() as u32);
+                debug_assert!(func_idx < wasm_module.meta.functions.len() as u32);
                 self.values.0[idx as usize] = TableItem::FunctionReference {
                     func_idx,
                     func_ptr: None,
-                    func_type: wasm_module.ir.functions[func_idx as usize].type_idx,
+                    func_type: wasm_module.meta.functions[func_idx as usize].type_idx,
                 }
             }
             RefType::ExternReference => {
@@ -214,7 +214,7 @@ impl TableInstance<'_> {
                 RefType::FunctionReference => TableItem::FunctionReference {
                     func_idx: value_to_fill.as_funcref(),
                     func_ptr: None,
-                    func_type: wasm_module.ir.functions[value_to_fill.as_funcref() as usize]
+                    func_type: wasm_module.meta.functions[value_to_fill.as_funcref() as usize]
                         .type_idx,
                 },
                 RefType::ExternReference => TableItem::ExternReference {
@@ -250,7 +250,7 @@ impl TableInstance<'_> {
                 RefType::FunctionReference => TableItem::FunctionReference {
                     func_idx: value.as_funcref(),
                     func_ptr: None,
-                    func_type: wasm_module.ir.functions[value.as_funcref() as usize].type_idx,
+                    func_type: wasm_module.meta.functions[value.as_funcref() as usize].type_idx,
                 },
                 RefType::ExternReference => TableItem::ExternReference {
                     func_ptr: RawPointer::new(value.as_externref() as _),
@@ -322,7 +322,7 @@ impl TableInstance<'_> {
                         ConstantValue::V(v) => v,
                         ConstantValue::Global(idx) => Value::from_raw(
                             engine.get_global_value(idx)?,
-                            wasm_module.globals[idx as usize].val_type(),
+                            wasm_module.meta.globals[idx as usize].val_type(),
                         ),
                         ConstantValue::FuncPtr(func_idx) => Value::funcref(func_idx),
                     };
@@ -332,7 +332,7 @@ impl TableInstance<'_> {
                             TableItem::FunctionReference {
                                 func_idx,
                                 func_ptr: None,
-                                func_type: wasm_module.ir.functions[func_idx as usize].type_idx,
+                                func_type: wasm_module.meta.functions[func_idx as usize].type_idx,
                             }
                         }
                         Value::Reference(Reference::Extern(func_ptr)) => {
@@ -354,7 +354,7 @@ impl TableInstance<'_> {
                     self.values.0[(dst_offset as usize) + i] = TableItem::FunctionReference {
                         func_idx,
                         func_ptr: None,
-                        func_type: wasm_module.ir.functions[func_idx as usize].type_idx,
+                        func_type: wasm_module.meta.functions[func_idx as usize].type_idx,
                     };
                 }
             }
@@ -463,7 +463,7 @@ fn table_init_impl(
         table.init(
             &(*execution_context_ptr).wasm_module,
             &*((*execution_context_ptr).engine as *mut Engine),
-            &wasm_module.elements[elem_idx as usize],
+            &wasm_module.meta.elements[elem_idx as usize],
             src_offset,
             dst_offset,
             len,
@@ -472,7 +472,7 @@ fn table_init_impl(
 }
 
 fn elem_drop_impl(ctxt: &mut ExecutionContext, elem_idx: ElemIdx) -> Result<(), TableError> {
-    if elem_idx as usize >= ctxt.wasm_module.elements.len() {
+    if elem_idx as usize >= ctxt.wasm_module.meta.elements.len() {
         return Err(TableError::ElemAccessOutOfBounds);
     }
     // we don't remove elems

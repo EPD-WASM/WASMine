@@ -4,7 +4,7 @@ use super::*;
 
 pub(crate) fn r#else(
     _: &mut Context,
-    _: &mut WasmStreamReader,
+    _: &mut WasmBinaryReader,
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     o.write(Else {});
@@ -22,7 +22,7 @@ impl Instruction for End {
 
 pub(crate) fn end(
     _: &mut Context,
-    _: &mut WasmStreamReader,
+    _: &mut WasmBinaryReader,
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     o.write(End {});

@@ -1,4 +1,4 @@
-use ir::instructions::MemoryInitInstruction;
+use module::instructions::MemoryInitInstruction;
 
 use crate::{Executable, InterpreterContext, InterpreterError};
 

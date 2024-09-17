@@ -1,5 +1,6 @@
 // test all samples previously found to be erroneous by the fuzzer
 
+use module::Module;
 use std::path::PathBuf;
 use wast::Wat;
 
@@ -16,10 +17,13 @@ fn test_fuzzer_samples() {
         let wast_parsebuf = wast::parser::ParseBuffer::new(&wasm_text).unwrap();
         let mut wast_repr: Wat = wast::parser::parse(&wast_parsebuf).unwrap();
         let wasm_bytes = wast_repr.encode().unwrap();
-        let parser = parser::parser::Parser::default();
-        let loader = loader::WasmLoader::from_buf(wasm_bytes.clone());
-        if let Err(e) = parser.parse(loader) {
-            panic!("Failed to parse wasm file {:?}: {}", file_path, e)
+        let source = resource_buffer::ResourceBuffer::from_wasm_buf(wasm_bytes.clone());
+        let mut module = Module::new(source);
+        let res = module
+            .load_meta(parser::ModuleMetaLoader)
+            .and_then(|_| module.load_all_functions(parser::FunctionLoader));
+        if let Err(e) = res {
+            panic!("Failed to parse wasm file {file_path:?}: {e}")
         }
     });
 }

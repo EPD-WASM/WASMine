@@ -1,7 +1,7 @@
 #![allow(dead_code)] // we have a lot of definition here that are not used yet
 
 use bitflags::bitflags;
-use ir::structs::value::{Value, ValueRaw};
+use module::objects::value::{Value, ValueRaw};
 use std::os::unix::fs::FileTypeExt;
 
 /// Wasm pointer type

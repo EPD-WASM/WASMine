@@ -44,8 +44,8 @@ fn main() {
             .with_extension("wasm");
         if !bm_wasm_file.exists() {
             println!(
-                "cargo:warning=missing benchmark file for {}, compiling new using wasi-sdk",
-                bm
+                "cargo:warning=missing benchmark file for {} ({:?}), compiling new using wasi-sdk",
+                bm, bm_wasm_file
             );
             let clang_exec =
                 PathBuf::from(env::var("WASI_SDK").expect(

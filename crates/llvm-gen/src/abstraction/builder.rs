@@ -1,6 +1,6 @@
 use super::{context::Context, function::Function, module::Module};
 use crate::util::c_str;
-use ir::structs::value::ValueRaw;
+use module::objects::value::ValueRaw;
 use llvm_sys::{
     core::{
         LLVMAddIncoming, LLVMAppendBasicBlockInContext, LLVMArrayType2, LLVMBuildAdd,

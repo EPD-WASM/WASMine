@@ -1,11 +1,11 @@
 use crate::util::c_str;
 use crate::{abstraction::function::Function, TranslationError, Translator};
-use ir::instructions::{
+use module::instructions::{
     DataDropInstruction, MemoryCopyInstruction, MemoryFillInstruction, MemoryGrowInstruction,
     MemoryInitInstruction, MemorySizeInstruction,
 };
-use ir::structs::memory::MemArg;
-use ir::{
+use module::objects::memory::MemArg;
+use module::{
     instructions::{LoadInstruction, StoreInstruction},
     InstructionDecoder,
 };

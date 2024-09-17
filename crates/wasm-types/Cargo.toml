@@ -11,4 +11,4 @@ workspace = true
 [dependencies]
 once_cell = { workspace = true }
 rand = { workspace = true }
-bitcode = { workspace = true }
+rkyv = { workspace = true }

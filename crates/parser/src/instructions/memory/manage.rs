@@ -2,7 +2,7 @@ use super::*;
 
 pub(crate) fn memory_size(
     ctxt: &mut Context,
-    i: &mut WasmStreamReader,
+    i: &mut WasmBinaryReader,
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     if i.read_byte()? != 0 {
@@ -19,7 +19,7 @@ pub(crate) fn memory_size(
 
 pub(crate) fn memory_grow(
     ctxt: &mut Context,
-    i: &mut WasmStreamReader,
+    i: &mut WasmBinaryReader,
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     if i.read_byte()? != 0 {
@@ -40,7 +40,7 @@ pub(crate) fn memory_grow(
 
 pub(crate) fn memory_copy(
     ctxt: &mut Context,
-    i: &mut WasmStreamReader,
+    i: &mut WasmBinaryReader,
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     if i.read_byte()? != 0 || i.read_byte()? != 0 {
@@ -65,7 +65,7 @@ pub(crate) fn memory_copy(
 
 pub(crate) fn memory_fill(
     ctxt: &mut Context,
-    i: &mut WasmStreamReader,
+    i: &mut WasmBinaryReader,
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     if i.read_byte()? != 0 {
@@ -90,7 +90,7 @@ pub(crate) fn memory_fill(
 
 pub(crate) fn memory_init(
     ctxt: &mut Context,
-    i: &mut WasmStreamReader,
+    i: &mut WasmBinaryReader,
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     let data_idx: u32 = DataIdx::parse(i)?;
@@ -127,7 +127,7 @@ pub(crate) fn memory_init(
 
 pub(crate) fn data_drop(
     ctxt: &mut Context,
-    i: &mut WasmStreamReader,
+    i: &mut WasmBinaryReader,
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     let data_idx = DataIdx::parse(i)?;

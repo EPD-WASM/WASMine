@@ -1,9 +1,9 @@
 use call::handle_call;
 use call_indirect::handle_call_indirect;
-use ir::{basic_block::BasicBlockGlue, structs::value::ValueRaw};
 use jmp::handle_jmp;
 use jmp_cond::handle_jmp_cond;
 use jmp_table::handle_jmp_table;
+use module::{basic_block::BasicBlockGlue, objects::value::ValueRaw};
 use r#return::handle_return;
 
 use crate::{InterpreterContext, InterpreterError};
@@ -74,7 +74,7 @@ impl GlueHandler for BasicBlockGlue {
 
         let stack_frame = ctx.stack.last_mut().unwrap();
         let bbs = super::util::get_bbs_from_function(
-            &ctx.module.ir.functions[stack_frame.fn_idx as usize],
+            &ctx.module.meta.functions[stack_frame.fn_idx as usize],
         );
         let bb = bbs
             .iter()

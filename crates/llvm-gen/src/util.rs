@@ -3,7 +3,7 @@ use std::{
     ffi::{CStr, CString},
 };
 
-use ir::structs::module::Module;
+use module::ModuleMetadata;
 use wasm_types::FuncIdx;
 
 // piratet from the inkwell library
@@ -22,12 +22,12 @@ pub(crate) fn c_str(mut s: &str) -> Cow<'_, CStr> {
 
 pub(crate) fn build_llvm_function_name(
     function_idx: FuncIdx,
-    wasm_module: &Module,
+    wasm_module: &ModuleMetadata,
     is_export: bool,
 ) -> String {
     if is_export {
         // make actual function name available to the public
-        ir::function::Function::query_function_name(function_idx, wasm_module)
+        module::objects::function::Function::query_function_name(function_idx, wasm_module)
             .map(|s| s.to_string())
             .unwrap_or_else(|| format!("func_{function_idx}"))
     } else {

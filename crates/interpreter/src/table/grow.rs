@@ -1,5 +1,5 @@
 use crate::{Executable, InterpreterContext, InterpreterError};
-use ir::instructions::TableGrowInstruction;
+use module::instructions::TableGrowInstruction;
 
 impl Executable for TableGrowInstruction {
     fn execute(&mut self, ctx: &mut InterpreterContext) -> Result<(), InterpreterError> {

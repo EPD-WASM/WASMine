@@ -3,7 +3,7 @@ use wasm_types::{TableIdx, TypeIdx};
 
 pub(crate) fn call_indirect(
     _: &mut Context,
-    i: &mut WasmStreamReader,
+    i: &mut WasmBinaryReader,
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     let type_idx = TypeIdx::parse(i)?;

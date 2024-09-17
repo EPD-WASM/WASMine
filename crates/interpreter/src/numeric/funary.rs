@@ -1,8 +1,8 @@
-use ir::structs::value::Value;
+use module::objects::value::Value;
 use wasm_types::FUnaryOp;
 use {
     crate::{Executable, InterpreterContext, InterpreterError},
-    ir::instructions::FUnaryInstruction,
+    module::instructions::FUnaryInstruction,
 };
 
 impl Executable for FUnaryInstruction {

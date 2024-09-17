@@ -2,7 +2,7 @@ use super::*;
 
 fn parse_store(
     ctxt: &mut Context,
-    i: &mut WasmStreamReader,
+    i: &mut WasmBinaryReader,
     o: &mut InstructionEncoder,
     input_type: NumType,
     operation: StoreOp,

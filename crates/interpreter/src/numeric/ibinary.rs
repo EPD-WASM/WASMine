@@ -1,9 +1,9 @@
-use ir::structs::value::Value;
+use module::objects::value::Value;
 use wasm_types::IBinaryOp;
 use {
     crate::{Executable, InterpreterContext, InterpreterError},
-    ir::instructions::IBinaryInstruction,
-    ir::structs::value::Number,
+    module::instructions::IBinaryInstruction,
+    module::objects::value::Number,
 };
 
 impl Executable for IBinaryInstruction {

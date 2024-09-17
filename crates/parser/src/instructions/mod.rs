@@ -15,15 +15,15 @@ pub(crate) use reference::*;
 pub(crate) use table::*;
 pub(crate) use variable::*;
 
-use crate::context::Context;
+use crate::ir::context::Context;
 use crate::parsable::Parse;
-use crate::{wasm_stream_reader::WasmStreamReader, ParseResult, ParserError, ValidationError};
-use ir::instructions::*;
-use ir::structs::instruction::ControlInstruction;
-use ir::InstructionEncoder;
+use crate::{wasm_stream_reader::WasmBinaryReader, ParseResult, ParserError, ValidationError};
+use module::instructions::*;
+use module::objects::instruction::ControlInstruction;
+use module::InstructionEncoder;
 use wasm_types::*;
 
 type C<'a> = Context<'a>;
-type I<'a> = WasmStreamReader<'a>;
+type I<'a> = WasmBinaryReader<'a>;
 type O = InstructionEncoder;
 type PR = ParseResult;

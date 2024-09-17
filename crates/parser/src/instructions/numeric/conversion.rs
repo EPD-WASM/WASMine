@@ -3,7 +3,7 @@ use wasm_types::*;
 
 pub(crate) fn i32_wrap_i64(
     ctxt: &mut Context,
-    _: &mut WasmStreamReader,
+    _: &mut WasmBinaryReader,
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     let in_ = ctxt.pop_var_with_type(&ValType::i64());
@@ -54,7 +54,7 @@ pub(crate) use convert_specializations::*;
 
 pub(crate) fn parse_reinterpret(
     ctxt: &mut Context,
-    _: &mut WasmStreamReader,
+    _: &mut WasmBinaryReader,
     o: &mut InstructionEncoder,
     input_type: NumType,
     out_type: NumType,
@@ -84,7 +84,7 @@ pub(crate) use reinterpret_specializations::*;
 
 pub(crate) fn parse_extend(
     ctxt: &mut Context,
-    _: &mut WasmStreamReader,
+    _: &mut WasmBinaryReader,
     o: &mut InstructionEncoder,
     input_size: u8,
     out_type: NumType,
@@ -116,7 +116,7 @@ pub(crate) use extend_specializations::*;
 
 pub(crate) fn parse_extend_type(
     ctxt: &mut Context,
-    _: &mut WasmStreamReader,
+    _: &mut WasmBinaryReader,
     o: &mut InstructionEncoder,
     signed: bool,
 ) -> ParseResult {
@@ -142,7 +142,7 @@ pub(crate) use extend_type_specializations::*;
 
 pub(crate) fn f32_demote_f64(
     ctxt: &mut Context,
-    _: &mut WasmStreamReader,
+    _: &mut WasmBinaryReader,
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     let in_ = ctxt.pop_var_with_type(&ValType::f64());
@@ -157,7 +157,7 @@ pub(crate) fn f32_demote_f64(
 
 pub(crate) fn f64_promote_f32(
     ctxt: &mut Context,
-    _: &mut WasmStreamReader,
+    _: &mut WasmBinaryReader,
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     let in_ = ctxt.pop_var_with_type(&ValType::f32());

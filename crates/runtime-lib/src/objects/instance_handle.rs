@@ -13,7 +13,7 @@ use crate::{
     Cluster, Engine, RuntimeError,
 };
 use core::{ffi, slice};
-use ir::structs::{module::Module as WasmModule, value::Value};
+use module::objects::{module::Module as WasmModule, value::Value};
 use runtime_interface::{ExecutionContext, GlobalInstance};
 use std::{
     collections::HashMap,
@@ -119,7 +119,7 @@ impl<'a> InstanceHandle<'a> {
 
         // initialize globals
         let globals =
-            GlobalsObject::init_on_cluster(cluster, &m.globals, &imports.globals, engine)?;
+            GlobalsObject::init_on_cluster(cluster, &m.meta.globals, &imports.globals, engine)?;
         execution_context.globals_ptr = &mut globals.inner as *mut runtime_interface::GlobalStorage;
         execution_context.globals_len = 1;
 
@@ -128,8 +128,8 @@ impl<'a> InstanceHandle<'a> {
             m.as_ref(),
             engine,
             cluster,
-            &m.tables,
-            &m.elements,
+            &m.meta.tables,
+            &m.meta.elements,
             &imports.tables,
             &globals.inner,
         )?;
@@ -139,8 +139,8 @@ impl<'a> InstanceHandle<'a> {
         // initialize memories
         let memories = MemoryStorage::init_on_cluster(
             cluster,
-            &m.memories,
-            &m.datas,
+            &m.meta.memories,
+            &m.meta.datas,
             &imports.memories,
             &globals.inner,
         )?;
@@ -149,7 +149,8 @@ impl<'a> InstanceHandle<'a> {
         execution_context.memories_len = memories.len();
 
         let exported_functions = Mutex::new(
-            m.exports
+            m.meta
+                .exports
                 .functions()
                 .map(|(name, idx)| (name.clone(), Either::Right(*idx)))
                 .collect(),
@@ -170,7 +171,7 @@ impl<'a> InstanceHandle<'a> {
     }
 
     pub fn query_start_function(&self) -> Result<FuncIdx, InstantiationError> {
-        if let Some(start_func_idx) = self.module.entry_point {
+        if let Some(start_func_idx) = self.module.meta.entry_point {
             return Ok(start_func_idx);
         }
         self.find_exported_func_idx("_start")
@@ -179,24 +180,27 @@ impl<'a> InstanceHandle<'a> {
     }
 
     pub fn find_exported_func_idx(&self, name: &str) -> Result<FuncIdx, InstantiationError> {
-        if let Some(entry) = self.module.entry_point {
+        if let Some(entry) = self.module.meta.entry_point {
             if name == format!("func_{entry}") {
                 return Ok(entry);
             }
         }
         self.module
+            .meta
             .exports
             .find_function_idx(name)
             .ok_or(InstantiationError::FunctionNotFound(name.to_string()))
     }
 
     pub fn get_function_type_from_func_idx(&self, func_idx: u32) -> FuncType {
-        self.module.function_types[self.module.ir.functions[func_idx as usize].type_idx as usize]
+        self.module.meta.function_types
+            [self.module.meta.functions[func_idx as usize].type_idx as usize]
     }
 
     pub fn get_function_type_from_name(&self, name: &str) -> Option<FuncType> {
-        self.module.exports.find_function_idx(name).map(|idx| {
-            self.module.function_types[self.module.ir.functions[idx as usize].type_idx as usize]
+        self.module.meta.exports.find_function_idx(name).map(|idx| {
+            self.module.meta.function_types
+                [self.module.meta.functions[idx as usize].type_idx as usize]
         })
     }
 
@@ -206,7 +210,7 @@ impl<'a> InstanceHandle<'a> {
             match function_entry {
                 Either::Left(func) => return Ok(*func),
                 Either::Right(func_idx) => {
-                    let idx = match self.wasm_module().exports.find_function_idx(name) {
+                    let idx = match self.wasm_module().meta.exports.find_function_idx(name) {
                         Some(idx) => idx,
                         None => return Err(RuntimeError::FunctionNotFound(name.to_string())),
                     };
@@ -225,7 +229,7 @@ impl<'a> InstanceHandle<'a> {
     }
 
     pub fn get_function_by_idx(&self, func_idx: FuncIdx) -> Result<&Function, RuntimeError> {
-        if let Some(func_name) = self.module.exports.find_function_name(func_idx) {
+        if let Some(func_name) = self.module.meta.exports.find_function_name(func_idx) {
             return self.get_export_by_name(func_name);
         }
         let func = Function::from_wasm_func(
@@ -244,7 +248,7 @@ impl<'a> InstanceHandle<'a> {
 
     pub fn extract_global_value_by_idx(&self, idx: usize) -> Value {
         let global_addr = self.globals.inner.globals[idx].addr;
-        let global_valty = match &self.module.globals[idx].r#type {
+        let global_valty = match &self.module.meta.globals[idx].r#type {
             wasm_types::GlobalType::Const(ty) => ty,
             wasm_types::GlobalType::Mut(ty) => ty,
         };
@@ -254,6 +258,7 @@ impl<'a> InstanceHandle<'a> {
 
     pub fn extract_global_value_by_name(&self, name: &str) -> Option<Value> {
         self.module
+            .meta
             .exports
             .find_global_idx(name)
             .map(|i| self.extract_global_value_by_idx(i as usize))

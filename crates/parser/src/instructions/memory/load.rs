@@ -2,7 +2,7 @@ use super::*;
 
 fn parse_load(
     ctxt: &mut Context,
-    i: &mut WasmStreamReader,
+    i: &mut WasmBinaryReader,
     o: &mut InstructionEncoder,
     out_type: NumType,
     operation: LoadOp,
@@ -54,5 +54,5 @@ mod load_specializations {
     pub(crate) fn i64_load32_s(c: &mut C, i: &mut I, o: &mut O) -> PR {parse_load(c, i, o, NumType::I64, LoadOp::INNLoad32S)}
     pub(crate) fn i64_load32_u(c: &mut C, i: &mut I, o: &mut O) -> PR {parse_load(c, i, o, NumType::I64, LoadOp::INNLoad32U)}
 }
-use ir::{instructions::LoadInstruction, structs::memory::MemArg};
+use module::{instructions::LoadInstruction, objects::memory::MemArg};
 pub(crate) use load_specializations::*;

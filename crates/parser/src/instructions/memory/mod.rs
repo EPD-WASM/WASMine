@@ -8,5 +8,5 @@ pub(crate) use store::*;
 
 use super::*;
 use crate::parsable::Parse;
-use ir::structs::memory::*;
+use module::objects::memory::*;
 use wasm_types::*;

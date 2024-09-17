@@ -1,5 +1,5 @@
 use crate::{control_flow::util::break_util, InterpreterContext, InterpreterError};
-use ir::structs::value::ValueRaw;
+use module::objects::value::ValueRaw;
 
 pub(super) fn handle_jmp_table(
     ctx: &mut InterpreterContext,

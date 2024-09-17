@@ -3,10 +3,10 @@ use crate::{
     WASM_PAGE_LIMIT, WASM_PAGE_SIZE, WASM_RESERVED_MEMORY_SIZE,
 };
 use core::slice;
-use ir::structs::data::{Data, DataMode};
-use ir::structs::memory::Memory;
-use ir::structs::module::Module as WasmModule;
-use ir::structs::value::{ConstantValue, Number, Value};
+use module::objects::data::{Data, DataMode};
+use module::objects::memory::Memory;
+use module::objects::module::Module as WasmModule;
+use module::objects::value::{ConstantValue, Number, Value};
 use nix::errno::Errno;
 use nix::libc::mprotect;
 use nix::{errno, libc};
@@ -158,7 +158,7 @@ impl MemoryObject {
         dst_offset: u32,
         size: u32,
     ) -> Result<(), RuntimeError> {
-        let data_instance = match wasm_module.datas.get(data_idx as usize) {
+        let data_instance = match wasm_module.meta.datas.get(data_idx as usize) {
             None => {
                 return Err(RuntimeError::Msg(format!(
                     "Data instance not found: {data_idx}"
@@ -378,7 +378,7 @@ fn data_drop_impl(
     ctxt: &mut runtime_interface::ExecutionContext,
     data_idx: DataIdx,
 ) -> Result<(), MemoryError> {
-    if data_idx as usize >= ctxt.wasm_module.datas.len() {
+    if data_idx as usize >= ctxt.wasm_module.meta.datas.len() {
         return Err(MemoryError::DataIdxOOB);
     }
     // we don't remove elems

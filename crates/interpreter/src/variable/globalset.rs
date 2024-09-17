@@ -1,4 +1,4 @@
-use ir::instructions::GlobalSetInstruction;
+use module::instructions::GlobalSetInstruction;
 use wasm_types::{GlobalType, ValType};
 
 use crate::{Executable, InterpreterContext, InterpreterError};

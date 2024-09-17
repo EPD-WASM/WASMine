@@ -1,5 +1,5 @@
 use crate::{Executable, InterpreterContext, InterpreterError};
-use ir::instructions::MemoryFillInstruction;
+use module::instructions::MemoryFillInstruction;
 
 impl Executable for MemoryFillInstruction {
     fn execute(&mut self, ctx: &mut InterpreterContext) -> Result<(), InterpreterError> {

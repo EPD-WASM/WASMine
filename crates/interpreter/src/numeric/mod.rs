@@ -1,5 +1,5 @@
 use super::{Executable, InterpreterContext, InterpreterError};
-use ir::instructions::{
+use module::instructions::{
     Constant, ConvertInstruction, DemoteInstruction, ExtendBitsInstruction, ExtendTypeInstruction,
     FBinaryInstruction, FRelationalInstruction, FUnaryInstruction, IBinaryInstruction,
     IRelationalInstruction, ITestInstruction, IUnaryInstruction, Instruction, PromoteInstruction,

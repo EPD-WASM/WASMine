@@ -1,5 +1,5 @@
 use crate::{Executable, InterpreterContext, InterpreterError};
-use ir::instructions::MemoryGrowInstruction;
+use module::instructions::MemoryGrowInstruction;
 
 impl Executable for MemoryGrowInstruction {
     fn execute(&mut self, ctx: &mut InterpreterContext) -> Result<(), InterpreterError> {

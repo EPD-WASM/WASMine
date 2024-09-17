@@ -1,4 +1,4 @@
-use ir::instructions::TableGetInstruction;
+use module::instructions::TableGetInstruction;
 
 use crate::{Executable, InterpreterContext, InterpreterError};
 

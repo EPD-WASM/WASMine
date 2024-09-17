@@ -1,0 +1,17 @@
+[package]
+name = "module"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+thiserror = { workspace = true }
+wasm-types = { workspace = true }
+once_cell = { workspace = true }
+rkyv = { workspace = true }
+resource-buffer = { workspace = true }
+smallvec = { workspace = true }

@@ -1,9 +1,9 @@
 use crate::{abstraction::function::Function, util::c_str, TranslationError, Translator};
-use ir::basic_block::BasicBlockGlue;
 use llvm_sys::{
     core::LLVMBuildExtractValue,
     prelude::{LLVMBasicBlockRef, LLVMValueRef},
 };
+use module::basic_block::BasicBlockGlue;
 use wasm_types::ValType;
 
 #[cfg(debug_assertions)]
@@ -70,7 +70,7 @@ impl Translator {
                 // TODO: remove this
                 #[cfg(debug_assertions)]
                 let _called_fun_name =
-                    build_llvm_function_name(*func_idx, &self.wasm_module, false);
+                    build_llvm_function_name(*func_idx, &self.wasm_module.meta, false);
 
                 let function = &self.llvm_functions[*func_idx as usize];
                 let mut parameters = vec![llvm_function.get_param(0)];

@@ -1,0 +1,12 @@
+pub mod data;
+pub mod element;
+pub mod export;
+pub mod expression;
+pub mod function;
+pub mod global;
+pub mod import;
+pub mod instruction;
+pub mod memory;
+pub mod module;
+pub mod table;
+pub mod value;

@@ -1,6 +1,6 @@
 #![allow(non_upper_case_globals)] // required because we use double underscores
 
-use ir::structs::value::ValueRaw;
+use module::objects::value::ValueRaw;
 /// Reference: https://github.com/WebAssembly/WASI/blob/89646e96b8f61fc57ae4c7d510d2dce68620e6a4/legacy/preview1/docs.md
 use once_cell::sync::Lazy;
 use std::{collections::HashSet, path::PathBuf};

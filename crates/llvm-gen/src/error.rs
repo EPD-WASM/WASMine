@@ -7,7 +7,7 @@ pub enum TranslationError {
     #[error("Unimplemented: {0}")]
     Unimplemented(String),
     #[error("ir decoding error: {0}")]
-    IRDecodingError(#[from] ir::DecodingError),
+    IRDecodingError(#[from] module::DecodingError),
     #[error("missing llvm intrinsic")]
     MissingIntrinsic,
     #[error("function not found")]

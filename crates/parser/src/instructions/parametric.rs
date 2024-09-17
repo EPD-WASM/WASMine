@@ -4,7 +4,7 @@ use wasm_types::*;
 
 pub(crate) fn drop(
     ctxt: &mut Context,
-    _: &mut WasmStreamReader,
+    _: &mut WasmBinaryReader,
     _: &mut InstructionEncoder,
 ) -> ParseResult {
     ctxt.pop_var();
@@ -13,7 +13,7 @@ pub(crate) fn drop(
 
 pub(crate) fn select_numeric(
     ctxt: &mut Context,
-    _: &mut WasmStreamReader,
+    _: &mut WasmBinaryReader,
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     let select_val = ctxt.pop_var_with_type(&ValType::i32());
@@ -46,7 +46,7 @@ pub(crate) fn select_numeric(
 
 pub(crate) fn select_generic(
     ctxt: &mut Context,
-    i: &mut WasmStreamReader,
+    i: &mut WasmBinaryReader,
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     let num_val_types = i.read_leb128::<u32>()?;

@@ -8,7 +8,7 @@ use crate::{
     },
     Cluster, Engine,
 };
-use ir::structs::{module::Module as WasmModule, value::ValueRaw};
+use module::objects::{module::Module as WasmModule, value::ValueRaw};
 use once_cell::sync::Lazy;
 use runtime_interface::{ExecutionContext, RawPointer};
 use std::{collections::HashMap, ptr::NonNull, rc::Rc};
@@ -160,7 +160,7 @@ impl<'a> BoundLinker<'a> {
     ) -> Result<DependencyStore, LinkingError> {
         let mut imports = DependencyStore::default();
 
-        for import in module.imports.iter() {
+        for import in module.meta.imports.iter() {
             let name = DependencyName {
                 module: import.module.clone(),
                 name: import.name.clone(),
@@ -176,7 +176,7 @@ impl<'a> BoundLinker<'a> {
 
             match &import.desc {
                 ImportDesc::Func(type_idx) => {
-                    let requested_function_type = module.function_types[*type_idx as usize];
+                    let requested_function_type = module.meta.function_types[*type_idx as usize];
 
                     let func;
                     let actual_functype;
@@ -212,6 +212,7 @@ impl<'a> BoundLinker<'a> {
                             };
                         let import_func_idx = exporting_module
                             .wasm_module()
+                            .meta
                             .exports
                             .find_function_idx(&import.name)
                             .unwrap();
@@ -239,6 +240,7 @@ impl<'a> BoundLinker<'a> {
                     let exporting_module = (exporting_module)()?;
                     let exported_global_idx = match exporting_module
                         .wasm_module()
+                        .meta
                         .exports
                         .find_global_idx(&import.name)
                     {
@@ -251,7 +253,7 @@ impl<'a> BoundLinker<'a> {
                         }
                     };
                     let exported_global =
-                        &exporting_module.wasm_module().globals[exported_global_idx as usize];
+                        &exporting_module.wasm_module().meta.globals[exported_global_idx as usize];
                     let actual_type = &exported_global.r#type;
                     if requested_type != actual_type {
                         return Err(LinkingError::GlobalTypeMismatch {
@@ -271,6 +273,7 @@ impl<'a> BoundLinker<'a> {
                     let exporting_module = (exporting_module)()?;
                     let exported_memory_idx = match exporting_module
                         .wasm_module()
+                        .meta
                         .exports
                         .find_memory_idx(&import.name)
                     {
@@ -283,7 +286,7 @@ impl<'a> BoundLinker<'a> {
                         }
                     };
                     let exported_memory =
-                        &exporting_module.wasm_module().memories[exported_memory_idx as usize];
+                        &exporting_module.wasm_module().meta.memories[exported_memory_idx as usize];
 
                     let mut actual_limits = exported_memory.limits;
                     actual_limits.min = actual_limits
@@ -313,6 +316,7 @@ impl<'a> BoundLinker<'a> {
                     let exporting_module = (exporting_module)()?;
                     let exported_table_idx = match exporting_module
                         .wasm_module()
+                        .meta
                         .exports
                         .find_table_idx(&import.name)
                     {
@@ -325,7 +329,7 @@ impl<'a> BoundLinker<'a> {
                         }
                     };
                     let exported_table =
-                        &exporting_module.wasm_module().tables[exported_table_idx as usize];
+                        &exporting_module.wasm_module().meta.tables[exported_table_idx as usize];
                     let actual_type = &exported_table.r#type;
 
                     let max_expected_len = expected_type.lim.max.unwrap_or(u32::MAX);

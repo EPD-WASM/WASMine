@@ -1,5 +1,5 @@
 use crate::{Executable, InterpreterContext, InterpreterError};
-use ir::instructions::MemoryCopyInstruction;
+use module::instructions::MemoryCopyInstruction;
 
 impl Executable for MemoryCopyInstruction {
     fn execute(&mut self, ctx: &mut InterpreterContext) -> Result<(), InterpreterError> {

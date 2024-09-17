@@ -1,6 +1,6 @@
-use ir::{
+use module::{
     instructions::ConvertInstruction,
-    structs::value::{Number, Value},
+    objects::value::{Number, Value},
 };
 use wasm_types::{NumType, ValType};
 

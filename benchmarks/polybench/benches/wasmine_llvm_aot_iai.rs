@@ -1,9 +1,9 @@
-use std::rc::Rc;
+use std::{path::PathBuf, rc::Rc};
 
 use iai_callgrind::{library_benchmark, library_benchmark_group, main, LibraryBenchmarkConfig};
 mod utils;
-use runtime_lib::ClusterConfig;
-use tempfile::NamedTempFile;
+use module::Module;
+use runtime_lib::{ClusterConfig, ResourceBuffer};
 use utils::*;
 use wasi::WasiContextBuilder;
 
@@ -13,6 +13,10 @@ fn setup_for_compile(bm: &str) -> Vec<u8> {
     std::fs::read(bm_path).unwrap()
 }
 
+fn teardown_for_compile(path: PathBuf) {
+    std::fs::remove_file(path).unwrap();
+}
+
 #[library_benchmark]
 #[benches::with_setup(args = [
     "gemm",
@@ -45,44 +49,71 @@ fn setup_for_compile(bm: &str) -> Vec<u8> {
     "lu",
     "covariance",
     "doitgen",
-], setup = setup_for_compile)]
-pub fn wasmine_llvm_aot_compile(wasm_bytes: Vec<u8>) {
-    let loader = loader::WasmLoader::from_buf(wasm_bytes);
-    let parser = parser::Parser::default();
-    let module = Rc::new(parser.parse(loader).unwrap());
+], setup = setup_for_compile, teardown = teardown_for_compile)]
+pub fn wasmine_llvm_aot_compile(wasm_bytes: Vec<u8>) -> PathBuf {
+    let source = ResourceBuffer::from_wasm_buf(wasm_bytes);
+    let mut module = module::Module::new(source);
+    module.load_meta(parser::ModuleMetaLoader).unwrap();
+    module.load_all_functions(parser::FunctionLoader).unwrap();
+    let module = Rc::new(module);
 
     let context = Rc::new(llvm_gen::Context::create());
     let mut executor = llvm_gen::JITExecutor::new(context.clone()).unwrap();
-    let mut translator = llvm_gen::Translator::new(context.clone()).unwrap();
 
-    let llvm_module = translator.translate_module(module.clone()).unwrap();
+    let llvm_module =
+        llvm_gen::Translator::translate_module(context.clone(), module.clone()).unwrap();
     executor.add_module(llvm_module).unwrap();
     let llvm_module_object_buf = executor.get_module_as_object_buffer(0).unwrap();
 
-    let compiled_file = tempfile::NamedTempFile::new().unwrap();
-    loader::CwasmLoader::write(compiled_file.path(), module, llvm_module_object_buf).unwrap()
+    let compiled_file_path = tempfile::NamedTempFile::new()
+        .unwrap()
+        .into_temp_path()
+        .with_extension("cwasm");
+    module
+        .store(
+            parser::ModuleStorer,
+            llvm_module_object_buf,
+            &compiled_file_path,
+        )
+        .unwrap();
+
+    compiled_file_path
 }
 
-fn setup_for_execute(bm: &str) -> NamedTempFile {
+fn setup_for_execute(bm: &str) -> PathBuf {
     let bm_path = get_bm_path(bm);
     assert!(bm_path.exists(), "{} does not exist", bm_path.display());
     let wasm_bytes = std::fs::read(bm_path).unwrap();
 
-    let loader = loader::WasmLoader::from_buf(wasm_bytes);
-    let parser = parser::Parser::default();
-    let module = Rc::new(parser.parse(loader).unwrap());
+    let source = ResourceBuffer::from_wasm_buf(wasm_bytes);
+    let mut module = module::Module::new(source);
+    module.load_meta(parser::ModuleMetaLoader).unwrap();
+    module.load_all_functions(parser::FunctionLoader).unwrap();
+    let module = Rc::new(module);
 
     let context = Rc::new(llvm_gen::Context::create());
     let mut executor = llvm_gen::JITExecutor::new(context.clone()).unwrap();
-    let mut translator = llvm_gen::Translator::new(context.clone()).unwrap();
-
-    let llvm_module = translator.translate_module(module.clone()).unwrap();
+    let llvm_module =
+        llvm_gen::Translator::translate_module(context.clone(), module.clone()).unwrap();
     executor.add_module(llvm_module).unwrap();
     let llvm_module_object_buf = executor.get_module_as_object_buffer(0).unwrap();
 
-    let compiled_file = tempfile::NamedTempFile::new().unwrap();
-    loader::CwasmLoader::write(compiled_file.path(), module, llvm_module_object_buf).unwrap();
-    compiled_file
+    let compiled_file_path = tempfile::NamedTempFile::new()
+        .unwrap()
+        .into_temp_path()
+        .with_extension("cwasm");
+    module
+        .store(
+            parser::ModuleStorer,
+            llvm_module_object_buf,
+            &compiled_file_path,
+        )
+        .unwrap();
+    compiled_file_path
+}
+
+fn teardown_for_execute(path: PathBuf) {
+    std::fs::remove_file(path).unwrap();
 }
 
 #[library_benchmark]
@@ -117,15 +148,18 @@ fn setup_for_execute(bm: &str) -> NamedTempFile {
     "lu",
     "covariance",
     "doitgen",
-], setup = setup_for_execute)]
-pub fn wasmine_llvm_aot_execute(compiled_file: NamedTempFile) {
-    let loader = loader::CwasmLoader::from_file(compiled_file.path()).unwrap();
+], setup = setup_for_execute, teardown = teardown_for_execute)]
+pub fn wasmine_llvm_aot_execute(compiled_file_path: PathBuf) -> PathBuf {
+    let source = ResourceBuffer::from_file(&compiled_file_path).unwrap();
     let mut wasmine_engine = runtime_lib::Engine::llvm().unwrap();
     let wasmine_cluster = runtime_lib::Cluster::new(ClusterConfig::default());
-    let wasmine_module = loader.wasm_module();
-    wasmine_engine
-        .init(wasmine_module.clone(), Some(&loader))
+    let mut wasmine_module = Module::new(source);
+    wasmine_module.load_meta(parser::ModuleMetaLoader).unwrap();
+    wasmine_module
+        .load_all_functions(parser::FunctionLoader)
         .unwrap();
+    let wasmine_module = Rc::new(wasmine_module);
+    wasmine_engine.init(wasmine_module.clone()).unwrap();
 
     let wasi_ctxt = {
         let mut builder = WasiContextBuilder::new();
@@ -142,6 +176,8 @@ pub fn wasmine_llvm_aot_execute(compiled_file: NamedTempFile) {
         .unwrap()
         .call(&[])
         .unwrap();
+
+    compiled_file_path
 }
 
 library_benchmark_group!(

@@ -1,5 +1,5 @@
 use crate::{Executable, InterpreterContext, InterpreterError};
-use ir::instructions::Constant;
+use module::instructions::Constant;
 
 impl Executable for Constant {
     fn execute(&mut self, ctx: &mut InterpreterContext) -> Result<(), InterpreterError> {

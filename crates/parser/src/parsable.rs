@@ -1,21 +1,23 @@
-use super::{
-    error::ParserError, parse_basic_blocks::parse_basic_blocks,
-    wasm_stream_reader::WasmStreamReader,
+use crate::{
+    error::ParserError,
+    ir::{
+        context::Context, function_builder::FunctionBuilder, parse_basic_blocks::parse_basic_blocks,
+    },
+    wasm_stream_reader::WasmBinaryReader,
 };
-use crate::{context::Context, function_builder::FunctionBuilder};
-use ir::{
-    function::Function,
-    structs::{
+use module::{
+    objects::{
         element::{ElemMode, Element, ElementInit},
         export::{Export, FuncExport, GlobalExport, MemoryExport, TableExport},
         expression::{ConstantExpression, ConstantExpressionError},
+        function::FunctionIR,
         global::Global,
         import::Import,
         memory::{MemArg, Memory},
-        module::Module,
         table::Table,
         value::ConstantValue,
     },
+    ModuleMetadata,
 };
 use wasm_types::{
     BlockType, FuncIdx, FuncType, FuncTypeBuilder, GlobalIdx, GlobalType, ImportDesc, Limits,
@@ -23,13 +25,13 @@ use wasm_types::{
 };
 
 pub(crate) trait Parse {
-    fn parse(i: &mut WasmStreamReader) -> Result<Self, ParserError>
+    fn parse(i: &mut WasmBinaryReader) -> Result<Self, ParserError>
     where
         Self: std::marker::Sized;
 }
 
 impl Parse for FuncType {
-    fn parse(i: &mut WasmStreamReader) -> Result<FuncType, ParserError> {
+    fn parse(i: &mut WasmBinaryReader) -> Result<FuncType, ParserError> {
         let prefix = i.read_byte()?;
         if prefix != 0x60 {
             return Err(ParserError::Msg(format!(
@@ -49,7 +51,7 @@ impl Parse for FuncType {
 }
 
 impl Parse for ValType {
-    fn parse(i: &mut WasmStreamReader) -> Result<ValType, ParserError> {
+    fn parse(i: &mut WasmBinaryReader) -> Result<ValType, ParserError> {
         let prefix = i.read_byte()?;
         match prefix {
             0x7F => Ok(ValType::i32()),
@@ -68,7 +70,7 @@ impl Parse for ValType {
 }
 
 impl Parse for Name {
-    fn parse(i: &mut WasmStreamReader) -> Result<Name, ParserError> {
+    fn parse(i: &mut WasmBinaryReader) -> Result<Name, ParserError> {
         let len = i.read_leb128::<u32>()?;
         let byte_string = (0..len)
             .map(|_| i.read_byte())
@@ -81,13 +83,13 @@ impl Parse for Name {
 }
 
 impl Parse for u32 {
-    fn parse(i: &mut WasmStreamReader) -> Result<TypeIdx, ParserError> {
+    fn parse(i: &mut WasmBinaryReader) -> Result<TypeIdx, ParserError> {
         i.read_leb128()
     }
 }
 
 impl Parse for Limits {
-    fn parse(i: &mut WasmStreamReader) -> Result<Limits, ParserError> {
+    fn parse(i: &mut WasmBinaryReader) -> Result<Limits, ParserError> {
         match i.read_byte()? {
             0x00 => Ok(Limits {
                 min: i.read_leb128()?,
@@ -110,7 +112,7 @@ impl Parse for Limits {
 }
 
 impl Parse for RefType {
-    fn parse(i: &mut WasmStreamReader) -> Result<RefType, ParserError> {
+    fn parse(i: &mut WasmBinaryReader) -> Result<RefType, ParserError> {
         match i.read_byte()? {
             0x70 => Ok(RefType::FunctionReference),
             0x6F => Ok(RefType::ExternReference),
@@ -120,7 +122,7 @@ impl Parse for RefType {
 }
 
 impl Parse for TableType {
-    fn parse(i: &mut WasmStreamReader) -> Result<TableType, ParserError> {
+    fn parse(i: &mut WasmBinaryReader) -> Result<TableType, ParserError> {
         let ref_type = RefType::parse(i)?;
         let lim = Limits::parse(i)?;
         Ok(TableType { ref_type, lim })
@@ -128,7 +130,7 @@ impl Parse for TableType {
 }
 
 impl Parse for GlobalType {
-    fn parse(i: &mut WasmStreamReader) -> Result<GlobalType, ParserError> {
+    fn parse(i: &mut WasmBinaryReader) -> Result<GlobalType, ParserError> {
         let value_type = ValType::parse(i)?;
         match i.read_byte()? {
             0x00 => Ok(GlobalType::Const(value_type)),
@@ -139,7 +141,7 @@ impl Parse for GlobalType {
 }
 
 impl Parse for ImportDesc {
-    fn parse(i: &mut WasmStreamReader) -> Result<ImportDesc, ParserError> {
+    fn parse(i: &mut WasmBinaryReader) -> Result<ImportDesc, ParserError> {
         match i.read_byte()? {
             0x00 => Ok(ImportDesc::Func(TypeIdx::parse(i)?)),
             0x01 => Ok(ImportDesc::Table(TableType::parse(i)?)),
@@ -151,7 +153,7 @@ impl Parse for ImportDesc {
 }
 
 impl Parse for Import {
-    fn parse(i: &mut WasmStreamReader) -> Result<Import, ParserError> {
+    fn parse(i: &mut WasmBinaryReader) -> Result<Import, ParserError> {
         let module = Name::parse(i)?;
         let name = Name::parse(i)?;
         let desc = ImportDesc::parse(i)?;
@@ -160,7 +162,7 @@ impl Parse for Import {
 }
 
 impl Parse for Table {
-    fn parse(i: &mut WasmStreamReader) -> Result<Table, ParserError> {
+    fn parse(i: &mut WasmBinaryReader) -> Result<Table, ParserError> {
         Ok(Table {
             r#type: TableType::parse(i)?,
             import: false,
@@ -169,7 +171,7 @@ impl Parse for Table {
 }
 
 impl Parse for Memory {
-    fn parse(i: &mut WasmStreamReader) -> Result<Memory, ParserError> {
+    fn parse(i: &mut WasmBinaryReader) -> Result<Memory, ParserError> {
         Ok(Memory {
             limits: Limits::parse(i)?,
             import: false,
@@ -178,7 +180,7 @@ impl Parse for Memory {
 }
 
 impl Parse for Export {
-    fn parse(i: &mut WasmStreamReader) -> Result<Export, ParserError> {
+    fn parse(i: &mut WasmBinaryReader) -> Result<Export, ParserError> {
         let name = Name::parse(i)?;
         // parse ExportDesc
         match i.read_byte()? {
@@ -204,7 +206,10 @@ impl Parse for Export {
 }
 
 impl ParseWithContext for Element {
-    fn parse_with_context(i: &mut WasmStreamReader, m: &Module) -> Result<Element, ParserError> {
+    fn parse_with_context(
+        i: &mut WasmBinaryReader,
+        m: &ModuleMetadata,
+    ) -> Result<Element, ParserError> {
         let code = i.read_leb128::<u32>()?;
         if code > 7 {
             return Err(ParserError::Msg("invalid element prefix code".into()));
@@ -272,7 +277,7 @@ impl ParseWithContext for Element {
 }
 
 impl Parse for Vec<u8> {
-    fn parse(i: &mut WasmStreamReader) -> Result<Vec<u8>, ParserError> {
+    fn parse(i: &mut WasmBinaryReader) -> Result<Vec<u8>, ParserError> {
         let len = i.read_leb128::<u32>()?;
         (0..len).map(|_| i.read_byte()).collect()
     }
@@ -280,7 +285,7 @@ impl Parse for Vec<u8> {
 
 impl ParseWithContext for BlockType {
     // this encoding is (in my opinion) cursed compared to the rest of the spec
-    fn parse_with_context(i: &mut WasmStreamReader, m: &Module) -> Result<Self, ParserError>
+    fn parse_with_context(i: &mut WasmBinaryReader, m: &ModuleMetadata) -> Result<Self, ParserError>
     where
         Self: std::marker::Sized,
     {
@@ -304,7 +309,7 @@ impl ParseWithContext for BlockType {
 }
 
 impl Parse for MemArg {
-    fn parse(i: &mut WasmStreamReader) -> Result<MemArg, ParserError> {
+    fn parse(i: &mut WasmBinaryReader) -> Result<MemArg, ParserError> {
         let align = i.read_leb128::<u32>()?;
         let offset = i.read_leb128::<u32>()?;
         Ok(MemArg { align, offset })
@@ -312,7 +317,7 @@ impl Parse for MemArg {
 }
 
 impl Parse for Section {
-    fn parse(i: &mut WasmStreamReader) -> Result<Section, ParserError> {
+    fn parse(i: &mut WasmBinaryReader) -> Result<Section, ParserError> {
         Ok(match i.read_byte()? {
             0 => Section::Custom,
             1 => Section::Type,
@@ -333,7 +338,10 @@ impl Parse for Section {
 }
 
 pub(crate) trait ParseWithContext {
-    fn parse_with_context(i: &mut WasmStreamReader, m: &Module) -> Result<Self, ParserError>
+    fn parse_with_context(
+        i: &mut WasmBinaryReader,
+        m: &ModuleMetadata,
+    ) -> Result<Self, ParserError>
     where
         Self: std::marker::Sized;
 }
@@ -341,14 +349,11 @@ pub(crate) trait ParseWithContext {
 impl ParseWithContext for ConstantExpression {
     // only used for parsing constant expressions
     fn parse_with_context(
-        i: &mut WasmStreamReader,
-        module: &Module,
+        i: &mut WasmBinaryReader,
+        module: &ModuleMetadata,
     ) -> Result<ConstantExpression, ParserError> {
-        let fake_func = match Function::create_empty(0).src {
-            ir::function::FunctionSource::Internal(f) => f,
-            _ => unreachable!(),
-        };
-        let mut ctxt = Context::new(module, &fake_func);
+        let empty_func = FunctionIR::default();
+        let mut ctxt = Context::new(module, &empty_func);
         let mut labels = Vec::new();
         let mut builder = FunctionBuilder::new();
         builder.start_bb();
@@ -370,7 +375,10 @@ impl ParseWithContext for ConstantExpression {
 }
 
 impl ParseWithContext for Global {
-    fn parse_with_context(i: &mut WasmStreamReader, m: &Module) -> Result<Self, ParserError> {
+    fn parse_with_context(
+        i: &mut WasmBinaryReader,
+        m: &ModuleMetadata,
+    ) -> Result<Self, ParserError> {
         let r#type = GlobalType::parse(i)?;
         let const_expr = ConstantExpression::parse_with_context(i, m)?;
         Ok(Global {

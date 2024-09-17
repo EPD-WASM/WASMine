@@ -4,9 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-ir = { workspace = true }
-loader = { workspace = true }
-parser = { workspace = true }
 runtime-lib = { workspace = true }
 wasi = { workspace = true }
 criterion = "0.5"
@@ -39,6 +36,26 @@ path = "benches/speccpu/wasmine_llvm_bench_criterion_557.rs"
 harness = false
 
 [[bench]]
+name = "wasmine_parser_bench_criterion_speccpu_505"
+path = "benches/speccpu/wasmine_parser_bench_criterion_505.rs"
+harness = false
+
+[[bench]]
+name = "wasmine_parser_bench_criterion_speccpu_508"
+path = "benches/speccpu/wasmine_parser_bench_criterion_508.rs"
+harness = false
+
+[[bench]]
+name = "wasmine_parser_bench_criterion_speccpu_519"
+path = "benches/speccpu/wasmine_parser_bench_criterion_519.rs"
+harness = false
+
+[[bench]]
+name = "wasmine_parser_bench_criterion_speccpu_557"
+path = "benches/speccpu/wasmine_parser_bench_criterion_557.rs"
+harness = false
+
+[[bench]]
 name = "wasmtime_criterion_speccpu_505"
 path = "benches/speccpu/wasmtime_criterion_505.rs"
 harness = false
@@ -59,21 +76,21 @@ path = "benches/speccpu/wasmtime_criterion_557.rs"
 harness = false
 
 [[bench]]
-name = "wasmine_llvm_bench_iai_speccpu_505"
-path = "benches/speccpu/wasmine_llvm_bench_iai_505.rs"
+name = "wasmine_parser_bench_iai_speccpu_505"
+path = "benches/speccpu/wasmine_parser_bench_iai_505.rs"
 harness = false
 
 [[bench]]
-name = "wasmine_llvm_bench_iai_speccpu_508"
-path = "benches/speccpu/wasmine_llvm_bench_iai_508.rs"
+name = "wasmine_parser_bench_iai_speccpu_508"
+path = "benches/speccpu/wasmine_parser_bench_iai_508.rs"
 harness = false
 
 [[bench]]
-name = "wasmine_llvm_bench_iai_speccpu_519"
-path = "benches/speccpu/wasmine_llvm_bench_iai_519.rs"
+name = "wasmine_parser_bench_iai_speccpu_519"
+path = "benches/speccpu/wasmine_parser_bench_iai_519.rs"
 harness = false
 
 [[bench]]
-name = "wasmine_llvm_bench_iai_speccpu_557"
-path = "benches/speccpu/wasmine_llvm_bench_iai_557.rs"
+name = "wasmine_parser_bench_iai_speccpu_557"
+path = "benches/speccpu/wasmine_parser_bench_iai_557.rs"
 harness = false

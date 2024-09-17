@@ -1,6 +1,5 @@
 use crate::objects::functions::BoundaryCCFuncTy;
-use ir::structs::{module::Module as WasmModule, value::ValueRaw};
-use loader::CwasmLoader;
+use module::objects::{module::Module as WasmModule, value::ValueRaw};
 use runtime_interface::RawPointer;
 use std::{
     ops::{Deref, DerefMut},
@@ -33,11 +32,7 @@ pub enum EngineError {
 pub struct Engine(Box<dyn WasmEngine>);
 
 pub trait WasmEngine {
-    fn init(
-        &mut self,
-        wasm_module: Rc<WasmModule>,
-        c_loader: Option<&CwasmLoader>,
-    ) -> Result<(), EngineError>;
+    fn init(&mut self, wasm_module: Rc<WasmModule>) -> Result<(), EngineError>;
 
     fn set_symbol_addr(&mut self, name: &str, address: RawPointer);
 
@@ -84,11 +79,11 @@ impl DerefMut for Engine {
 #[cfg(feature = "llvm")]
 mod llvm_engine_impl {
     use super::*;
+    use llvm_gen::Translator;
     use wasm_types::GlobalIdx;
 
     pub(crate) struct LLVMEngine {
         context: Rc<llvm_gen::Context>,
-        translator: llvm_gen::Translator,
         executor: llvm_gen::JITExecutor,
         module_already_translated: bool,
         wasm_module: Option<Rc<WasmModule>>,
@@ -97,11 +92,9 @@ mod llvm_engine_impl {
     impl LLVMEngine {
         pub(crate) fn new() -> Result<Self, EngineError> {
             let context = Rc::new(llvm_gen::Context::create());
-            let translator = llvm_gen::Translator::new(context.clone())?;
             let executor = llvm_gen::JITExecutor::new(context.clone())?;
             Ok(Self {
                 context,
-                translator,
                 executor,
                 module_already_translated: false,
                 wasm_module: None,
@@ -110,19 +103,25 @@ mod llvm_engine_impl {
     }
 
     impl WasmEngine for LLVMEngine {
-        fn init(
-            &mut self,
-            wasm_module: Rc<WasmModule>,
-            c_loader: Option<&CwasmLoader>,
-        ) -> Result<(), EngineError> {
+        fn init(&mut self, wasm_module: Rc<WasmModule>) -> Result<(), EngineError> {
             self.wasm_module = Some(wasm_module.clone());
-            if let Some(loader) = c_loader {
-                self.executor.add_object_file(loader.llvm_memory_buffer())?;
-            } else {
-                let llvm_module = self.translator.translate_module(wasm_module)?;
-                self.executor.add_module(llvm_module)?;
+
+            // aot case
+            if let Some(first_function) = wasm_module.meta.functions.first() {
+                if let Some(precomp_info) = first_function.get_precompiled_llvm() {
+                    self.executor.add_object_file(unsafe {
+                        &*std::ptr::slice_from_raw_parts(
+                            precomp_info.offset as *const u8,
+                            precomp_info.size,
+                        )
+                    })?;
+                    self.module_already_translated = true;
+                    return Ok(());
+                }
             }
-            self.module_already_translated = true;
+
+            let llvm_module = Translator::translate_module(self.context.clone(), wasm_module)?;
+            self.executor.add_module(llvm_module)?;
             Ok(())
         }
 
@@ -142,6 +141,7 @@ mod llvm_engine_impl {
                 .wasm_module
                 .as_ref()
                 .ok_or(EngineError::EngineUninitialized)?
+                .meta
                 .exports
                 .find_function_name(function_idx)
                 .ok_or(EngineError::FunctionNotFound(function_idx))?;
@@ -180,11 +180,7 @@ mod interpreter_engine_impl {
 
     impl WasmEngine for InterpreterEngine {
         // this is to set the module to be run so it does not have to be provided when the Engine is created
-        fn init(
-            &mut self,
-            wasm_module: Rc<WasmModule>,
-            _c_loader: Option<&CwasmLoader>,
-        ) -> Result<(), EngineError> {
+        fn init(&mut self, wasm_module: Rc<WasmModule>) -> Result<(), EngineError> {
             self.interpreter.set_module(wasm_module);
             Ok(())
         }

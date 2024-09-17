@@ -1,4 +1,4 @@
-use ir::instructions::TableSetInstruction;
+use module::instructions::TableSetInstruction;
 
 use crate::{Executable, InterpreterContext, InterpreterError};
 

@@ -1,5 +1,5 @@
-use ir::{
-    structs::value::Value,
+use module::{
+    objects::value::Value,
     utils::numeric_transmutes::{Bit32, Bit64},
 };
 use runtime_lib::RuntimeError;

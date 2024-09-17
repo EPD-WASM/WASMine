@@ -1,4 +1,4 @@
-use ir::instructions::ExtendTypeInstruction;
+use module::instructions::ExtendTypeInstruction;
 
 use crate::{Executable, InterpreterContext, InterpreterError};
 

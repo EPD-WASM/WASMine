@@ -1,4 +1,4 @@
-use ir::{instructions::ITestInstruction, structs::value::Number};
+use module::{instructions::ITestInstruction, objects::value::Number};
 
 use crate::Executable;
 

@@ -1,5 +1,5 @@
 use crate::{Executable, InterpreterContext, InterpreterError};
-use ir::instructions::TableSizeInstruction;
+use module::instructions::TableSizeInstruction;
 
 impl Executable for TableSizeInstruction {
     fn execute(&mut self, ctx: &mut InterpreterContext) -> Result<(), InterpreterError> {

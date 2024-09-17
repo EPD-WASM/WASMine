@@ -1,6 +1,6 @@
 use super::instance_handle::InstantiationError;
 use crate::{linker::RTGlobalImport, Cluster, Engine};
-use ir::structs::{
+use module::objects::{
     global::Global,
     value::{ConstantValue, ValueRaw},
 };

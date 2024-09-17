@@ -1,6 +1,6 @@
-use ir::{
+use module::{
     instructions::ReferenceFunctionInstruction,
-    structs::value::{Reference, Value},
+    objects::value::{Reference, Value},
 };
 
 use crate::{Executable, InterpreterContext, InterpreterError};

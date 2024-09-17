@@ -1,4 +1,4 @@
-use ir::instructions::LocalTeeInstruction;
+use module::instructions::LocalTeeInstruction;
 
 use crate::{util, Executable, InterpreterContext, InterpreterError};
 

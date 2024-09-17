@@ -1,9 +1,10 @@
 extern crate anyhow;
 extern crate runtime_lib;
 use anyhow::{Context, Result};
-use loader::WasmLoader;
+use resource_buffer::ResourceBuffer;
 use runtime_lib::{
-    Cluster, ClusterConfig, Engine, InstanceHandle, Linker, Parser, RuntimeError, WasmModule,
+    Cluster, ClusterConfig, Engine, FunctionLoader, InstanceHandle, Linker, ModuleMetaLoader,
+    RuntimeError, WasmModule,
 };
 use std::ffi::c_void;
 use std::os::fd::IntoRawFd;
@@ -287,9 +288,10 @@ impl<'a> BenchState<'a> {
         );
 
         (self.compilation_start)(self.compilation_timer);
-        let loader = WasmLoader::from_buf(bytes.to_vec());
-        let parser = Parser::default();
-        let module = parser.parse(loader)?;
+        let source = ResourceBuffer::from_wasm_buf(bytes.to_vec());
+        let mut module = WasmModule::new(source);
+        module.load_meta(ModuleMetaLoader).unwrap();
+        module.load_all_functions(FunctionLoader).unwrap();
         (self.compilation_end)(self.compilation_timer);
 
         self.module = Some(Rc::new(module));
@@ -305,7 +307,7 @@ impl<'a> BenchState<'a> {
         (self.instantiation_start)(self.instantiation_timer);
         let wasi_ctxt = (self.make_wasi_cx)()?;
         let mut engine = Engine::llvm()?;
-        engine.init(module.clone(), None)?;
+        engine.init(module.clone())?;
 
         let instance = self
             .linker

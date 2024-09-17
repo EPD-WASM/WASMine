@@ -59,8 +59,8 @@ impl ExecutionContextWrapper<'_> {
                 func_idx,
                 func_type,
             } => {
-                let expected_function_type = &wasm_module.function_types[ty_idx as usize];
-                let actual_function_type = &wasm_module.function_types[*func_type as usize];
+                let expected_function_type = &wasm_module.meta.function_types[ty_idx as usize];
+                let actual_function_type = &wasm_module.meta.function_types[*func_type as usize];
                 if expected_function_type != actual_function_type {
                     return Err(TableError::TableFunctionTypeMismatch {
                         expected: *expected_function_type,

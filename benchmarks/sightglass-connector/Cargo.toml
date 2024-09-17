@@ -7,8 +7,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-ir = { workspace = true }
 wasi = { workspace = true }
-loader = { workspace = true }
+resource-buffer = { workspace = true }
 runtime-lib = { workspace = true }
 anyhow = "1.0.86"

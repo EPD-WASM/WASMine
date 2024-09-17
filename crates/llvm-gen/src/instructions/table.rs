@@ -1,12 +1,12 @@
 use crate::{abstraction::function::Function, TranslationError, Translator};
-use ir::{
+use llvm_sys::prelude::LLVMValueRef;
+use module::{
     instructions::{
         ElemDropInstruction, TableCopyInstruction, TableFillInstruction, TableGetInstruction,
         TableGrowInstruction, TableInitInstruction, TableSetInstruction, TableSizeInstruction,
     },
     InstructionDecoder,
 };
-use llvm_sys::prelude::LLVMValueRef;
 use wasm_types::{InstructionType, TableInstructionCategory, ValType};
 
 impl Translator {
@@ -70,7 +70,7 @@ impl Translator {
                     instr.table_idx,
                     variable_map[instr.idx as usize],
                     self.builder.valtype2llvm(ValType::Reference(
-                        self.wasm_module.tables[instr.table_idx as usize]
+                        self.wasm_module.meta.tables[instr.table_idx as usize]
                             .r#type
                             .ref_type,
                     )),

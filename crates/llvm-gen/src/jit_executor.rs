@@ -4,7 +4,7 @@ use crate::{
     },
     error::ExecutionError,
 };
-use ir::structs::value::ValueRaw;
+use module::objects::value::ValueRaw;
 use runtime_interface::RawPointer;
 use std::rc::Rc;
 use wasm_types::GlobalIdx;

@@ -1,5 +1,5 @@
-use loader::WasmLoader;
-use parser::Parser;
+use module::Module;
+use runtime_lib::ResourceBuffer;
 use wast::Wast;
 
 pub fn test_parser(file_path: &str) {
@@ -9,8 +9,7 @@ pub fn test_parser(file_path: &str) {
         Ok(wast) => wast,
         Err(e) => {
             eprintln!(
-                "Warning: Third-party wast parser failed to parse spec test file: {:?}\n{:?}",
-                file_path, e
+                "Warning: Third-party wast parser failed to parse spec test file: {file_path:?}\n{e:?}"
             );
             return;
         }
@@ -20,17 +19,18 @@ pub fn test_parser(file_path: &str) {
         match directive {
             wast::WastDirective::Wat(wast::QuoteWat::Wat(wast::Wat::Module(mut module))) => {
                 let binary_mod = module.encode().unwrap();
-                let parser = Parser::default();
-                let loader = WasmLoader::from_buf(binary_mod.clone());
-                let res = parser.parse(loader);
-                if res.is_err() {
+                let source = ResourceBuffer::from_wasm_buf(binary_mod.clone());
+                let mut module = Module::new(source);
+                if module
+                    .load_meta(parser::ModuleMetaLoader)
+                    .and_then(|_| module.load_all_functions(parser::FunctionLoader))
+                    .is_err()
+                {
                     std::fs::write("test_module_dump.wasm", binary_mod).unwrap();
                     eprintln!(
-                        "Parsing failed of spec test file: {:?}:{}:{}\nWriting binary module to ./test_module_dump.wasm",
-                        file_path, line, col
+                        "Parsing failed of spec test file: {file_path:?}:{line}:{col}\nWriting binary module to ./test_module_dump.wasm"
                     );
                 }
-                res.unwrap();
             }
             wast::WastDirective::AssertMalformed {
                 span: _,
@@ -38,14 +38,16 @@ pub fn test_parser(file_path: &str) {
                 message,
             } => {
                 let binary_mod = module.encode().unwrap();
-                let parser = Parser::default();
-                let loader = WasmLoader::from_buf(binary_mod.clone());
-                let res = parser.parse(loader);
-                if res.is_ok() {
+                let source = ResourceBuffer::from_wasm_buf(binary_mod.clone());
+                let mut module = Module::new(source);
+                if module
+                    .load_meta(parser::ModuleMetaLoader)
+                    .and_then(|_| module.load_all_functions(parser::FunctionLoader))
+                    .is_ok()
+                {
                     std::fs::write("test_module_dump.wasm", binary_mod).unwrap();
                     panic!(
-                        "expected parsing failure \"{}\" for malformed module in spec test file {:?}:{}:{}, but parsed successfully.\nnWriting binary module to ./test_module_dump.wasm",
-                        message, file_path, line, col
+                        "expected parsing failure \"{message}\" for malformed module in spec test file {file_path:?}:{line}:{col}, but parsed successfully.\nnWriting binary module to ./test_module_dump.wasm"
                     )
                 }
             }

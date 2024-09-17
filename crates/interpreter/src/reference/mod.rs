@@ -1,4 +1,4 @@
-use ir::instructions::{
+use module::instructions::{
     Instruction, ReferenceFunctionInstruction, ReferenceIsNullInstruction, ReferenceNullInstruction,
 };
 use wasm_types::{InstructionType, ReferenceInstructionType};

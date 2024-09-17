@@ -1,5 +1,5 @@
 use crate::{error::TranslationError, translator::Translator};
-use ir::{
+use module::{
     instructions::{
         ReferenceFunctionInstruction, ReferenceIsNullInstruction, ReferenceNullInstruction,
     },

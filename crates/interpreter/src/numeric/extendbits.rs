@@ -1,6 +1,6 @@
-use ir::{
+use module::{
     instructions::ExtendBitsInstruction,
-    structs::value::{Number, Value},
+    objects::value::{Number, Value},
 };
 
 use crate::{Executable, InterpreterContext, InterpreterError};

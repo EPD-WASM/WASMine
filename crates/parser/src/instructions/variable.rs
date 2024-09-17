@@ -4,7 +4,7 @@ use wasm_types::*;
 
 pub(crate) fn local_get(
     ctxt: &mut Context,
-    i: &mut WasmStreamReader,
+    i: &mut WasmBinaryReader,
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     let local_idx = LocalIdx::parse(i)?;
@@ -29,7 +29,7 @@ pub(crate) fn local_get(
 
 pub(crate) fn global_get(
     ctxt: &mut Context,
-    i: &mut WasmStreamReader,
+    i: &mut WasmBinaryReader,
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     let global_idx = GlobalIdx::parse(i)?;
@@ -58,7 +58,7 @@ pub(crate) fn global_get(
 
 pub(crate) fn local_set(
     ctxt: &mut Context,
-    i: &mut WasmStreamReader,
+    i: &mut WasmBinaryReader,
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     let local_idx = LocalIdx::parse(i)?;
@@ -89,7 +89,7 @@ pub(crate) fn local_set(
 
 pub(crate) fn global_set(
     ctxt: &mut Context,
-    i: &mut WasmStreamReader,
+    i: &mut WasmBinaryReader,
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     let global_idx = GlobalIdx::parse(i)?;
@@ -130,7 +130,7 @@ pub(crate) fn global_set(
 
 pub(crate) fn local_tee(
     ctxt: &mut Context,
-    i: &mut WasmStreamReader,
+    i: &mut WasmBinaryReader,
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     let local_idx = LocalIdx::parse(i)?;

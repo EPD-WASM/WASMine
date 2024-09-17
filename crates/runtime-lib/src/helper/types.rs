@@ -1,5 +1,5 @@
 use super::utils::macro_invoke_for_each_function_signature;
-use ir::structs::value::ValueRaw;
+use module::objects::value::ValueRaw;
 use std::mem::MaybeUninit;
 use wasm_types::{FuncType, FuncTypeBuilder, NumType, ValType};
 

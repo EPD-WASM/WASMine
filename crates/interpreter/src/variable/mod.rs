@@ -1,4 +1,4 @@
-use ir::instructions::{
+use module::instructions::{
     GlobalGetInstruction, GlobalSetInstruction, Instruction, LocalGetInstruction,
     LocalSetInstruction, LocalTeeInstruction,
 };

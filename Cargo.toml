@@ -7,15 +7,16 @@ edition = "2021"
 runtime-lib = { workspace = true }
 wasm-types = { workspace = true }
 parser = { workspace = true }
-loader = { workspace = true }
+resource-buffer = { workspace = true }
 interpreter = { workspace = true }
 llvm-gen = { workspace = true }
-ir = { workspace = true }
+module = { workspace = true }
 runtime-interface = { workspace = true }
 simplelog = { workspace = true }
 clap = { workspace = true }
 log = { workspace = true }
 wasi = { workspace = true }
+rkyv = { workspace = true }
 
 [dev-dependencies]
 gen_util = { workspace = true }
@@ -51,10 +52,10 @@ members = [
 
     "crates/runtime-lib",
     "crates/interpreter",
-    "crates/ir",
+    "crates/module",
     "crates/parser",
     "crates/wasm-types",
-    "crates/loader",
+    "crates/resource-buffer",
     "crates/runtime-interface",
     "crates/llvm-gen",
     "crates/wasi",
@@ -87,10 +88,10 @@ manual_strip = 'warn'
 [workspace.dependencies]
 runtime-lib = { path = "crates/runtime-lib", version = "0.1.0" }
 interpreter = { path = "crates/interpreter" }
-ir = { path = "crates/ir", version = "0.1.0" }
+module = { path = "crates/module", version = "0.1.0" }
 parser = { path = "crates/parser", version = "0.1.0" }
 wasm-types = { path = "crates/wasm-types", version = "0.1.0" }
-loader = { path = "crates/loader", version = "0.1.0" }
+resource-buffer = { path = "crates/resource-buffer", version = "0.1.0" }
 runtime-interface = { path = "crates/runtime-interface", version = "0.1.0" }
 llvm-gen = { path = "crates/llvm-gen", version = "0.1.0" }
 wasi = { path = "crates/wasi", version = "0.1.0" }
@@ -108,10 +109,11 @@ clap = { version = "4.5.17", features = ["derive"] }
 nix = { version = "0.29.0", features = ["signal"] }
 rand = "0.8.5"
 itertools = "0.13.0"
-bitcode = "0.6.3"
+rkyv = { version = "0.7.45", features = ["smallvec"] }
 memmap2 = "0.9.4"
 tempfile = "3.12.0"
 llvm-sys = { package = "llvm-sys", version = "181.1.1", features = ["prefer-dynamic"] }
+smallvec = "1.13.2"
 
 
 [features]

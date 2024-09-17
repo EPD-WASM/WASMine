@@ -10,5 +10,5 @@ workspace = true
 
 [dependencies]
 wasm-types = { workspace = true }
-ir = { workspace = true }
+module = { workspace = true }
 cee-scape = { workspace = true }

@@ -3,7 +3,7 @@ use crate::parsable::Parse;
 
 pub(crate) fn ref_is_null(
     ctxt: &mut Context,
-    _: &mut WasmStreamReader,
+    _: &mut WasmBinaryReader,
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     let val = ctxt.pop_var();
@@ -25,7 +25,7 @@ pub(crate) fn ref_is_null(
 
 pub(crate) fn ref_null(
     ctxt: &mut Context,
-    i: &mut WasmStreamReader,
+    i: &mut WasmBinaryReader,
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     let ref_type = RefType::parse(i)?;
@@ -40,7 +40,7 @@ pub(crate) fn ref_null(
 
 pub(crate) fn ref_func(
     ctxt: &mut Context,
-    i: &mut WasmStreamReader,
+    i: &mut WasmBinaryReader,
     o: &mut InstructionEncoder,
 ) -> ParseResult {
     let func_idx = FuncIdx::parse(i)?;

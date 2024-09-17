@@ -1,8 +1,8 @@
 use crate::abstraction::function::Function;
 use crate::util::c_str;
 use crate::{error::TranslationError, translator::Translator};
-use ir::instructions::*;
-use ir::{
+use module::instructions::*;
+use module::{
     instructions::{FBinaryInstruction, FUnaryInstruction, IBinaryInstruction, IUnaryInstruction},
     InstructionDecoder,
 };
