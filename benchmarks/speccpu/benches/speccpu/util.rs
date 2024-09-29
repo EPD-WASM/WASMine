@@ -78,7 +78,7 @@ pub static SPECCPU_557: Lazy<SpeccpuBenchmark> = Lazy::new(|| {
 }
 });
 
-pub fn wasmine_parser_speccpu_criterion(bm: SpeccpuBenchmark, c: &mut Criterion) {
+pub fn wasmine_parser_criterion(bm: SpeccpuBenchmark, c: &mut Criterion) {
     let wasm_bytes = std::fs::read(bm.wasm_path).unwrap();
     let mut group = c.benchmark_group("speccpu");
     group.throughput(Throughput::Bytes(wasm_bytes.len() as u64));
@@ -98,7 +98,7 @@ pub fn wasmine_parser_speccpu_criterion(bm: SpeccpuBenchmark, c: &mut Criterion)
     });
 }
 
-pub fn wasmine_llvm_speccpu_criterion(bm: SpeccpuBenchmark, c: &mut Criterion) {
+pub fn wasmine_llvm_jit_criterion(bm: SpeccpuBenchmark, c: &mut Criterion) {
     let mut group = c.benchmark_group("speccpu");
     group.throughput(Throughput::Elements(1));
     group.sample_size(10);
@@ -159,7 +159,7 @@ pub fn wasmine_llvm_speccpu_criterion(bm: SpeccpuBenchmark, c: &mut Criterion) {
     });
 }
 
-pub fn wasmine_parse_speccpu_iai(bm: SpeccpuBenchmark) -> WasmModule {
+pub fn wasmine_parse_iai(bm: SpeccpuBenchmark) -> WasmModule {
     let _stdout_dropper = gag::Gag::stdout().unwrap();
     let _stderr_dropper = gag::Gag::stderr().unwrap();
 
@@ -175,7 +175,7 @@ pub fn wasmine_parse_speccpu_iai(bm: SpeccpuBenchmark) -> WasmModule {
     module
 }
 
-pub fn wasmtime_parser_speccpu_criterion(bm: SpeccpuBenchmark, c: &mut Criterion) {
+pub fn wasmtime_parser_criterion(bm: SpeccpuBenchmark, c: &mut Criterion) {
     let wasm_bytes = std::fs::read(bm.wasm_path).unwrap();
 
     let mut group = c.benchmark_group("speccpu");
@@ -197,7 +197,7 @@ pub fn wasmtime_parser_speccpu_criterion(bm: SpeccpuBenchmark, c: &mut Criterion
     });
 }
 
-pub fn wasmtime_speccpu_criterion(bm: SpeccpuBenchmark, c: &mut Criterion) {
+pub fn wasmtime_jit_criterion(bm: SpeccpuBenchmark, c: &mut Criterion) {
     let mut group = c.benchmark_group("speccpu");
     group.throughput(Throughput::Elements(1));
     group.sample_size(10);

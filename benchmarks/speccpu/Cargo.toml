@@ -16,81 +16,26 @@ wasmtime-wasi = "24.0.0"
 once_cell = "1.19.0"
 
 [[bench]]
-name = "wasmine_llvm_bench_criterion_speccpu_505"
-path = "benches/speccpu/wasmine_llvm_bench_criterion_505.rs"
+name = "wasmine_llvm_jit_criterion"
+path = "benches/speccpu/wasmine_llvm_jit_criterion.rs"
 harness = false
 
 [[bench]]
-name = "wasmine_llvm_bench_criterion_speccpu_508"
-path = "benches/speccpu/wasmine_llvm_bench_criterion_508.rs"
+name = "wasmine_parser_criterion"
+path = "benches/speccpu/wasmine_parser_criterion.rs"
 harness = false
 
 [[bench]]
-name = "wasmine_llvm_bench_criterion_speccpu_519"
-path = "benches/speccpu/wasmine_llvm_bench_criterion_519.rs"
+name = "wasmtime_parser_criterion"
+path = "benches/speccpu/wasmtime_parser_criterion.rs"
 harness = false
 
 [[bench]]
-name = "wasmine_llvm_bench_criterion_speccpu_557"
-path = "benches/speccpu/wasmine_llvm_bench_criterion_557.rs"
+name = "wasmtime_criterion"
+path = "benches/speccpu/wasmtime_criterion.rs"
 harness = false
 
 [[bench]]
-name = "wasmine_parser_bench_criterion_speccpu_505"
-path = "benches/speccpu/wasmine_parser_bench_criterion_505.rs"
-harness = false
-
-[[bench]]
-name = "wasmine_parser_bench_criterion_speccpu_508"
-path = "benches/speccpu/wasmine_parser_bench_criterion_508.rs"
-harness = false
-
-[[bench]]
-name = "wasmine_parser_bench_criterion_speccpu_519"
-path = "benches/speccpu/wasmine_parser_bench_criterion_519.rs"
-harness = false
-
-[[bench]]
-name = "wasmine_parser_bench_criterion_speccpu_557"
-path = "benches/speccpu/wasmine_parser_bench_criterion_557.rs"
-harness = false
-
-[[bench]]
-name = "wasmtime_criterion_speccpu_505"
-path = "benches/speccpu/wasmtime_criterion_505.rs"
-harness = false
-
-[[bench]]
-name = "wasmtime_criterion_speccpu_508"
-path = "benches/speccpu/wasmtime_criterion_508.rs"
-harness = false
-
-[[bench]]
-name = "wasmtime_criterion_speccpu_519"
-path = "benches/speccpu/wasmtime_criterion_519.rs"
-harness = false
-
-[[bench]]
-name = "wasmtime_criterion_speccpu_557"
-path = "benches/speccpu/wasmtime_criterion_557.rs"
-harness = false
-
-[[bench]]
-name = "wasmine_parser_bench_iai_speccpu_505"
-path = "benches/speccpu/wasmine_parser_bench_iai_505.rs"
-harness = false
-
-[[bench]]
-name = "wasmine_parser_bench_iai_speccpu_508"
-path = "benches/speccpu/wasmine_parser_bench_iai_508.rs"
-harness = false
-
-[[bench]]
-name = "wasmine_parser_bench_iai_speccpu_519"
-path = "benches/speccpu/wasmine_parser_bench_iai_519.rs"
-harness = false
-
-[[bench]]
-name = "wasmine_parser_bench_iai_speccpu_557"
-path = "benches/speccpu/wasmine_parser_bench_iai_557.rs"
+name = "wasmine_parser_iai"
+path = "benches/speccpu/wasmine_parser_iai.rs"
 harness = false
