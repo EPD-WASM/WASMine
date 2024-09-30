@@ -10,19 +10,11 @@ pub struct TableSetInstruction {
 }
 
 impl Instruction for TableSetInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Table(TableInstructionCategory::Set));
-        o.write_immediate(self.table_idx);
-        o.write_value_type(self.input_type);
-        o.write_variable(self.in1);
-        o.write_variable(self.idx);
-    }
-
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         let table_idx = i.read_immediate()?;
         let input_type = i.read_value_type()?;
-        let in1: u32 = i.read_variable()?;
-        let idx: u32 = i.read_variable()?;
+        let in1: VariableID = i.read_variable()?;
+        let idx: VariableID = i.read_variable()?;
         Ok(TableSetInstruction {
             table_idx,
             in1,
@@ -50,13 +42,6 @@ pub struct TableGetInstruction {
 }
 
 impl Instruction for TableGetInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Table(TableInstructionCategory::Get));
-        o.write_immediate(self.table_idx);
-        o.write_variable(self.idx);
-        o.write_variable(self.out1);
-    }
-
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         let table_idx = i.read_immediate()?;
         let idx = i.read_variable()?;
@@ -84,14 +69,6 @@ pub struct TableGrowInstruction {
 }
 
 impl Instruction for TableGrowInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Table(TableInstructionCategory::Grow));
-        o.write_immediate(self.table_idx);
-        o.write_variable(self.size);
-        o.write_variable(self.value_to_fill);
-        o.write_variable(self.out1);
-    }
-
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         let table_idx = i.read_immediate()?;
         let size = i.read_variable()?;
@@ -123,12 +100,6 @@ pub struct TableSizeInstruction {
 }
 
 impl Instruction for TableSizeInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Table(TableInstructionCategory::Size));
-        o.write_immediate(self.table_idx);
-        o.write_variable(self.out1);
-    }
-
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         let table_idx = i.read_immediate()?;
         let out1 = i.read_variable()?;
@@ -155,14 +126,6 @@ pub struct TableFillInstruction {
 }
 
 impl Instruction for TableFillInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Table(TableInstructionCategory::Fill));
-        o.write_immediate(self.table_idx);
-        o.write_variable(self.i);
-        o.write_variable(self.n);
-        o.write_variable(self.ref_value);
-    }
-
     fn deserialize(
         in_: &mut InstructionDecoder,
         _: InstructionType,
@@ -200,15 +163,6 @@ pub struct TableCopyInstruction {
 }
 
 impl Instruction for TableCopyInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Table(TableInstructionCategory::Copy));
-        o.write_immediate(self.table_idx_x);
-        o.write_immediate(self.table_idx_y);
-        o.write_variable(self.n);
-        o.write_variable(self.s);
-        o.write_variable(self.d);
-    }
-
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         let table_idx_x = i.read_immediate()?;
         let table_idx_y = i.read_immediate()?;
@@ -245,15 +199,6 @@ pub struct TableInitInstruction {
 }
 
 impl Instruction for TableInitInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Table(TableInstructionCategory::Init));
-        o.write_immediate(self.table_idx);
-        o.write_immediate(self.elem_idx);
-        o.write_variable(self.n);
-        o.write_variable(self.s);
-        o.write_variable(self.d);
-    }
-
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         let table_idx = i.read_immediate()?;
         let elem_idx = i.read_immediate()?;
@@ -286,11 +231,6 @@ pub struct ElemDropInstruction {
 }
 
 impl Instruction for ElemDropInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Table(TableInstructionCategory::Drop));
-        o.write_immediate(self.elem_idx);
-    }
-
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         let elem_idx = i.read_immediate()?;
         Ok(ElemDropInstruction { elem_idx })

@@ -8,14 +8,6 @@ pub struct WrapInstruction {
 }
 
 impl Instruction for WrapInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Numeric(
-            NumericInstructionCategory::Conversion(ConversionOp::Wrap),
-        ));
-        o.write_variable(self.in1);
-        o.write_variable(self.out1);
-    }
-
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         Ok(WrapInstruction {
             in1: i.read_variable()?,
@@ -43,19 +35,6 @@ pub struct ConvertInstruction {
 }
 
 impl Instruction for ConvertInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Numeric(
-            NumericInstructionCategory::Conversion(ConversionOp::Convert),
-        ));
-        o.write_variable(self.in1);
-        o.write_value_type(ValType::Number(self.in1_type));
-
-        o.write_variable(self.out1);
-        o.write_value_type(ValType::Number(self.out1_type));
-
-        o.write_immediate(self.signed as u8);
-    }
-
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         Ok(ConvertInstruction {
             in1: i.read_variable()?,
@@ -91,18 +70,6 @@ pub struct ReinterpretInstruction {
 }
 
 impl Instruction for ReinterpretInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Numeric(
-            NumericInstructionCategory::Conversion(ConversionOp::Reinterpret),
-        ));
-
-        o.write_variable(self.in1);
-        o.write_value_type(ValType::Number(self.in1_type));
-
-        o.write_variable(self.out1);
-        o.write_value_type(ValType::Number(self.out1_type));
-    }
-
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         Ok(ReinterpretInstruction {
             in1: i.read_variable()?,
@@ -135,19 +102,6 @@ pub struct ExtendBitsInstruction {
 }
 
 impl Instruction for ExtendBitsInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Numeric(
-            NumericInstructionCategory::Conversion(ConversionOp::ExtendBits),
-        ));
-        o.write_variable(self.in1);
-        o.write_value_type(ValType::Number(self.in1_type));
-
-        o.write_immediate(self.input_size);
-
-        o.write_variable(self.out1);
-        o.write_value_type(ValType::Number(self.out1_type));
-    }
-
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         Ok(ExtendBitsInstruction {
             in1: i.read_variable()?,
@@ -177,15 +131,6 @@ pub struct ExtendTypeInstruction {
 }
 
 impl Instruction for ExtendTypeInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Numeric(
-            NumericInstructionCategory::Conversion(ConversionOp::ExtendType),
-        ));
-        o.write_immediate(self.signed as u8);
-        o.write_variable(self.in1);
-        o.write_variable(self.out1);
-    }
-
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         Ok(ExtendTypeInstruction {
             signed: i.read_immediate::<u8>()? != 0,
@@ -214,14 +159,6 @@ pub struct DemoteInstruction {
 }
 
 impl Instruction for DemoteInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Numeric(
-            NumericInstructionCategory::Conversion(ConversionOp::Demote),
-        ));
-        o.write_variable(self.in1);
-        o.write_variable(self.out1);
-    }
-
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         Ok(DemoteInstruction {
             in1: i.read_variable()?,
@@ -243,14 +180,6 @@ pub struct PromoteInstruction {
 }
 
 impl Instruction for PromoteInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Numeric(
-            NumericInstructionCategory::Conversion(ConversionOp::Promote),
-        ));
-        o.write_variable(self.in1);
-        o.write_variable(self.out1);
-    }
-
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         Ok(PromoteInstruction {
             in1: i.read_variable()?,

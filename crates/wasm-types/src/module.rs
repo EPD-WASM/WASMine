@@ -30,21 +30,23 @@ pub enum ImportDesc {
 
 pub type Name = String;
 
+// non-custom sections must appear in module at least once in a certain order defined by the spec.
+// This enum contains all sections with numbers assigned in the order they must appear in the module.
 #[derive(Debug, Clone, PartialEq, Archive, Deserialize, Serialize)]
 pub enum Section {
-    Custom,
-    Type,
-    Import,
-    Function,
-    Table,
-    Memory,
-    Global,
-    Export,
-    Start,
-    Element,
-    Code,
-    Data,
-    DataCount,
+    Custom = 99,
+    Type = 0,
+    Import = 1,
+    Function = 2,
+    Table = 3,
+    Memory = 4,
+    Global = 5,
+    Export = 6,
+    Start = 7,
+    Element = 8,
+    DataCount = 9,
+    Code = 10,
+    Data = 11,
 }
 
 pub type MemType = Limits;

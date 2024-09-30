@@ -10,17 +10,6 @@ pub struct LoadInstruction {
 }
 
 impl Instruction for LoadInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Memory(MemoryInstructionCategory::Load(
-            self.operation.clone(),
-        )));
-        o.write_immediate(self.memarg.align);
-        o.write_immediate(self.memarg.offset);
-        o.write_variable(self.addr);
-        o.write_variable(self.out1);
-        o.write_value_type(ValType::Number(self.out1_type))
-    }
-
     fn deserialize(i: &mut InstructionDecoder, t: InstructionType) -> Result<Self, DecodingError> {
         let align = i.read_immediate()?;
         let offset = i.read_immediate()?;

@@ -7,10 +7,6 @@ pub struct BrIf {
 }
 
 impl Instruction for BrIf {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.finish(ControlInstruction::BrIf(self.label_idx));
-    }
-
     fn deserialize(_: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         unimplemented!(
             "Control instructions are not serialized and can therefore not be deserialized."

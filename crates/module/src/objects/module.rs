@@ -6,7 +6,7 @@ use super::{
 };
 use resource_buffer::ResourceBuffer;
 use rkyv::{Archive, Deserialize, Serialize};
-use std::{fmt::Debug, path::Path};
+use std::{any::Any, fmt::Debug, path::Path};
 use wasm_types::{FuncIdx, FuncType};
 
 #[derive(Default, Debug, Deserialize, Serialize, Archive)]
@@ -56,21 +56,25 @@ pub struct Module {
     ///
     /// Note: This typically needs to be kept alive, because sources are memory-mapped.
     pub source: ResourceBuffer,
+
+    pub additional_resources: Vec<Box<dyn Any>>,
 }
 
 pub trait ModuleMetaLoaderInterface {
     fn load_module_meta(
         &self,
-        m: &mut ModuleMetadata,
-        b: &ResourceBuffer,
+        module: &mut ModuleMetadata,
+        source: &ResourceBuffer,
+        additional_resources: &mut Vec<Box<dyn std::any::Any>>,
     ) -> Result<(), ModuleError>;
 }
 
 pub trait FunctionLoaderInterface {
     fn parse_all_functions(
         &self,
-        m: &mut ModuleMetadata,
-        b: &ResourceBuffer,
+        module: &mut ModuleMetadata,
+        source: &ResourceBuffer,
+        additional_resources: &mut Vec<Box<dyn std::any::Any>>,
     ) -> Result<(), ModuleError>;
 }
 
@@ -92,18 +96,19 @@ impl Module {
         Self {
             meta: ModuleMetadata::default(),
             source,
+            additional_resources: Vec::new(),
         }
     }
 
     pub fn load_meta(&mut self, loader: impl ModuleMetaLoaderInterface) -> Result<(), ModuleError> {
-        loader.load_module_meta(&mut self.meta, &self.source)
+        loader.load_module_meta(&mut self.meta, &self.source, &mut self.additional_resources)
     }
 
     pub fn load_all_functions(
         &mut self,
         loader: impl FunctionLoaderInterface,
     ) -> Result<(), ModuleError> {
-        loader.parse_all_functions(&mut self.meta, &self.source)
+        loader.parse_all_functions(&mut self.meta, &self.source, &mut self.additional_resources)
     }
 
     pub fn store(
@@ -113,5 +118,19 @@ impl Module {
         output_path: impl AsRef<Path>,
     ) -> Result<(), ModuleError> {
         storer.store(&self.meta, llvm_memory_buffer, output_path)
+    }
+}
+
+impl ModuleMetadata {
+    pub fn is_empty(&self) -> bool {
+        self.tables.is_empty()
+            && self.elements.is_empty()
+            && self.memories.is_empty()
+            && self.globals.is_empty()
+            && self.datas.is_empty()
+            && self.function_types.is_empty()
+            && self.imports.is_empty()
+            && self.exports.is_empty()
+            && self.functions.is_empty()
     }
 }

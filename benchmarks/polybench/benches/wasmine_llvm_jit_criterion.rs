@@ -1,7 +1,6 @@
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
 use resource_buffer::ResourceBuffer;
 use runtime_lib::ClusterConfig;
-use std::rc::Rc;
 use wasi::WasiContextBuilder;
 
 mod utils;
@@ -31,10 +30,9 @@ pub fn wasmine_llvm_jit_criterion(c: &mut Criterion) {
                         let mut module = module::Module::new(source);
                         module.load_meta(parser::ModuleMetaLoader).unwrap();
                         module.load_all_functions(parser::FunctionLoader).unwrap();
-                        let wasmine_module = Rc::new(module);
                         let wasmine_cluster = runtime_lib::Cluster::new(ClusterConfig::default());
                         let mut wasmine_engine = runtime_lib::Engine::llvm().unwrap();
-                        wasmine_engine.init(wasmine_module.clone()).unwrap();
+                        let wasmine_module = wasmine_engine.init(module).unwrap();
 
                         let wasi_ctxt = {
                             let mut builder = WasiContextBuilder::new();

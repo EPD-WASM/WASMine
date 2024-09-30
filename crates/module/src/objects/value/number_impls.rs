@@ -43,7 +43,6 @@ impl Number {
 
     pub fn trans_from_u64(n: u64, t: &NumType) -> Number {
         match t {
-            // TODO: the spec stores I32s as signed, but this should't make a difference
             NumType::I32 => Self::I32(n as u32),
             NumType::I64 => Self::I64(n),
             NumType::F32 => Self::F32(n.trans_f32()),
@@ -53,7 +52,6 @@ impl Number {
 
     pub fn trans_from_u64_sign(n: u64, t: &NumType, sign: bool) -> Number {
         match t {
-            // TODO: the spec stores I32s as signed, but this should't make a difference
             NumType::I32 => {
                 if sign {
                     Self::S32(n as i32)

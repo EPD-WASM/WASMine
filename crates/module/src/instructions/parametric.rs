@@ -5,10 +5,6 @@ use wasm_types::*;
 pub struct DropInstruction {}
 
 impl Instruction for DropInstruction {
-    fn serialize(self, _: &mut InstructionEncoder) {
-        unimplemented!("Control instructions are not serialized.")
-    }
-
     fn deserialize(_: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         unimplemented!(
             "Drop instructions are not serialized and can therefore not be deserialized."
@@ -30,16 +26,6 @@ pub struct SelectInstruction {
 }
 
 impl Instruction for SelectInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Parametric(
-            ParametricInstructionType::Select,
-        ));
-        o.write_variable(self.input_vals[0]);
-        o.write_variable(self.input_vals[1]);
-        o.write_variable(self.select_val);
-        o.write_variable(self.out1);
-    }
-
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         let input_vals = [i.read_variable()?, i.read_variable()?];
         let select_val = i.read_variable()?;

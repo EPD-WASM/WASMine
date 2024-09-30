@@ -9,7 +9,7 @@ use module::{
 };
 use wasm_types::{InstructionType, TableInstructionCategory, ValType};
 
-impl Translator {
+impl Translator<'_> {
     pub(crate) fn translate_table(
         &self,
         instr_type: TableInstructionCategory,
@@ -21,9 +21,9 @@ impl Translator {
         match instr_type {
             TableInstructionCategory::Init => {
                 let instr = decoder.read::<TableInitInstruction>(instruction)?;
-                let n = variable_map[instr.n as usize];
-                let d = variable_map[instr.d as usize];
-                let s = variable_map[instr.s as usize];
+                let n = variable_map[instr.n];
+                let d = variable_map[instr.d];
+                let s = variable_map[instr.s];
                 self.table_init(
                     Self::get_rt_ref(llvm_function),
                     instr.table_idx,
@@ -35,7 +35,7 @@ impl Translator {
             }
             TableInstructionCategory::Size => {
                 let instr = decoder.read::<TableSizeInstruction>(instruction)?;
-                variable_map[instr.out1 as usize] =
+                variable_map[instr.out1] =
                     self.table_size(Self::get_rt_ref(llvm_function), instr.table_idx);
             }
             TableInstructionCategory::Copy => {
@@ -44,9 +44,9 @@ impl Translator {
                     Self::get_rt_ref(llvm_function),
                     instr.table_idx_y,
                     instr.table_idx_x,
-                    variable_map[instr.s as usize],
-                    variable_map[instr.d as usize],
-                    variable_map[instr.n as usize],
+                    variable_map[instr.s],
+                    variable_map[instr.d],
+                    variable_map[instr.n],
                 )
             }
             TableInstructionCategory::Fill => {
@@ -54,9 +54,9 @@ impl Translator {
                 self.table_fill(
                     Self::get_rt_ref(llvm_function),
                     instr.table_idx,
-                    variable_map[instr.i as usize],
-                    variable_map[instr.n as usize],
-                    variable_map[instr.ref_value as usize],
+                    variable_map[instr.i],
+                    variable_map[instr.n],
+                    variable_map[instr.ref_value],
                 )
             }
             TableInstructionCategory::Drop => {
@@ -65,12 +65,12 @@ impl Translator {
             }
             TableInstructionCategory::Get => {
                 let instr = decoder.read::<TableGetInstruction>(instruction)?;
-                variable_map[instr.out1 as usize] = self.table_get(
+                variable_map[instr.out1] = self.table_get(
                     Self::get_rt_ref(llvm_function),
                     instr.table_idx,
-                    variable_map[instr.idx as usize],
+                    variable_map[instr.idx],
                     self.builder.valtype2llvm(ValType::Reference(
-                        self.wasm_module.meta.tables[instr.table_idx as usize]
+                        self.wasm_module_meta.tables[instr.table_idx as usize]
                             .r#type
                             .ref_type,
                     )),
@@ -81,17 +81,17 @@ impl Translator {
                 self.table_set(
                     Self::get_rt_ref(llvm_function),
                     instr.table_idx,
-                    variable_map[instr.in1 as usize],
-                    variable_map[instr.idx as usize],
+                    variable_map[instr.in1],
+                    variable_map[instr.idx],
                 );
             }
             TableInstructionCategory::Grow => {
                 let instr = decoder.read::<TableGrowInstruction>(instruction)?;
-                variable_map[instr.out1 as usize] = self.table_grow(
+                variable_map[instr.out1] = self.table_grow(
                     Self::get_rt_ref(llvm_function),
                     instr.table_idx,
-                    variable_map[instr.size as usize],
-                    variable_map[instr.value_to_fill as usize],
+                    variable_map[instr.size],
+                    variable_map[instr.value_to_fill],
                 );
             }
         }

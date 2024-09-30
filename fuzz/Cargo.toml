@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 libfuzzer-sys = "0.4.7"
-wasm-smith = "0.216.0"
+wasm-smith = "0.217.0"
 runtime-lib = { workspace = true }
 
 [package.metadata]

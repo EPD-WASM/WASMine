@@ -3,11 +3,11 @@ use crate::{
     error::ParserError, instructions::*, wasm_stream_reader::WasmBinaryReader, ParseResult,
 };
 use context::Context;
-use module::InstructionEncoder;
+use module::InstructionConsumer;
 
 /// Reference: https://webassembly.github.io/spec/core/bikeshed/#a7-index-of-instructions
 #[rustfmt::skip]
-pub(crate) const LVL1_JMP_TABLE: [fn(&mut Context, &mut WasmBinaryReader, &mut InstructionEncoder) -> ParseResult; 256] = [
+pub(crate) const LVL1_JMP_TABLE: [fn(&mut Context, &mut WasmBinaryReader, &mut dyn InstructionConsumer) -> ParseResult; 256] = [
     /* Control Instructions */
     /* instr ::= 0x00 ⇒ unreachable
             | 0x01 ⇒ nop
@@ -429,7 +429,7 @@ pub(crate) const LVL1_JMP_TABLE: [fn(&mut Context, &mut WasmBinaryReader, &mut I
 
 #[rustfmt::skip]
 #[allow(non_upper_case_globals)]
-pub(crate) const LVL2_JMP_TABLE_0xFC: [fn(&mut Context, &mut WasmBinaryReader, &mut InstructionEncoder) -> ParseResult; 18] = [
+pub(crate) const LVL2_JMP_TABLE_0xFC: [fn(&mut Context, &mut WasmBinaryReader, &mut dyn InstructionConsumer) -> ParseResult; 18] = [
     /* Table Instructions */
     /* instr ::= ...
                 | 0xFC 12:u32 𝑦:elemidx 𝑥:tableidx ⇒ table.init 𝑥 𝑦
@@ -483,16 +483,16 @@ pub(crate) const LVL2_JMP_TABLE_0xFC: [fn(&mut Context, &mut WasmBinaryReader, &
 
 #[rustfmt::skip]
 #[allow(non_upper_case_globals)]
-pub(crate) const LVL2_JMP_TABLE_0xFD: [fn(&mut Context, &mut WasmBinaryReader, &mut InstructionEncoder) -> ParseResult; 0] = [/* TODO */];
+pub(crate) const LVL2_JMP_TABLE_0xFD: [fn(&mut Context, &mut WasmBinaryReader, &mut dyn InstructionConsumer) -> ParseResult; 0] = [/* TODO */];
 
-fn e(_: &mut Context, _: &mut WasmBinaryReader, _: &mut InstructionEncoder) -> ParseResult {
+fn e(_: &mut Context, _: &mut WasmBinaryReader, _: &mut dyn InstructionConsumer) -> ParseResult {
     Err(ParserError::InvalidOpcode)
 }
 
 fn lvl2_instruction_gp(
     ctxt: &mut Context,
     i: &mut WasmBinaryReader,
-    o: &mut InstructionEncoder,
+    o: &mut dyn InstructionConsumer,
 ) -> ParseResult {
     let opcode = i.read_leb128::<u32>()? as usize;
     if opcode >= LVL2_JMP_TABLE_0xFC.len() {
@@ -504,7 +504,7 @@ fn lvl2_instruction_gp(
 fn lvl2_instruction_vec(
     ctxt: &mut Context,
     i: &mut WasmBinaryReader,
-    o: &mut InstructionEncoder,
+    o: &mut dyn InstructionConsumer,
 ) -> ParseResult {
     let opcode = i.read_leb128::<u32>()? as usize;
     if opcode >= LVL2_JMP_TABLE_0xFD.len() {

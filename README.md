@@ -154,8 +154,16 @@ The llvm backend automatically generates wrapper functions to convert between th
 # TODO
 
  * add option to compile via llvm to elf binary where runtime-lib is loaded as interpreter
- * llvm: generate call_indirect in code (-> generate function in LLVM IR and call) (prevent RT call) and bench
- * add sigaltstack to maybe solve resource exhaustion detection problem
- * split runtime into (linking / instance handling / cluster) and (resource management / execution context / tables / memories / etc.)
- * rebuild parsing to only parse everything except code aot. Code should be split to "function pointers" which could be parsed on demand
- * rebuild public api to only ever hand out empty "handle"-types (except cluster) which always just store the index of a slab resource in a cluster. E.e. "Module" does not follow this principle currently.
+ * llvm: generate call_indirect in code (-> generate function in LLVM IR and
+   call) (prevent RT call) and bench
+ * c api for llvm-interpreter project
+ * add tracing for better performance monitoring
+ * parser direct llvm emit
+ * make all load / load_all_functions passes idempotent to ease API
+ * allow llvm compilation both from raw sources and ir (currently, only raw sources are available) AND test both!
+ * rewrite llvm_integration_tests to
+    * spec_llvm_jit_ir (parser -> ir -> llvm jit)
+    * spec_llvm_jit (raw wasm -> llvm jit)
+    * spec_llvm_aot_ir (parser -> ir -> llvm aot)
+    * spec_llvm_aot (raw wasm -> llvm aot)
+    * spec_interp (parser -> ir -> interp)

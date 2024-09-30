@@ -9,7 +9,7 @@ use module::{
 };
 use wasm_types::{GlobalType, InstructionType, VariableInstructionType};
 
-impl Translator {
+impl Translator<'_> {
     pub(crate) fn translate_variable(
         &self,
         instr_type: VariableInstructionType,
@@ -23,31 +23,31 @@ impl Translator {
                 let instr = decoder.read::<LocalGetInstruction>(instruction)?;
                 let (local_val, local_ty) = local_map[instr.local_idx as usize];
                 let value = self.builder.build_load(local_ty, local_val, "local_get");
-                variable_map[instr.out1 as usize] = value;
+                variable_map[instr.out1] = value;
             }
             VariableInstructionType::LocalSet => {
                 let instr = decoder.read::<LocalSetInstruction>(instruction)?;
                 let (local_val, _) = local_map[instr.local_idx as usize];
-                let value = variable_map[instr.in1 as usize];
+                let value = variable_map[instr.in1];
                 self.builder.build_store(value, local_val);
             }
             VariableInstructionType::LocalTee => {
                 let instr = decoder.read::<LocalTeeInstruction>(instruction)?;
                 let (local_val, _) = local_map[instr.local_idx as usize];
-                let value = variable_map[instr.in1 as usize];
+                let value = variable_map[instr.in1];
                 self.builder.build_store(value, local_val);
-                variable_map[instr.out1 as usize] = value;
+                variable_map[instr.out1] = value;
             }
             VariableInstructionType::GlobalGet => {
                 let instr = decoder.read::<GlobalGetInstruction>(instruction)?;
-                let wasm_global = &self.wasm_module.meta.globals[instr.global_idx as usize];
+                let wasm_global = &self.wasm_module_meta.globals[instr.global_idx as usize];
                 let global_type = match wasm_global.r#type {
                     GlobalType::Const(ty) => ty,
                     GlobalType::Mut(ty) => ty,
                 };
                 let global_name = format!("__wasmine_global__{}", instr.global_idx);
                 let global = self.module.get_global(&global_name)?;
-                variable_map[instr.out1 as usize] = self.builder.build_load(
+                variable_map[instr.out1] = self.builder.build_load(
                     self.builder.valtype2llvm(global_type),
                     global,
                     "global_get",
@@ -57,8 +57,7 @@ impl Translator {
                 let instr = decoder.read::<GlobalSetInstruction>(instruction)?;
                 let global_name = format!("__wasmine_global__{}", instr.global_idx);
                 let global = self.module.get_global(&global_name)?;
-                self.builder
-                    .build_store(variable_map[instr.in1 as usize], global)
+                self.builder.build_store(variable_map[instr.in1], global)
             }
         }
         Ok(())

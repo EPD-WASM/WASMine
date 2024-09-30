@@ -1,24 +1,25 @@
 use super::{context::Context, function::Function, module::Module};
 use crate::util::c_str;
-use module::objects::value::ValueRaw;
 use llvm_sys::{
     core::{
         LLVMAddIncoming, LLVMAppendBasicBlockInContext, LLVMArrayType2, LLVMBuildAdd,
         LLVMBuildAggregateRet, LLVMBuildAlloca, LLVMBuildBitCast, LLVMBuildBr, LLVMBuildCall2,
-        LLVMBuildCondBr, LLVMBuildFCmp, LLVMBuildFPCast, LLVMBuildFPToSI, LLVMBuildFPToUI,
-        LLVMBuildGEP2, LLVMBuildICmp, LLVMBuildIntCast2, LLVMBuildLoad2, LLVMBuildMul,
-        LLVMBuildPhi, LLVMBuildRet, LLVMBuildRetVoid, LLVMBuildSIToFP, LLVMBuildSelect,
-        LLVMBuildStore, LLVMBuildSub, LLVMBuildSwitch, LLVMBuildUIToFP, LLVMBuildUnreachable,
-        LLVMConstBitCast, LLVMConstInt, LLVMConstNull, LLVMConstReal, LLVMCreateBuilderInContext,
-        LLVMDisposeBuilder, LLVMDoubleTypeInContext, LLVMFloatTypeInContext,
-        LLVMInt16TypeInContext, LLVMInt1Type, LLVMInt32TypeInContext, LLVMInt64TypeInContext,
-        LLVMInt8TypeInContext, LLVMIntTypeInContext, LLVMMDStringInContext2, LLVMMetadataAsValue,
-        LLVMMetadataTypeInContext, LLVMPointerType, LLVMPointerTypeInContext,
-        LLVMPositionBuilderAtEnd, LLVMStructTypeInContext, LLVMTypeOf, LLVMVoidTypeInContext,
+        LLVMBuildCondBr, LLVMBuildFCmp, LLVMBuildFNeg, LLVMBuildFPCast, LLVMBuildFPToSI,
+        LLVMBuildFPToUI, LLVMBuildGEP2, LLVMBuildICmp, LLVMBuildIntCast2, LLVMBuildLoad2,
+        LLVMBuildMul, LLVMBuildPhi, LLVMBuildRet, LLVMBuildRetVoid, LLVMBuildSIToFP,
+        LLVMBuildSelect, LLVMBuildStore, LLVMBuildSub, LLVMBuildSwitch, LLVMBuildUIToFP,
+        LLVMBuildUnreachable, LLVMConstBitCast, LLVMConstInt, LLVMConstNull, LLVMConstReal,
+        LLVMCreateBuilderInContext, LLVMDisposeBuilder, LLVMDoubleTypeInContext,
+        LLVMFloatTypeInContext, LLVMInt16TypeInContext, LLVMInt1Type, LLVMInt32TypeInContext,
+        LLVMInt64TypeInContext, LLVMInt8TypeInContext, LLVMIntTypeInContext,
+        LLVMMDStringInContext2, LLVMMetadataAsValue, LLVMMetadataTypeInContext, LLVMPointerType,
+        LLVMPointerTypeInContext, LLVMPositionBuilderAtEnd, LLVMStructTypeInContext, LLVMTypeOf,
+        LLVMVoidTypeInContext,
     },
     prelude::{LLVMBasicBlockRef, LLVMBuilderRef, LLVMContextRef, LLVMTypeRef, LLVMValueRef},
     LLVMIntPredicate, LLVMRealPredicate,
 };
+use module::objects::value::ValueRaw;
 use std::{rc::Rc, sync::OnceLock};
 use wasm_types::{NumType, ValType};
 
@@ -150,6 +151,10 @@ impl Builder {
         unsafe { LLVMIntTypeInContext(self.context, (std::mem::size_of::<ValueRaw>() * 8) as u32) }
     }
 
+    pub(crate) fn custom_type(&self, bits: u32) -> LLVMTypeRef {
+        unsafe { LLVMIntTypeInContext(self.context, bits) }
+    }
+
     pub(crate) fn r#struct(&self, elems: &mut [LLVMTypeRef]) -> LLVMTypeRef {
         unsafe {
             LLVMStructTypeInContext(
@@ -275,6 +280,10 @@ impl Builder {
         name: &str,
     ) -> LLVMValueRef {
         unsafe { LLVMBuildFPCast(self.get(), val, to_ty, c_str(name).as_ptr()) }
+    }
+
+    pub(crate) fn build_fneg(&self, val: LLVMValueRef, name: &str) -> LLVMValueRef {
+        unsafe { LLVMBuildFNeg(self.get(), val, c_str(name).as_ptr()) }
     }
 
     pub(crate) fn build_bitcast(
@@ -512,7 +521,7 @@ impl Builder {
         }
     }
 
-    pub(crate) unsafe fn call_unary_intrinsic(
+    pub(crate) fn call_unary_intrinsic(
         &self,
         param_ty: NumType,
         ret_ty: NumType,
@@ -536,7 +545,7 @@ impl Builder {
         self.build_call(&intrinsic_function, &mut [param], "call_intrinsic")
     }
 
-    pub(crate) unsafe fn call_binary_intrinsic(
+    pub(crate) fn call_binary_intrinsic(
         &self,
         param_tys: [NumType; 2],
         params: [LLVMValueRef; 2],
@@ -555,7 +564,7 @@ impl Builder {
         )
     }
 
-    pub(crate) unsafe fn call_fbinary_constrained_intrinsic(
+    pub(crate) fn call_fbinary_constrained_intrinsic(
         &self,
         ty: NumType,
         params: [LLVMValueRef; 2],
@@ -574,14 +583,16 @@ impl Builder {
 
         let rounding_mode = self.DEFAULT_ROUNDING_MODE.get_or_init(|| {
             let rm = "round.dynamic";
-            let rm = LLVMMDStringInContext2(self.context, c_str(rm).as_ptr(), rm.len());
-            LLVMValueRefWrapper(LLVMMetadataAsValue(self.context, rm))
+            let rm = unsafe { LLVMMDStringInContext2(self.context, c_str(rm).as_ptr(), rm.len()) };
+            LLVMValueRefWrapper(unsafe { LLVMMetadataAsValue(self.context, rm) })
         });
 
         let fp_exception_mode = self.DEFAULT_FP_EXCEPTION_MODE.get_or_init(|| {
             let fp_e_m = "fpexcept.ignore";
-            let fp_e_m = LLVMMDStringInContext2(self.context, c_str(fp_e_m).as_ptr(), fp_e_m.len());
-            LLVMValueRefWrapper(LLVMMetadataAsValue(self.context, fp_e_m))
+            let fp_e_m = unsafe {
+                LLVMMDStringInContext2(self.context, c_str(fp_e_m).as_ptr(), fp_e_m.len())
+            };
+            LLVMValueRefWrapper(unsafe { LLVMMetadataAsValue(self.context, fp_e_m) })
         });
 
         self.build_call(
@@ -591,7 +602,7 @@ impl Builder {
         )
     }
 
-    pub(crate) unsafe fn call_funary_constrained_intrinsic(
+    pub(crate) fn call_funary_constrained_intrinsic(
         &self,
         in_ty: NumType,
         out_ty: NumType,
@@ -608,8 +619,10 @@ impl Builder {
 
         let fp_exception_mode = self.DEFAULT_FP_EXCEPTION_MODE.get_or_init(|| {
             let fp_e_m = "fpexcept.ignore";
-            let fp_e_m = LLVMMDStringInContext2(self.context, c_str(fp_e_m).as_ptr(), fp_e_m.len());
-            LLVMValueRefWrapper(LLVMMetadataAsValue(self.context, fp_e_m))
+            let fp_e_m = unsafe {
+                LLVMMDStringInContext2(self.context, c_str(fp_e_m).as_ptr(), fp_e_m.len())
+            };
+            LLVMValueRefWrapper(unsafe { LLVMMetadataAsValue(self.context, fp_e_m) })
         });
 
         self.build_call(
@@ -619,7 +632,7 @@ impl Builder {
         )
     }
 
-    pub(crate) unsafe fn call_binary_intrinsic_raw(
+    pub(crate) fn call_binary_intrinsic_raw(
         &self,
         mut param_tys: [LLVMTypeRef; 2],
         mut params: [LLVMValueRef; 2],

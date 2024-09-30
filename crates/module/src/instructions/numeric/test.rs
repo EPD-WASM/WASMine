@@ -10,15 +10,6 @@ pub struct ITestInstruction {
 }
 
 impl Instruction for ITestInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Numeric(NumericInstructionCategory::ITest(
-            self.op.clone(),
-        )));
-        o.write_value_type(ValType::Number(self.input_type));
-        o.write_variable(self.in1);
-        o.write_variable(self.out1);
-    }
-
     fn deserialize(
         i: &mut InstructionDecoder,
         r#type: InstructionType,

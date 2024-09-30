@@ -37,7 +37,7 @@ impl ParserStack {
 
     pub(crate) fn pop_var_with_type(
         &mut self,
-        type_: &ValType,
+        type_: ValType,
     ) -> Result<Variable, ValidationError> {
         if self
             .stash
@@ -51,7 +51,7 @@ impl ParserStack {
             Some(var) => var,
             None => return Err(ValidationError::Msg("stack underflow".into())),
         };
-        if var.type_ != *type_ {
+        if var.type_ != type_ {
             return Err(ValidationError::Msg("type mismatch".into()));
         }
         Ok(var)

@@ -9,7 +9,7 @@ use llvm_sys::{
 use runtime_interface::{ExecutionContext, MemoryInstance};
 use wasm_types::{DataIdx, ElemIdx, MemIdx, TableIdx, ValType};
 
-impl Translator {
+impl Translator<'_> {
     pub(crate) fn ec_memories_ptr(&self, ec_ptr: LLVMValueRef) -> LLVMValueRef {
         let ptr = self.builder.build_gep(
             self.builder.i8(),

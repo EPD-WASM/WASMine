@@ -8,40 +8,116 @@ use llvm_sys::prelude::{LLVMBasicBlockRef, LLVMTypeRef, LLVMValueRef};
 use llvm_sys::{LLVMCallConv, LLVMLinkage};
 use module::objects::function::{
     Function as WasmFunction, FunctionIR as WasmFunctionIR, FunctionImport as WasmFunctionImport,
+    FunctionUnparsed,
 };
-use module::{basic_block::BasicBlock, objects::module::Module as WasmModule, InstructionDecoder};
+use module::{basic_block::BasicBlock, InstructionDecoder, ModuleMetadata as WasmModuleMeta};
+use std::cell::RefCell;
 use std::collections::HashSet;
 use std::ptr::null_mut;
 use std::rc::Rc;
 use wasm_types::*;
 
-pub struct Translator {
+pub struct Translator<'wasm> {
     pub(crate) builder: Builder,
     pub(crate) context: Rc<Context>,
     pub(crate) module: Rc<Module>,
-    pub(crate) wasm_module: Rc<WasmModule>,
-    pub(crate) llvm_functions: Vec<Function>,
+    pub(crate) wasm_module_meta: &'wasm WasmModuleMeta,
+    pub(crate) llvm_functions: Rc<RefCell<Vec<Function>>>,
 }
 
-impl Translator {
-    pub fn translate_module(
+impl<'wasm> Translator<'wasm> {
+    pub fn translate_full_module(
         context: Rc<Context>,
-        wasm_module: Rc<WasmModule>,
+        wasm_module_meta: &'wasm WasmModuleMeta,
     ) -> Result<Rc<Module>, TranslationError> {
+        let (module, functions) =
+            Translator::translate_module_meta(context.clone(), wasm_module_meta)?;
+        Translator::translate_functions(
+            context.clone(),
+            wasm_module_meta,
+            module.clone(),
+            functions.clone(),
+        )?;
+        Ok(module)
+    }
+
+    pub(crate) fn translate_module_meta(
+        context: Rc<Context>,
+        wasm_module_meta: &'wasm WasmModuleMeta,
+    ) -> Result<(Rc<Module>, Rc<RefCell<Vec<Function>>>), TranslationError> {
         let module = Rc::new(Module::new("main", &context));
         let builder = context.create_builder(module.clone());
         let mut instance = Self {
             context,
             builder,
             module,
-            wasm_module,
-            llvm_functions: Vec::new(),
+            wasm_module_meta,
+            llvm_functions: Rc::default(),
         };
-        instance.translate_module_internal()
+        instance.translate_module_meta_internal()?;
+        Ok((instance.module, instance.llvm_functions))
     }
 
-    pub fn translate_module_internal(&mut self) -> Result<Rc<Module>, TranslationError> {
-        for (global_idx, global) in self.wasm_module.meta.globals.iter().enumerate() {
+    pub(crate) fn translate_functions(
+        context: Rc<Context>,
+        wasm_module_meta: &'wasm WasmModuleMeta,
+        llvm_module: Rc<Module>,
+        llvm_functions: Rc<RefCell<Vec<Function>>>,
+    ) -> Result<(), TranslationError> {
+        let builder = context.create_builder(llvm_module.clone());
+        let instance = Self {
+            context,
+            builder,
+            module: llvm_module,
+            wasm_module_meta,
+            llvm_functions,
+        };
+
+        for func_idx in 0..wasm_module_meta.functions.len() {
+            let wasm_func_type = wasm_module_meta.functions[func_idx].type_idx;
+            if let Some(ir) = wasm_module_meta.functions[func_idx].get_ir() {
+                let llvm_func = instance.llvm_functions.borrow()[func_idx];
+                instance.translate_internal_function(
+                    &ir,
+                    wasm_func_type,
+                    &llvm_func,
+                    func_idx as FuncIdx,
+                )?;
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn translate_single_function(
+        context: Rc<Context>,
+        wasm_module_meta: &'wasm WasmModuleMeta,
+        llvm_module: Rc<Module>,
+        llvm_functions: Rc<RefCell<Vec<Function>>>,
+        ir: &WasmFunctionIR,
+        func_idx: usize,
+    ) -> Result<(), TranslationError> {
+        let builder = context.create_builder(llvm_module.clone());
+        let instance = Self {
+            context,
+            builder,
+            module: llvm_module,
+            wasm_module_meta,
+            llvm_functions,
+        };
+
+        let wasm_func_type = wasm_module_meta.functions[func_idx].type_idx;
+        let llvm_func = instance.llvm_functions.borrow()[func_idx];
+        instance.translate_internal_function(
+            &ir,
+            wasm_func_type,
+            &llvm_func,
+            func_idx as FuncIdx,
+        )?;
+        Ok(())
+    }
+
+    fn translate_module_meta_internal(&mut self) -> Result<Rc<Module>, TranslationError> {
+        for (global_idx, global) in self.wasm_module_meta.globals.iter().enumerate() {
             let name = format!("__wasmine_global__{global_idx}");
             let global_val_ty = match global.r#type {
                 GlobalType::Const(vt) => vt,
@@ -51,8 +127,7 @@ impl Translator {
                 .add_global(&name, self.builder.valtype2llvm(global_val_ty));
         }
         let required_rt_ptr_global_names = self
-            .wasm_module
-            .meta
+            .wasm_module_meta
             .imports
             .iter()
             .filter_map(|i| match i.desc {
@@ -65,54 +140,39 @@ impl Translator {
             self.module.add_global(&name, self.builder.ptr());
         }
 
-        for (i, func) in self.wasm_module.meta.functions.iter().enumerate() {
+        for (i, func) in self.wasm_module_meta.functions.iter().enumerate() {
             if let Some(WasmFunctionImport { import_idx }) = func.get_import().cloned() {
-                let wasm_import = &self.wasm_module.meta.imports[import_idx as usize];
+                let wasm_import = &self.wasm_module_meta.imports[import_idx as usize];
                 let name = format!("{}.{}", wasm_import.module, wasm_import.name);
-                self.llvm_functions.push(self.declare_imported_function(
-                    &name,
-                    i as FuncIdx,
-                    func.type_idx,
-                )?);
+                self.llvm_functions
+                    .borrow_mut()
+                    .push(self.declare_imported_function(&name, i as FuncIdx, func.type_idx)?);
             } else if let Some(WasmFunctionIR { .. }) = func.get_ir() {
                 self.llvm_functions
+                    .borrow_mut()
+                    .push(self.declare_internal_function(i as FuncIdx, func)?);
+            } else if let Some(FunctionUnparsed { .. }) = func.get_unparsed_mem() {
+                self.llvm_functions
+                    .borrow_mut()
                     .push(self.declare_internal_function(i as FuncIdx, func)?);
             } else {
                 panic!("unexpected function source: {func:?}");
             }
         }
 
-        for (func_idx, (wasm_func, llvm_func)) in self
-            .wasm_module
-            .meta
-            .functions
-            .iter()
-            .zip(self.llvm_functions.iter())
-            .enumerate()
-        {
-            if let Some(f) = wasm_func.get_ir() {
-                self.translate_internal_function(
-                    &f,
-                    wasm_func.type_idx,
-                    llvm_func,
-                    func_idx as u32,
-                )?;
-            }
-        }
-
         // create entrypoint wrappers for exported functions
-        for (func_name, func_idx) in self.wasm_module.meta.exports.functions() {
-            let wasm_function = &self.wasm_module.meta.functions[*func_idx as usize];
+        for (func_name, func_idx) in self.wasm_module_meta.exports.functions() {
+            let wasm_function = &self.wasm_module_meta.functions[*func_idx as usize];
             let llvm_function = self.declare_export_wrapper(func_name)?;
             self.translate_external_wrapper_function(wasm_function, &llvm_function, *func_idx)?;
         }
 
         // add external wrapper for start function
-        if let Some(start_func_idx) = self.wasm_module.meta.entry_point {
-            let wasm_function = &self.wasm_module.meta.functions[start_func_idx as usize];
+        if let Some(start_func_idx) = self.wasm_module_meta.entry_point {
+            let wasm_function = &self.wasm_module_meta.functions[start_func_idx as usize];
             let llvm_function = self.declare_export_wrapper(&build_llvm_function_name(
                 start_func_idx,
-                &self.wasm_module.meta,
+                &self.wasm_module_meta,
                 true,
             ))?;
             self.translate_external_wrapper_function(
@@ -152,7 +212,7 @@ impl Translator {
         &self,
         functype_idx: usize,
     ) -> Result<LLVMTypeRef, TranslationError> {
-        let func_type = self.wasm_module.meta.function_types[functype_idx];
+        let func_type = self.wasm_module_meta.function_types[functype_idx];
         let mut param_types = vec![
             // runtime ptr
             self.builder.ptr(),
@@ -183,7 +243,7 @@ impl Translator {
         function: &WasmFunction,
     ) -> Result<Function, TranslationError> {
         let fn_type = self.llvm_internal_func_type_from_wasm(function.type_idx as usize)?;
-        let function_name = build_llvm_function_name(function_idx, &self.wasm_module.meta, false);
+        let function_name = build_llvm_function_name(function_idx, &self.wasm_module_meta, false);
         let llvm_function = self.module.add_function(
             &function_name,
             fn_type,
@@ -224,7 +284,7 @@ impl Translator {
             });
 
         // create wrapper with internal signature for calls via different calling conventions
-        let internal_fn_wasm_type = self.wasm_module.meta.function_types[type_idx as usize];
+        let internal_fn_wasm_type = self.wasm_module_meta.function_types[type_idx as usize];
         let internal_function = self.module.add_function(
             &internal_function_name,
             internal_fn_type,
@@ -304,7 +364,7 @@ impl Translator {
         }
 
         #[cfg(debug_assertions)]
-        self.verify_function(&internal_function, 0)?;
+        Self::verify_function(&self.module, &internal_function, 0, &self.wasm_module_meta)?;
 
         // return original import declaration
         Ok(internal_function)
@@ -351,20 +411,15 @@ impl Translator {
         llvm_function: &Function,
         _function_idx: FuncIdx,
     ) -> Result<(), TranslationError> {
-        // TODO: remove this, only required for debugging
-        #[cfg(debug_assertions)]
-        let _name = build_llvm_function_name(_function_idx, &self.wasm_module.meta, false);
-
         let func_type = self
-            .wasm_module
-            .meta
+            .wasm_module_meta
             .function_types
             .get(wasm_ty_idx as usize)
             .unwrap();
         // allocate locals (function parameters + explicit locals) inside entry block
         let locals = self.allocate_locals(func_type, wasm_function, llvm_function)?;
 
-        let mut variable_map = vec![null_mut() as LLVMValueRef; wasm_function.num_vars as usize];
+        let mut variable_map = vec![null_mut() as LLVMValueRef; wasm_function.num_vars];
         let llvm_function_blocks = self.translate_basic_block_map(wasm_function, llvm_function);
         // this exists, because every parsed function has at least one terminator = one basic block
         let first_declared_bb =
@@ -388,20 +443,20 @@ impl Translator {
                 let (mut basic_blocks, mut incoming_vars): (Vec<_>, Vec<_>) = phi
                     .inputs
                     .iter()
-                    .map(|(bb, var)| {
-                        (
-                            llvm_function_blocks[*bb as usize],
-                            variable_map[*var as usize],
-                        )
-                    })
+                    .map(|(bb, var)| (llvm_function_blocks[*bb as usize], variable_map[*var]))
                     .unzip();
-                let phi_val = variable_map[phi.out as usize];
+                let phi_val = variable_map[phi.out];
                 Builder::phi_add_incoming(phi_val, &mut incoming_vars, &mut basic_blocks);
             }
         }
 
         #[cfg(debug_assertions)]
-        self.verify_function(llvm_function, _function_idx)?;
+        Self::verify_function(
+            &self.module,
+            llvm_function,
+            _function_idx,
+            self.wasm_module_meta,
+        )?;
         Ok(())
     }
 
@@ -411,17 +466,12 @@ impl Translator {
         llvm_function: &Function,
         function_idx: FuncIdx,
     ) -> Result<(), TranslationError> {
-        // TODO: remove this, only required for debugging
-        #[cfg(debug_assertions)]
-        let _name = build_llvm_function_name(function_idx, &self.wasm_module.meta, true);
-
         let func_type = self
-            .wasm_module
-            .meta
+            .wasm_module_meta
             .function_types
             .get(wasm_function.type_idx as usize)
             .unwrap();
-        let wrapped_function = &self.llvm_functions[function_idx as usize];
+        let wrapped_function = &self.llvm_functions.borrow()[function_idx as usize];
         let entry_bb = self
             .context
             .append_basic_block(llvm_function.get(), "entry");
@@ -484,7 +534,12 @@ impl Translator {
         self.builder.build_ret_void();
 
         #[cfg(debug_assertions)]
-        self.verify_function(llvm_function, function_idx)?;
+        Self::verify_function(
+            &self.module,
+            llvm_function,
+            function_idx,
+            &self.wasm_module_meta,
+        )?;
         Ok(())
     }
 
@@ -509,8 +564,8 @@ impl Translator {
             self.builder.build_store(param_val, local);
             locals.push((local, param_llvm_type));
         }
-        for i in (func_type.num_params() as u32)..(function.locals.len() as u32) {
-            let local_ty = &function.locals[i as usize];
+        for i in func_type.num_params()..function.locals.len() {
+            let local_ty = &function.locals[i];
             let local_llvm_type = self.builder.valtype2llvm(*local_ty);
             let local_llvm_storage = self
                 .builder
@@ -535,7 +590,7 @@ impl Translator {
 
         // collect inputs (if required because of multiple predecessors)
         for phi in wasm_bb.inputs.iter() {
-            variable_map[phi.out as usize] = self
+            variable_map[phi.out] = self
                 .builder
                 .build_phi(self.builder.valtype2llvm(phi.r#type), "phi")
         }
@@ -598,7 +653,7 @@ mod debug_helper {
     use super::*;
     use std::{ffi::CStr, mem::MaybeUninit};
 
-    impl Translator {
+    impl Translator<'_> {
         pub(super) fn verify_module(&self) -> Result<(), TranslationError> {
             let mut msg = MaybeUninit::uninit();
             let res = unsafe {
@@ -623,10 +678,11 @@ mod debug_helper {
             Ok(())
         }
 
-        pub(super) fn verify_function(
-            &self,
+        pub(crate) fn verify_function(
+            module: &Module,
             function: &Function,
             function_idx: u32,
+            wasm_module_meta: &WasmModuleMeta,
         ) -> Result<(), TranslationError> {
             if 1 == unsafe {
                 LLVMVerifyFunction(
@@ -635,10 +691,10 @@ mod debug_helper {
                 )
             } {
                 // print module early for debugging
-                self.module.print_to_file();
+                module.print_to_file();
                 return Err(TranslationError::Msg(format!(
                     "function verification failed for function {}",
-                    build_llvm_function_name(function_idx, &self.wasm_module.meta, false)
+                    build_llvm_function_name(function_idx, wasm_module_meta, false)
                 )));
             }
             Ok(())

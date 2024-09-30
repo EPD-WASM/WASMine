@@ -61,7 +61,7 @@ pub fn wasmine_llvm_aot_compile(wasm_bytes: Vec<u8>) -> PathBuf {
     let mut executor = llvm_gen::JITExecutor::new(context.clone()).unwrap();
 
     let llvm_module =
-        llvm_gen::Translator::translate_module(context.clone(), module.clone()).unwrap();
+        llvm_gen::Translator::translate_full_module(context.clone(), &module.meta).unwrap();
     executor.add_module(llvm_module).unwrap();
     let llvm_module_object_buf = executor.get_module_as_object_buffer(0).unwrap();
 
@@ -94,7 +94,7 @@ fn setup_for_execute(bm: &str) -> PathBuf {
     let context = Rc::new(llvm_gen::Context::create());
     let mut executor = llvm_gen::JITExecutor::new(context.clone()).unwrap();
     let llvm_module =
-        llvm_gen::Translator::translate_module(context.clone(), module.clone()).unwrap();
+        llvm_gen::Translator::translate_full_module(context.clone(), &module.meta).unwrap();
     executor.add_module(llvm_module).unwrap();
     let llvm_module_object_buf = executor.get_module_as_object_buffer(0).unwrap();
 
@@ -158,8 +158,7 @@ pub fn wasmine_llvm_aot_execute(compiled_file_path: PathBuf) -> PathBuf {
     wasmine_module
         .load_all_functions(parser::FunctionLoader)
         .unwrap();
-    let wasmine_module = Rc::new(wasmine_module);
-    wasmine_engine.init(wasmine_module.clone()).unwrap();
+    let wasmine_module = wasmine_engine.init(wasmine_module).unwrap();
 
     let wasi_ctxt = {
         let mut builder = WasiContextBuilder::new();

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use rkyv::{Deserialize, Serialize, Archive};
+use rkyv::{Archive, Deserialize, Serialize};
 use wasm_types::{FuncIdx, GlobalIdx, MemIdx, Name, TableIdx};
 
 #[derive(Debug, Clone)]
@@ -47,6 +47,13 @@ pub struct WasmExports {
 impl WasmExports {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.functions.is_empty()
+            && self.tables.is_empty()
+            && self.memories.is_empty()
+            && self.globals.is_empty()
     }
 
     #[inline]

@@ -6,13 +6,6 @@ pub struct MemorySizeInstruction {
 }
 
 impl Instruction for MemorySizeInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Memory(MemoryInstructionCategory::Memory(
-            MemoryOp::Size,
-        )));
-        o.write_variable(self.out1)
-    }
-
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         let out1 = i.read_variable()?;
         Ok(MemorySizeInstruction { out1 })
@@ -38,14 +31,6 @@ impl Display for MemoryGrowInstruction {
 }
 
 impl Instruction for MemoryGrowInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Memory(MemoryInstructionCategory::Memory(
-            MemoryOp::Grow,
-        )));
-        o.write_variable(self.in1);
-        o.write_variable(self.out1);
-    }
-
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         let in1 = i.read_variable()?;
         let out1 = i.read_variable()?;
@@ -61,15 +46,6 @@ pub struct MemoryCopyInstruction {
 }
 
 impl Instruction for MemoryCopyInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Memory(MemoryInstructionCategory::Memory(
-            MemoryOp::Copy,
-        )));
-        o.write_variable(self.n);
-        o.write_variable(self.s);
-        o.write_variable(self.d);
-    }
-
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         let n = i.read_variable()?;
         let s = i.read_variable()?;
@@ -106,15 +82,6 @@ impl Display for MemoryFillInstruction {
 }
 
 impl Instruction for MemoryFillInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Memory(MemoryInstructionCategory::Memory(
-            MemoryOp::Fill,
-        )));
-        o.write_variable(self.n);
-        o.write_variable(self.val);
-        o.write_variable(self.d);
-    }
-
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         let n = i.read_variable()?;
         let val = i.read_variable()?;
@@ -132,16 +99,6 @@ pub struct MemoryInitInstruction {
 }
 
 impl Instruction for MemoryInitInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Memory(MemoryInstructionCategory::Memory(
-            MemoryOp::Init,
-        )));
-        o.write_immediate(self.data_idx);
-        o.write_variable(self.n);
-        o.write_variable(self.s);
-        o.write_variable(self.d);
-    }
-
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         let data_idx = i.read_immediate()?;
         let n = i.read_variable()?;
@@ -167,13 +124,6 @@ pub struct DataDropInstruction {
 }
 
 impl Instruction for DataDropInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Memory(MemoryInstructionCategory::Memory(
-            MemoryOp::Drop,
-        )));
-        o.write_immediate(self.data_idx)
-    }
-
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         let data_idx = i.read_immediate()?;
         Ok(DataDropInstruction { data_idx })

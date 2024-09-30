@@ -1,5 +1,5 @@
 use super::*;
-use crate::{basic_block::BasicBlockID, DecodingError, InstructionDecoder, InstructionEncoder};
+use crate::{basic_block::BasicBlockID, DecodingError, InstructionDecoder};
 use rkyv::{Archive, Deserialize, Serialize};
 use smallvec::SmallVec;
 use wasm_types::InstructionType;
@@ -14,10 +14,6 @@ pub struct PhiNode {
 }
 
 impl Instruction for PhiNode {
-    fn serialize(self, _: &mut InstructionEncoder) {
-        unimplemented!("Phis are not serialized.")
-    }
-
     fn deserialize(_: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         unimplemented!("Phis are not deserialized.")
     }

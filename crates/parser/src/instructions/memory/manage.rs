@@ -3,7 +3,7 @@ use super::*;
 pub(crate) fn memory_size(
     ctxt: &mut Context,
     i: &mut WasmBinaryReader,
-    o: &mut InstructionEncoder,
+    o: &mut dyn InstructionConsumer,
 ) -> ParseResult {
     if i.read_byte()? != 0 {
         return Err(ParserError::Msg(
@@ -12,7 +12,7 @@ pub(crate) fn memory_size(
     }
 
     let out = ctxt.create_var(ValType::i32());
-    o.write(MemorySizeInstruction { out1: out.id });
+    o.write_memory_size(MemorySizeInstruction { out1: out.id });
     ctxt.push_var(out);
     Ok(())
 }
@@ -20,7 +20,7 @@ pub(crate) fn memory_size(
 pub(crate) fn memory_grow(
     ctxt: &mut Context,
     i: &mut WasmBinaryReader,
-    o: &mut InstructionEncoder,
+    o: &mut dyn InstructionConsumer,
 ) -> ParseResult {
     if i.read_byte()? != 0 {
         return Err(ParserError::Msg(
@@ -28,9 +28,9 @@ pub(crate) fn memory_grow(
         ));
     }
 
-    let size_in = ctxt.pop_var_with_type(&ValType::i32());
+    let size_in = ctxt.pop_var_with_type(ValType::i32());
     let out = ctxt.create_var(ValType::i32());
-    o.write(MemoryGrowInstruction {
+    o.write_memory_grow(MemoryGrowInstruction {
         in1: size_in.id,
         out1: out.id,
     });
@@ -41,7 +41,7 @@ pub(crate) fn memory_grow(
 pub(crate) fn memory_copy(
     ctxt: &mut Context,
     i: &mut WasmBinaryReader,
-    o: &mut InstructionEncoder,
+    o: &mut dyn InstructionConsumer,
 ) -> ParseResult {
     if i.read_byte()? != 0 || i.read_byte()? != 0 {
         return Err(ParserError::Msg(
@@ -52,10 +52,10 @@ pub(crate) fn memory_copy(
         return Err(ParserError::Msg("unknown memory 0".into()));
     }
 
-    let n = ctxt.pop_var_with_type(&ValType::i32());
-    let s = ctxt.pop_var_with_type(&ValType::i32());
-    let d = ctxt.pop_var_with_type(&ValType::i32());
-    o.write(MemoryCopyInstruction {
+    let n = ctxt.pop_var_with_type(ValType::i32());
+    let s = ctxt.pop_var_with_type(ValType::i32());
+    let d = ctxt.pop_var_with_type(ValType::i32());
+    o.write_memory_copy(MemoryCopyInstruction {
         n: n.id,
         s: s.id,
         d: d.id,
@@ -66,7 +66,7 @@ pub(crate) fn memory_copy(
 pub(crate) fn memory_fill(
     ctxt: &mut Context,
     i: &mut WasmBinaryReader,
-    o: &mut InstructionEncoder,
+    o: &mut dyn InstructionConsumer,
 ) -> ParseResult {
     if i.read_byte()? != 0 {
         return Err(ParserError::Msg(
@@ -77,10 +77,10 @@ pub(crate) fn memory_fill(
         return Err(ParserError::Msg("unknown memory 0".into()));
     }
 
-    let n = ctxt.pop_var_with_type(&ValType::i32());
-    let val = ctxt.pop_var_with_type(&ValType::i32());
-    let d = ctxt.pop_var_with_type(&ValType::i32());
-    o.write(MemoryFillInstruction {
+    let n = ctxt.pop_var_with_type(ValType::i32());
+    let val = ctxt.pop_var_with_type(ValType::i32());
+    let d = ctxt.pop_var_with_type(ValType::i32());
+    o.write_memory_fill(MemoryFillInstruction {
         n: n.id,
         val: val.id,
         d: d.id,
@@ -91,7 +91,7 @@ pub(crate) fn memory_fill(
 pub(crate) fn memory_init(
     ctxt: &mut Context,
     i: &mut WasmBinaryReader,
-    o: &mut InstructionEncoder,
+    o: &mut dyn InstructionConsumer,
 ) -> ParseResult {
     let data_idx: u32 = DataIdx::parse(i)?;
 
@@ -112,11 +112,11 @@ pub(crate) fn memory_init(
             "memory init instruction invalid encoding".into(),
         ));
     }
-    let n = ctxt.pop_var_with_type(&ValType::i32());
-    let s = ctxt.pop_var_with_type(&ValType::i32());
-    let d = ctxt.pop_var_with_type(&ValType::i32());
+    let n = ctxt.pop_var_with_type(ValType::i32());
+    let s = ctxt.pop_var_with_type(ValType::i32());
+    let d = ctxt.pop_var_with_type(ValType::i32());
 
-    o.write(MemoryInitInstruction {
+    o.write_memory_init(MemoryInitInstruction {
         data_idx,
         n: n.id,
         s: s.id,
@@ -128,7 +128,7 @@ pub(crate) fn memory_init(
 pub(crate) fn data_drop(
     ctxt: &mut Context,
     i: &mut WasmBinaryReader,
-    o: &mut InstructionEncoder,
+    o: &mut dyn InstructionConsumer,
 ) -> ParseResult {
     let data_idx = DataIdx::parse(i)?;
     if let Some(data_count) = ctxt.module.datacount {
@@ -143,6 +143,6 @@ pub(crate) fn data_drop(
         ))
     }
 
-    o.write(DataDropInstruction { data_idx });
+    o.write_data_drop(DataDropInstruction { data_idx });
     Ok(())
 }

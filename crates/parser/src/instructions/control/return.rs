@@ -3,8 +3,8 @@ use super::*;
 pub(crate) fn r#return(
     _: &mut Context,
     _: &mut WasmBinaryReader,
-    o: &mut InstructionEncoder,
+    o: &mut dyn InstructionConsumer,
 ) -> ParseResult {
-    o.write(Return {});
+    o.write_return();
     Ok(())
 }

@@ -10,15 +10,6 @@ pub struct IUnaryInstruction {
 }
 
 impl Instruction for IUnaryInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Numeric(
-            NumericInstructionCategory::IUnary(self.op.clone()),
-        ));
-        o.write_value_type(ValType::Number(self.types));
-        o.write_variable(self.in1);
-        o.write_variable(self.out1);
-    }
-
     fn deserialize(
         i: &mut InstructionDecoder,
         r#type: InstructionType,
@@ -55,15 +46,6 @@ pub struct FUnaryInstruction {
 }
 
 impl Instruction for FUnaryInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Numeric(
-            NumericInstructionCategory::FUnary(self.op.clone()),
-        ));
-        o.write_value_type(ValType::Number(self.types));
-        o.write_variable(self.in1);
-        o.write_variable(self.out1);
-    }
-
     fn deserialize(
         i: &mut InstructionDecoder,
         r#type: InstructionType,

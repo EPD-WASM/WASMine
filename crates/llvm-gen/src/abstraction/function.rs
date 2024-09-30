@@ -3,6 +3,7 @@ use llvm_sys::{
     prelude::{LLVMTypeRef, LLVMValueRef},
 };
 
+#[derive(Clone, Copy)]
 pub(crate) struct Function {
     inner: LLVMValueRef,
     ty: LLVMTypeRef,
@@ -27,12 +28,6 @@ impl Function {
 
     pub(crate) fn r#type(&self) -> LLVMTypeRef {
         self.ty
-    }
-}
-
-impl Drop for Function {
-    fn drop(&mut self) {
-        // function values are dropped with the context
     }
 }
 

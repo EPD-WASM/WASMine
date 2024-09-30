@@ -2,6 +2,7 @@ pub mod basic_block;
 mod control;
 pub(crate) mod decoder;
 pub(crate) mod encoder;
+pub(crate) mod instruction_consumer;
 mod memory;
 pub mod meta;
 mod numeric;
@@ -19,12 +20,11 @@ pub use reference::*;
 pub use table::*;
 pub use variable::*;
 
-use crate::{DecodingError, InstructionDecoder, InstructionEncoder};
+use crate::{DecodingError, InstructionDecoder};
 use std::fmt::{self, Display, Formatter};
 use wasm_types::*;
 
 pub trait Instruction {
-    fn serialize(self, o: &mut InstructionEncoder);
     fn deserialize(_: &mut InstructionDecoder, _t: InstructionType) -> Result<Self, DecodingError>
     where
         Self: std::marker::Sized,
@@ -39,7 +39,7 @@ pub struct Variable {
     pub id: VariableID,
 }
 
-pub type VariableID = u32;
+pub type VariableID = usize;
 
 macro_rules! extract_numtype {
     ($val_type:expr) => {

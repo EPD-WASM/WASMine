@@ -6,10 +6,6 @@ use super::*;
 pub struct Else {}
 
 impl Instruction for Else {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.finish(ControlInstruction::Else);
-    }
-
     fn deserialize(_: &mut InstructionDecoder, _t: InstructionType) -> Result<Self, DecodingError> {
         unimplemented!(
             "Control instructions are not serialized and can therefore not be deserialized."
@@ -20,8 +16,4 @@ impl Instruction for Else {
 #[derive(Debug, Clone)]
 pub struct End {}
 
-impl Instruction for End {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.finish(ControlInstruction::End);
-    }
-}
+impl Instruction for End {}

@@ -1,6 +1,6 @@
 use module::{objects::value::Value, Module};
 use runtime_lib::{Cluster, Config, Engine, Linker, RuntimeError};
-use std::{path::Path, rc::Rc};
+use std::path::Path;
 use utils::parse_input_params_for_function;
 use wasi::{PreopenDirInheritPerms, PreopenDirPerms, WasiContextBuilder};
 
@@ -20,9 +20,7 @@ fn run_internal(
     let buffer = resource_buffer::ResourceBuffer::from_file(path)?;
     let mut module = Module::new(buffer);
     module.load_meta(parser::ModuleMetaLoader)?;
-    module.load_all_functions(parser::FunctionLoader)?;
-    let module = Rc::new(module);
-    engine.init(module.clone())?;
+    let module = engine.init(module)?;
 
     let start_function = config.start_function.clone();
 
@@ -100,6 +98,7 @@ pub fn run(path: &Path, config: Config, engine: Engine, function_args: Vec<Strin
 #[cfg(feature = "llvm")]
 mod c_wasm_compilation {
     use super::*;
+    use llvm_gen::LLVMAdditionalResources;
     use resource_buffer::SourceFormat;
     use std::rc::Rc;
 
@@ -111,14 +110,22 @@ mod c_wasm_compilation {
         }
         let source = resource_buffer::ResourceBuffer::from_file(in_path)?;
         let mut module = module::Module::new(source);
-        module.load_meta(parser::ModuleMetaLoader)?;
-        module.load_all_functions(parser::FunctionLoader)?;
+        module.load_meta(parser::ModuleMetaLoader).unwrap();
+        module.load_meta(llvm_gen::ModuleMetaLoader).unwrap();
+        module.load_all_functions(llvm_gen::FunctionLoader).unwrap();
         let module = Rc::new(module);
 
         let context = Rc::new(llvm_gen::Context::create());
         let mut executor = llvm_gen::JITExecutor::new(context.clone())?;
 
-        let llvm_module = llvm_gen::Translator::translate_module(context.clone(), module.clone())?;
+        let llvm_module = module
+            .additional_resources
+            .first()
+            .unwrap()
+            .downcast_ref::<LLVMAdditionalResources>()
+            .unwrap()
+            .module
+            .clone();
         executor.add_module(llvm_module)?;
         let llvm_module_object_buf = executor.get_module_as_object_buffer(0)?;
         module.store(parser::ModuleStorer, llvm_module_object_buf, out_path)?;

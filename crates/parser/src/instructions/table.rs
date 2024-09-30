@@ -6,7 +6,7 @@ use wasm_types::*;
 pub(crate) fn table_set(
     ctxt: &mut Context,
     i: &mut WasmBinaryReader,
-    o: &mut InstructionEncoder,
+    o: &mut dyn InstructionConsumer,
 ) -> ParseResult {
     let table_idx = TableIdx::parse(i)?;
     if table_idx as usize >= ctxt.module.tables.len() {
@@ -22,8 +22,8 @@ pub(crate) fn table_set(
             "table value to set must be of reference type".into(),
         )),
     }
-    let idx = ctxt.pop_var_with_type(&ValType::i32());
-    o.write(TableSetInstruction {
+    let idx = ctxt.pop_var_with_type(ValType::i32());
+    o.write_table_set(TableSetInstruction {
         table_idx,
         in1: value_to_set.id,
         idx: idx.id,
@@ -35,7 +35,7 @@ pub(crate) fn table_set(
 pub(crate) fn table_get(
     ctxt: &mut Context,
     i: &mut WasmBinaryReader,
-    o: &mut InstructionEncoder,
+    o: &mut dyn InstructionConsumer,
 ) -> ParseResult {
     let table_idx = TableIdx::parse(i)?;
     let table = match ctxt.module.tables.get(table_idx as usize) {
@@ -48,9 +48,9 @@ pub(crate) fn table_get(
         }
     };
     let table_ref_type = table.r#type.ref_type;
-    let idx = ctxt.pop_var_with_type(&ValType::i32());
+    let idx = ctxt.pop_var_with_type(ValType::i32());
     let out = ctxt.create_var(ValType::Reference(table_ref_type));
-    o.write(TableGetInstruction {
+    o.write_table_get(TableGetInstruction {
         table_idx,
         out1: out.id,
         idx: idx.id,
@@ -62,7 +62,7 @@ pub(crate) fn table_get(
 pub(crate) fn table_grow(
     ctxt: &mut Context,
     i: &mut WasmBinaryReader,
-    o: &mut InstructionEncoder,
+    o: &mut dyn InstructionConsumer,
 ) -> ParseResult {
     let table_idx = TableIdx::parse(i)?;
     let table = match ctxt.module.tables.get(table_idx as usize) {
@@ -76,8 +76,8 @@ pub(crate) fn table_grow(
     };
     let table_type = ValType::Reference(table.r#type.ref_type);
 
-    let size = ctxt.pop_var_with_type(&ValType::i32());
-    let value_to_fill = ctxt.pop_var_with_type(&table_type);
+    let size = ctxt.pop_var_with_type(ValType::i32());
+    let value_to_fill = ctxt.pop_var_with_type(table_type);
     match value_to_fill.type_ {
         ValType::Reference(_) => {}
         _ => ctxt.poison(ValidationError::Msg(format!(
@@ -86,7 +86,7 @@ pub(crate) fn table_grow(
         ))),
     }
     let out = ctxt.create_var(ValType::i32());
-    o.write(TableGrowInstruction {
+    o.write_table_grow(TableGrowInstruction {
         table_idx,
         size: size.id,
         value_to_fill: value_to_fill.id,
@@ -99,7 +99,7 @@ pub(crate) fn table_grow(
 pub(crate) fn table_size(
     ctxt: &mut Context,
     i: &mut WasmBinaryReader,
-    o: &mut InstructionEncoder,
+    o: &mut dyn InstructionConsumer,
 ) -> ParseResult {
     let table_idx = TableIdx::parse(i)?;
     if table_idx as usize > ctxt.module.tables.len() {
@@ -108,7 +108,7 @@ pub(crate) fn table_size(
         )))
     }
     let out = ctxt.create_var(ValType::i32());
-    o.write(TableSizeInstruction {
+    o.write_table_size(TableSizeInstruction {
         table_idx,
         out1: out.id,
     });
@@ -119,12 +119,12 @@ pub(crate) fn table_size(
 pub(crate) fn table_fill(
     ctxt: &mut Context,
     i: &mut WasmBinaryReader,
-    o: &mut InstructionEncoder,
+    o: &mut dyn InstructionConsumer,
 ) -> ParseResult {
     let table_idx = TableIdx::parse(i)?;
-    let n = ctxt.pop_var_with_type(&ValType::i32());
+    let n = ctxt.pop_var_with_type(ValType::i32());
     let ref_value = ctxt.pop_var();
-    let i = ctxt.pop_var_with_type(&ValType::i32());
+    let i = ctxt.pop_var_with_type(ValType::i32());
 
     // validate
     let ref_value_type = match ref_value.type_ {
@@ -152,7 +152,7 @@ pub(crate) fn table_fill(
         ))),
     }
 
-    o.write(TableFillInstruction {
+    o.write_table_fill(TableFillInstruction {
         table_idx,
         i: i.id,
         n: n.id,
@@ -164,13 +164,13 @@ pub(crate) fn table_fill(
 pub(crate) fn table_copy(
     ctxt: &mut Context,
     i: &mut WasmBinaryReader,
-    o: &mut InstructionEncoder,
+    o: &mut dyn InstructionConsumer,
 ) -> ParseResult {
     let table_idx_x = TableIdx::parse(i)?;
     let table_idx_y = TableIdx::parse(i)?;
-    let n = ctxt.pop_var_with_type(&ValType::i32());
-    let s = ctxt.pop_var_with_type(&ValType::i32());
-    let d = ctxt.pop_var_with_type(&ValType::i32());
+    let n = ctxt.pop_var_with_type(ValType::i32());
+    let s = ctxt.pop_var_with_type(ValType::i32());
+    let d = ctxt.pop_var_with_type(ValType::i32());
 
     // validate
     let table_type_x = match ctxt
@@ -203,7 +203,7 @@ pub(crate) fn table_copy(
         )))
     }
 
-    o.write(TableCopyInstruction {
+    o.write_table_copy(TableCopyInstruction {
         table_idx_x,
         table_idx_y,
         n: n.id,
@@ -216,13 +216,13 @@ pub(crate) fn table_copy(
 pub(crate) fn table_init(
     ctxt: &mut Context,
     i: &mut WasmBinaryReader,
-    o: &mut InstructionEncoder,
+    o: &mut dyn InstructionConsumer,
 ) -> ParseResult {
     let elem_idx = ElemIdx::parse(i)?;
     let table_idx = TableIdx::parse(i)?;
-    let n = ctxt.pop_var_with_type(&ValType::i32());
-    let s = ctxt.pop_var_with_type(&ValType::i32());
-    let d = ctxt.pop_var_with_type(&ValType::i32());
+    let n = ctxt.pop_var_with_type(ValType::i32());
+    let s = ctxt.pop_var_with_type(ValType::i32());
+    let d = ctxt.pop_var_with_type(ValType::i32());
 
     // validate
     let table_type = match ctxt
@@ -250,7 +250,7 @@ pub(crate) fn table_init(
         )))
     }
 
-    o.write(TableInitInstruction {
+    o.write_table_init(TableInitInstruction {
         table_idx,
         elem_idx,
         n: n.id,
@@ -263,7 +263,7 @@ pub(crate) fn table_init(
 pub(crate) fn elem_drop(
     ctxt: &mut Context,
     i: &mut WasmBinaryReader,
-    o: &mut InstructionEncoder,
+    o: &mut dyn InstructionConsumer,
 ) -> ParseResult {
     let elem_idx = ElemIdx::parse(i)?;
 
@@ -274,6 +274,6 @@ pub(crate) fn elem_drop(
         )))
     }
 
-    o.write(ElemDropInstruction { elem_idx });
+    o.write_elem_drop(ElemDropInstruction { elem_idx });
     Ok(())
 }

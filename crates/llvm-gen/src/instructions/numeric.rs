@@ -1,20 +1,18 @@
 use crate::abstraction::function::Function;
-use crate::util::c_str;
 use crate::{error::TranslationError, translator::Translator};
+use llvm_sys::prelude::LLVMValueRef;
+use llvm_sys::{LLVMIntPredicate, LLVMRealPredicate};
 use module::instructions::*;
 use module::{
     instructions::{FBinaryInstruction, FUnaryInstruction, IBinaryInstruction, IUnaryInstruction},
     InstructionDecoder,
 };
-use llvm_sys::core::LLVMIntTypeInContext;
-use llvm_sys::prelude::{LLVMBuilderRef, LLVMValueRef};
-use llvm_sys::{LLVMIntPredicate, LLVMRealPredicate};
 use wasm_types::{
     ConversionOp, FBinaryOp, FRelationalOp, FUnaryOp, IBinaryOp, IRelationalOp, ITestOp, IUnaryOp,
     InstructionType, NumType, NumericInstructionCategory, ValType,
 };
 
-struct IRelationalOpConv(IRelationalOp);
+pub(super) struct IRelationalOpConv(pub(super) IRelationalOp);
 impl From<IRelationalOpConv> for LLVMIntPredicate {
     fn from(val: IRelationalOpConv) -> Self {
         match val.0 {
@@ -32,7 +30,7 @@ impl From<IRelationalOpConv> for LLVMIntPredicate {
     }
 }
 
-struct FRelationalOpConv(FRelationalOp);
+pub(super) struct FRelationalOpConv(pub(super) FRelationalOp);
 impl From<FRelationalOpConv> for LLVMRealPredicate {
     fn from(val: FRelationalOpConv) -> Self {
         match val.0 {
@@ -46,7 +44,7 @@ impl From<FRelationalOpConv> for LLVMRealPredicate {
     }
 }
 
-impl Translator {
+impl Translator<'_> {
     pub(crate) fn translate_numeric(
         &self,
         instr_type: NumericInstructionCategory,
@@ -58,42 +56,34 @@ impl Translator {
         match instr_type {
             NumericInstructionCategory::IBinary(_) => {
                 let instr = decoder.read::<IBinaryInstruction>(instruction)?;
-                let lhs = variable_map[instr.lhs as usize];
-                let rhs = variable_map[instr.rhs as usize];
-                let out = &mut variable_map[instr.out1 as usize];
-                unsafe {
-                    *out = self.compile_ibinary(instr, lhs, rhs, llvm_function)?;
-                }
+                let lhs = variable_map[instr.lhs];
+                let rhs = variable_map[instr.rhs];
+                let out = &mut variable_map[instr.out1];
+                *out = self.compile_ibinary(instr, lhs, rhs, llvm_function)?;
             }
             NumericInstructionCategory::FBinary(_) => {
                 let instr = decoder.read::<FBinaryInstruction>(instruction)?;
-                let lhs = variable_map[instr.lhs as usize];
-                let rhs = variable_map[instr.rhs as usize];
-                let out = &mut variable_map[instr.out1 as usize];
-                unsafe {
-                    *out = self.compile_fbinary(instr, lhs, rhs)?;
-                }
+                let lhs = variable_map[instr.lhs];
+                let rhs = variable_map[instr.rhs];
+                let out = &mut variable_map[instr.out1];
+                *out = self.compile_fbinary(instr, lhs, rhs)?;
             }
             NumericInstructionCategory::IUnary(_) => {
                 let instr = decoder.read::<IUnaryInstruction>(instruction)?;
-                let src = variable_map[instr.in1 as usize];
-                let dst = &mut variable_map[instr.out1 as usize];
-                unsafe {
-                    *dst = self.compile_iunary(instr, src)?;
-                }
+                let src = variable_map[instr.in1];
+                let dst = &mut variable_map[instr.out1];
+                *dst = self.compile_iunary(instr, src)?;
             }
             NumericInstructionCategory::FUnary(_) => {
                 let instr = decoder.read::<FUnaryInstruction>(instruction)?;
-                let src = variable_map[instr.in1 as usize];
-                let dst = &mut variable_map[instr.out1 as usize];
-                unsafe {
-                    *dst = self.compile_funary(instr, self.builder.get(), src)?;
-                }
+                let src = variable_map[instr.in1];
+                let dst = &mut variable_map[instr.out1];
+                *dst = self.compile_funary(instr, src)?;
             }
             NumericInstructionCategory::Conversion(ConversionOp::Convert) => {
                 let instr = decoder.read::<ConvertInstruction>(instruction)?;
-                let src = variable_map[instr.in1 as usize];
-                variable_map[instr.out1 as usize] = self.builder.build_int2float(
+                let src = variable_map[instr.in1];
+                variable_map[instr.out1] = self.builder.build_int2float(
                     src,
                     self.builder.valtype2llvm(ValType::Number(instr.out1_type)),
                     instr.signed,
@@ -102,8 +92,8 @@ impl Translator {
             }
             NumericInstructionCategory::Conversion(ConversionOp::Reinterpret) => {
                 let instr = decoder.read::<ReinterpretInstruction>(instruction)?;
-                let src = variable_map[instr.in1 as usize];
-                variable_map[instr.out1 as usize] = self.builder.build_bitcast(
+                let src = variable_map[instr.in1];
+                variable_map[instr.out1] = self.builder.build_bitcast(
                     src,
                     self.builder.valtype2llvm(ValType::Number(instr.out1_type)),
                     "reinterpret",
@@ -111,22 +101,19 @@ impl Translator {
             }
             NumericInstructionCategory::Conversion(ConversionOp::Demote) => {
                 let instr = decoder.read::<DemoteInstruction>(instruction)?;
-                let src = variable_map[instr.in1 as usize];
-                variable_map[instr.out1 as usize] = self.builder.build_float_cast(
-                    src,
-                    self.builder.valtype2llvm(ValType::f32()),
-                    "demote",
-                );
+                let src = variable_map[instr.in1];
+                variable_map[instr.out1] =
+                    self.builder
+                        .build_float_cast(src, self.builder.f32(), "demote");
             }
             NumericInstructionCategory::Conversion(ConversionOp::ExtendBits) => {
                 let instr = decoder.read::<ExtendBitsInstruction>(instruction)?;
-                let src = variable_map[instr.in1 as usize];
-                let actual_type =
-                    unsafe { LLVMIntTypeInContext(self.context.get(), instr.input_size as u32) };
+                let src = variable_map[instr.in1];
+                let actual_type = self.builder.custom_type(instr.input_size as u32);
                 let part_view = self
                     .builder
                     .build_int_cast(src, actual_type, false, "downcast");
-                variable_map[instr.out1 as usize] = self.builder.build_int_cast(
+                variable_map[instr.out1] = self.builder.build_int_cast(
                     part_view,
                     self.builder.valtype2llvm(ValType::Number(instr.out1_type)),
                     true,
@@ -135,30 +122,25 @@ impl Translator {
             }
             NumericInstructionCategory::Conversion(ConversionOp::ExtendType) => {
                 let instr = decoder.read::<ExtendTypeInstruction>(instruction)?;
-                let src = variable_map[instr.in1 as usize];
-                variable_map[instr.out1 as usize] = self.builder.build_int_cast(
-                    src,
-                    self.builder.valtype2llvm(ValType::i64()),
-                    instr.signed,
-                    "convert",
-                );
+                let src = variable_map[instr.in1];
+                variable_map[instr.out1] =
+                    self.builder
+                        .build_int_cast(src, self.builder.i64(), instr.signed, "convert");
             }
             NumericInstructionCategory::Conversion(ConversionOp::Promote) => {
                 let instr = decoder.read::<PromoteInstruction>(instruction)?;
-                let src = variable_map[instr.in1 as usize];
-                variable_map[instr.out1 as usize] = unsafe {
-                    self.builder.call_funary_constrained_intrinsic(
-                        NumType::F32,
-                        NumType::F64,
-                        src,
-                        "llvm.experimental.constrained.fpext",
-                    )
-                };
+                let src = variable_map[instr.in1];
+                variable_map[instr.out1] = self.builder.call_funary_constrained_intrinsic(
+                    NumType::F32,
+                    NumType::F64,
+                    src,
+                    "llvm.experimental.constrained.fpext",
+                )
             }
             NumericInstructionCategory::Conversion(ConversionOp::Trunc) => {
                 let instr = decoder.read::<TruncInstruction>(instruction)?;
-                let src = variable_map[instr.in1 as usize];
-                variable_map[instr.out1 as usize] = self.builder.build_fp2int_trunc(
+                let src = variable_map[instr.in1];
+                variable_map[instr.out1] = self.builder.build_fp2int_trunc(
                     src,
                     instr.out1_type,
                     instr.in1_type,
@@ -169,35 +151,30 @@ impl Translator {
             }
             NumericInstructionCategory::Conversion(ConversionOp::TruncSat) => {
                 let instr = decoder.read::<TruncSaturationInstruction>(instruction)?;
-                let src = variable_map[instr.in1 as usize];
+                let src = variable_map[instr.in1];
                 let intrinsic_name = if instr.signed {
                     "llvm.fptosi.sat"
                 } else {
                     "llvm.fptoui.sat"
                 };
-                variable_map[instr.out1 as usize] = unsafe {
-                    self.builder.call_unary_intrinsic(
-                        instr.in1_type,
-                        instr.out1_type,
-                        src,
-                        intrinsic_name,
-                        true,
-                    )
-                }
+                variable_map[instr.out1] = self.builder.call_unary_intrinsic(
+                    instr.in1_type,
+                    instr.out1_type,
+                    src,
+                    intrinsic_name,
+                    true,
+                )
             }
             NumericInstructionCategory::Conversion(ConversionOp::Wrap) => {
                 let instr = decoder.read::<WrapInstruction>(instruction)?;
-                let src = variable_map[instr.in1 as usize];
-                variable_map[instr.out1 as usize] = self.builder.build_int_cast(
-                    src,
-                    self.builder.valtype2llvm(ValType::i32()),
-                    false,
-                    "wrap",
-                );
+                let src = variable_map[instr.in1];
+                variable_map[instr.out1] =
+                    self.builder
+                        .build_int_cast(src, self.builder.i32(), false, "wrap");
             }
             NumericInstructionCategory::Constant => {
                 let instr = decoder.read::<Constant>(instruction)?;
-                variable_map[instr.out1 as usize] = match instr.out1_type {
+                variable_map[instr.out1] = match instr.out1_type {
                     NumType::I32 => self.builder.const_i32(instr.imm.into()),
                     NumType::I64 => self.builder.const_i64(instr.imm.into()),
                     NumType::F32 => self.builder.const_f32(instr.imm.into()),
@@ -206,9 +183,9 @@ impl Translator {
             }
             NumericInstructionCategory::IRelational(_) => {
                 let instr = decoder.read::<IRelationalInstruction>(instruction)?;
-                let lhs = variable_map[instr.in1 as usize];
-                let rhs = variable_map[instr.in2 as usize];
-                let out = &mut variable_map[instr.out1 as usize];
+                let lhs = variable_map[instr.in1];
+                let rhs = variable_map[instr.in2];
+                let out = &mut variable_map[instr.out1];
                 *out =
                     self.builder
                         .build_icmp(IRelationalOpConv(instr.op).into(), lhs, rhs, "icmp");
@@ -221,9 +198,9 @@ impl Translator {
             }
             NumericInstructionCategory::FRelational(_) => {
                 let instr = decoder.read::<FRelationalInstruction>(instruction)?;
-                let lhs = variable_map[instr.in1 as usize];
-                let rhs = variable_map[instr.in2 as usize];
-                let out = &mut variable_map[instr.out1 as usize];
+                let lhs = variable_map[instr.in1];
+                let rhs = variable_map[instr.in2];
+                let out = &mut variable_map[instr.out1];
                 *out =
                     self.builder
                         .build_fcmp(FRelationalOpConv(instr.op).into(), lhs, rhs, "fcmp");
@@ -236,26 +213,23 @@ impl Translator {
             }
             NumericInstructionCategory::ITest(ITestOp::Eqz) => {
                 let instr = decoder.read::<ITestInstruction>(instruction)?;
-                let val = variable_map[instr.in1 as usize];
-                let out = &mut variable_map[instr.out1 as usize];
+                let val = variable_map[instr.in1];
+                let out = &mut variable_map[instr.out1];
                 *out = self.builder.build_icmp(
                     LLVMIntPredicate::LLVMIntEQ,
                     val,
                     self.builder.const_zero(ValType::Number(instr.input_type)),
                     "test_eqz",
                 );
-                *out = self.builder.build_int_cast(
-                    *out,
-                    self.builder.i32(),
-                    false,
-                    "upcast icmp i8 -> i32",
-                )
+                *out = self
+                    .builder
+                    .build_int_cast(*out, self.builder.i32(), false, "icmp -> i32")
             }
         }
         Ok(())
     }
 
-    unsafe fn compile_ibinary(
+    pub(crate) fn compile_ibinary(
         &self,
         instr: IBinaryInstruction,
         lhs: LLVMValueRef,
@@ -289,7 +263,7 @@ impl Translator {
         })
     }
 
-    unsafe fn compile_fbinary(
+    pub(crate) fn compile_fbinary(
         &self,
         instr: FBinaryInstruction,
         lhs: LLVMValueRef,
@@ -358,7 +332,7 @@ impl Translator {
         })
     }
 
-    unsafe fn compile_iunary(
+    pub(crate) fn compile_iunary(
         &self,
         instr: IUnaryInstruction,
         val: LLVMValueRef,
@@ -395,14 +369,13 @@ impl Translator {
         })
     }
 
-    unsafe fn compile_funary(
+    pub(crate) fn compile_funary(
         &self,
         instr: FUnaryInstruction,
-        builder: LLVMBuilderRef,
         val: LLVMValueRef,
     ) -> Result<LLVMValueRef, TranslationError> {
         Ok(match instr.op {
-            FUnaryOp::Neg => llvm_sys::core::LLVMBuildFNeg(builder, val, c_str("fneg").as_ptr()),
+            FUnaryOp::Neg => self.builder.build_fneg(val, "fneg"),
 
             // https://llvm.org/docs/LangRef.html#llvm-fabs-intrinsic
             FUnaryOp::Abs => {

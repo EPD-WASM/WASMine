@@ -1,8 +1,11 @@
 use super::{builder::Builder, module::Module};
 use crate::util::c_str;
 use llvm_sys::{
-    core::{LLVMAppendBasicBlockInContext, LLVMContextCreate, LLVMContextDispose},
+    core::{
+        LLVMAppendBasicBlockInContext, LLVMContextCreate, LLVMContextDispose, LLVMDeleteBasicBlock,
+    },
     prelude::{LLVMBasicBlockRef, LLVMContextRef, LLVMValueRef},
+    LLVMBasicBlock,
 };
 use std::rc::Rc;
 
@@ -27,6 +30,10 @@ impl Context {
 
     pub(crate) fn append_basic_block(&self, func: LLVMValueRef, name: &str) -> LLVMBasicBlockRef {
         unsafe { LLVMAppendBasicBlockInContext(self.inner, func, c_str(name).as_ptr()) }
+    }
+
+    pub(crate) fn delete_basic_block(&self, bb: *mut LLVMBasicBlock) {
+        unsafe { LLVMDeleteBasicBlock(bb) }
     }
 }
 

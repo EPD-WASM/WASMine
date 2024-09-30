@@ -10,15 +10,6 @@ pub struct Constant {
 }
 
 impl Instruction for Constant {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Numeric(
-            NumericInstructionCategory::Constant,
-        ));
-        o.write_immediate(self.imm.as_u64());
-        o.write_variable(self.out1);
-        o.write_value_type(ValType::Number(self.out1_type));
-    }
-
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         let imm = i.read_immediate::<u64>()?.into();
         let out1 = i.read_variable()?;

@@ -13,7 +13,7 @@ use runtime_lib::{
     BoundLinker, Cluster, ClusterConfig, Engine, InstanceHandle, Linker, ResourceBuffer,
     RuntimeError,
 };
-use std::{collections::HashMap, path::PathBuf, rc::Rc};
+use std::{collections::HashMap, path::PathBuf};
 use test_log::test;
 use wasm_types::ValType;
 use wast::{
@@ -32,11 +32,11 @@ type DeclaredModulesMap<'a> = HashMap<
 generate_spec_test_cases!(test_llvm, llvm);
 
 pub fn translate_module<'a>(
-    module: Rc<module::objects::module::Module>,
+    module: module::objects::module::Module,
     linker: &mut BoundLinker<'a>,
 ) -> Result<(InstanceHandle<'a>, bool), RuntimeError> {
     let mut engine = Engine::llvm()?;
-    engine.init(module.clone())?;
+    let module = engine.init(module)?;
     let instance_handle = linker.instantiate_and_link(module.clone(), engine)?;
     Ok((instance_handle, false))
 }
@@ -144,7 +144,9 @@ fn parse_module(module: &mut QuoteWat) -> Result<Module, ModuleError> {
     let source = ResourceBuffer::from_wasm_buf(binary_mod.clone());
     let mut module = Module::new(source);
     module.load_meta(parser::ModuleMetaLoader)?;
+    module.load_meta(llvm_gen::ModuleMetaLoader)?;
     module.load_all_functions(parser::FunctionLoader)?;
+    module.load_all_functions(llvm_gen::FunctionLoader)?;
     Ok(module)
 }
 
@@ -175,8 +177,7 @@ pub fn test_llvm(file_path: &str) {
     let source = ResourceBuffer::from_file(&spectest_module_path).unwrap();
     let mut module = Module::new(source);
     module.load_meta(parser::ModuleMetaLoader).unwrap();
-    module.load_all_functions(parser::FunctionLoader).unwrap();
-    let spectest_module = translate_module(Rc::new(module), &mut linker).unwrap();
+    let spectest_module = translate_module(module, &mut linker).unwrap();
     linker.transfer("spectest", spectest_module.0).unwrap();
 
     for directive in wast_repr.directives.into_iter() {
@@ -196,8 +197,8 @@ pub fn test_llvm(file_path: &str) {
                         );
                     }
                 };
-                let translation_result = translate_module(Rc::new(wasm_module), &mut linker)
-                    .unwrap_or_else(|e| {
+                let translation_result =
+                    translate_module(wasm_module, &mut linker).unwrap_or_else(|e| {
                         panic!(
                             "Failed to translate module: {:?}:{}:{}\nError: {:?}",
                             file_path, line, col, e
@@ -230,7 +231,7 @@ pub fn test_llvm(file_path: &str) {
                     Ok(m) => m,
                     Err(_) => return,
                 };
-                match translate_module(Rc::new(m), &mut linker) {
+                match translate_module(m, &mut linker) {
                     Ok(_) => {
                         panic!(
                             "expected translation failure \"{}\" for invalid module in spec test file {:?}:{}:{}, but translated successfully.",
@@ -405,11 +406,9 @@ pub fn test_llvm(file_path: &str) {
                 let mut module = Module::new(source);
                 module
                     .load_meta(parser::ModuleMetaLoader)
-                    .and_then(|_| module.load_all_functions(parser::FunctionLoader))
                     .unwrap_or_else(|e| {
                         panic!("Error during parsing: {:?} {file_path:?}:{line}:{col}", e)
                     });
-                let module = Rc::new(module);
 
                 let mut engine = Engine::llvm().unwrap_or_else(|e| {
                     panic!(
@@ -417,7 +416,7 @@ pub fn test_llvm(file_path: &str) {
                         e
                     );
                 });
-                engine.init(module.clone()).unwrap_or_else(|e| {
+                let module = engine.init(module).unwrap_or_else(|e| {
                     panic!(
                         "Error during engine init: {:?} {file_path:?}:{line}:{col}",
                         e

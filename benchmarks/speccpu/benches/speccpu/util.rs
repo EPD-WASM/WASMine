@@ -2,7 +2,7 @@
 use criterion::{black_box, BatchSize, BenchmarkId, Criterion, Throughput};
 use once_cell::sync::Lazy;
 use runtime_lib::{ClusterConfig, FunctionLoader, ModuleMetaLoader, ResourceBuffer, WasmModule};
-use std::{path::PathBuf, rc::Rc};
+use std::path::PathBuf;
 use wasi::{PreopenDirInheritPerms, PreopenDirPerms, WasiContextBuilder};
 
 pub static PATH_505: Lazy<PathBuf> =
@@ -116,12 +116,10 @@ pub fn wasmine_llvm_jit_criterion(bm: SpeccpuBenchmark, c: &mut Criterion) {
                 let source = ResourceBuffer::from_wasm_buf(wasm_bytes);
                 let mut module = WasmModule::new(source);
                 module.load_meta(ModuleMetaLoader).unwrap();
-                module.load_all_functions(FunctionLoader).unwrap();
 
-                let wasmine_module = Rc::new(module);
                 let wasmine_cluster = runtime_lib::Cluster::new(ClusterConfig::default());
                 let mut wasmine_engine = runtime_lib::Engine::llvm().unwrap();
-                wasmine_engine.init(wasmine_module.clone()).unwrap();
+                let wasmine_module = wasmine_engine.init(module).unwrap();
 
                 let wasi_ctxt = {
                     let mut builder = WasiContextBuilder::new();
@@ -157,6 +155,47 @@ pub fn wasmine_llvm_jit_criterion(bm: SpeccpuBenchmark, c: &mut Criterion) {
             BatchSize::SmallInput,
         );
     });
+}
+
+pub fn wasmine_llvm_jit_iai(bm: SpeccpuBenchmark) {
+    let wasm_bytes = std::fs::read(bm.wasm_path).unwrap();
+    let _stdout_dropper = gag::Gag::stdout().unwrap();
+    // let _stderr_dropper = gag::Gag::stderr().unwrap();
+
+    let source = ResourceBuffer::from_wasm_buf(wasm_bytes);
+    let mut module = WasmModule::new(source);
+    module.load_meta(ModuleMetaLoader).unwrap();
+
+    let wasmine_cluster = runtime_lib::Cluster::new(ClusterConfig::default());
+    let mut wasmine_engine = runtime_lib::Engine::llvm().unwrap();
+    let wasmine_module = wasmine_engine.init(module).unwrap();
+
+    let wasi_ctxt = {
+        let mut builder = WasiContextBuilder::new();
+        builder.args(bm.args.clone());
+        for dir in bm.dirs.iter() {
+            builder
+                .preopen_dir(
+                    dir.0.clone(),
+                    dir.1.clone(),
+                    PreopenDirPerms::all(),
+                    PreopenDirInheritPerms::all(),
+                )
+                .unwrap();
+        }
+        builder.inherit_stdio();
+        builder.finish()
+    };
+
+    let wasmine_instance = runtime_lib::BoundLinker::new(&wasmine_cluster)
+        .instantiate_and_link_with_wasi(wasmine_module.clone(), wasmine_engine, wasi_ctxt)
+        .unwrap();
+
+    wasmine_instance
+        .get_function_by_idx(wasmine_instance.query_start_function().unwrap())
+        .unwrap()
+        .call(&[])
+        .unwrap();
 }
 
 pub fn wasmine_parse_iai(bm: SpeccpuBenchmark) -> WasmModule {

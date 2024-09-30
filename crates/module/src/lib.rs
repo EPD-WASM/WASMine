@@ -8,8 +8,10 @@ pub mod utils;
 pub mod fmt;
 
 pub use instructions::basic_block;
+pub use instructions::basic_block::{BasicBlock, BasicBlockID};
 pub use instructions::decoder::{DecodingError, InstructionDecoder};
 pub use instructions::encoder::InstructionEncoder;
+pub use instructions::instruction_consumer::InstructionConsumer;
 
 pub use error::ModuleError;
 pub use objects::module::{Module, ModuleMetadata};

@@ -1,5 +1,7 @@
 use crate::util::c_str;
 use crate::{abstraction::function::Function, TranslationError, Translator};
+use llvm_sys::core::LLVMBuildAdd;
+use llvm_sys::prelude::LLVMValueRef;
 use module::instructions::{
     DataDropInstruction, MemoryCopyInstruction, MemoryFillInstruction, MemoryGrowInstruction,
     MemoryInitInstruction, MemorySizeInstruction,
@@ -9,11 +11,9 @@ use module::{
     instructions::{LoadInstruction, StoreInstruction},
     InstructionDecoder,
 };
-use llvm_sys::core::LLVMBuildAdd;
-use llvm_sys::prelude::LLVMValueRef;
 use wasm_types::{InstructionType, LoadOp, MemoryInstructionCategory, MemoryOp, StoreOp};
 
-impl Translator {
+impl Translator<'_> {
     pub(crate) fn translate_memory(
         &self,
         instr_type: MemoryInstructionCategory,
@@ -35,14 +35,14 @@ impl Translator {
                 MemoryOp::Size => {
                     let instr = decoder.read::<MemorySizeInstruction>(instruction)?;
                     let mem_size = self.ec_get_mem_size(Self::get_rt_ref(llvm_function), 0);
-                    variable_map[instr.out1 as usize] = mem_size;
+                    variable_map[instr.out1] = mem_size;
                     Ok(())
                 }
                 MemoryOp::Grow => {
                     let instr = decoder.read::<MemoryGrowInstruction>(instruction)?;
-                    let grow_by = variable_map[instr.in1 as usize];
+                    let grow_by = variable_map[instr.in1];
                     let res = self.memory_grow(Self::get_rt_ref(llvm_function), 0, grow_by);
-                    variable_map[instr.out1 as usize] = res;
+                    variable_map[instr.out1] = res;
                     Ok(())
                 }
                 MemoryOp::Init => {
@@ -51,16 +51,16 @@ impl Translator {
                         Self::get_rt_ref(llvm_function),
                         0,
                         instr.data_idx,
-                        variable_map[instr.s as usize],
-                        variable_map[instr.d as usize],
-                        variable_map[instr.n as usize],
+                        variable_map[instr.s],
+                        variable_map[instr.d],
+                        variable_map[instr.n],
                     );
                     Ok(())
                 }
                 MemoryOp::Fill => {
                     let instr = decoder.read::<MemoryFillInstruction>(instruction)?;
                     let value = self.builder.build_int_cast(
-                        variable_map[instr.val as usize],
+                        variable_map[instr.val],
                         self.builder.i8(),
                         false,
                         "cast_fill_val",
@@ -68,8 +68,8 @@ impl Translator {
                     self.memory_fill(
                         Self::get_rt_ref(llvm_function),
                         0,
-                        variable_map[instr.d as usize],
-                        variable_map[instr.n as usize],
+                        variable_map[instr.d],
+                        variable_map[instr.n],
                         value,
                     );
                     Ok(())
@@ -79,9 +79,9 @@ impl Translator {
                     self.memory_copy(
                         Self::get_rt_ref(llvm_function),
                         0,
-                        variable_map[instr.s as usize],
-                        variable_map[instr.d as usize],
-                        variable_map[instr.n as usize],
+                        variable_map[instr.s],
+                        variable_map[instr.d],
+                        variable_map[instr.n],
                     );
                     Ok(())
                 }
@@ -94,18 +94,18 @@ impl Translator {
         }
     }
 
-    fn compile_load(
+    pub(crate) fn compile_load(
         &self,
         instr: LoadInstruction,
         variable_map: &mut [LLVMValueRef],
         llvm_function: &Function,
     ) -> Result<(), TranslationError> {
         let memory_ptr = self.ec_get_mem_ptr(Self::get_rt_ref(llvm_function), 0);
-        let addr = self.calc_addr(variable_map[instr.addr as usize], memory_ptr, &instr.memarg);
+        let addr = self.calc_addr(variable_map[instr.addr], memory_ptr, &instr.memarg);
         let out_ty = self
             .builder
             .valtype2llvm(wasm_types::ValType::Number(instr.out1_type));
-        variable_map[instr.out1 as usize] = match instr.operation {
+        variable_map[instr.out1] = match instr.operation {
             LoadOp::INNLoad | LoadOp::FNNLoad => self.builder.build_load(out_ty, addr, "load"),
             LoadOp::INNLoad8S => {
                 let val = self.builder.build_load(self.builder.i8(), addr, "load");
@@ -160,19 +160,15 @@ impl Translator {
         )
     }
 
-    fn compile_store(
+    pub(crate) fn compile_store(
         &self,
         instr: StoreInstruction,
         variable_map: &mut [LLVMValueRef],
         llvm_function: &Function,
     ) -> Result<(), TranslationError> {
         let memory_ptr = self.ec_get_mem_ptr(Self::get_rt_ref(llvm_function), 0);
-        let val = variable_map[instr.value_in as usize];
-        let addr = self.calc_addr(
-            variable_map[instr.addr_in as usize],
-            memory_ptr,
-            &instr.memarg,
-        );
+        let val = variable_map[instr.value_in];
+        let addr = self.calc_addr(variable_map[instr.addr_in], memory_ptr, &instr.memarg);
 
         let val = match instr.operation {
             StoreOp::INNStore | StoreOp::FNNStore => val,

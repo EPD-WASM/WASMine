@@ -1,7 +1,9 @@
 use crate::{
     error::ParserError,
     ir::{
-        context::Context, function_builder::FunctionBuilder, parse_basic_blocks::parse_basic_blocks,
+        context::Context,
+        function_builder::{FunctionBuilderInterface, FunctionIRBuilder},
+        parse_basic_blocks::parse_basic_blocks,
     },
     wasm_stream_reader::WasmBinaryReader,
 };
@@ -10,7 +12,6 @@ use module::{
         element::{ElemMode, Element, ElementInit},
         export::{Export, FuncExport, GlobalExport, MemoryExport, TableExport},
         expression::{ConstantExpression, ConstantExpressionError},
-        function::FunctionIR,
         global::Global,
         import::Import,
         memory::{MemArg, Memory},
@@ -352,13 +353,14 @@ impl ParseWithContext for ConstantExpression {
         i: &mut WasmBinaryReader,
         module: &ModuleMetadata,
     ) -> Result<ConstantExpression, ParserError> {
-        let empty_func = FunctionIR::default();
-        let mut ctxt = Context::new(module, &empty_func);
+        let mut ctxt = Context::new(module, Vec::new());
         let mut labels = Vec::new();
-        let mut builder = FunctionBuilder::new();
-        builder.start_bb();
+        let mut builder = FunctionIRBuilder::new();
+        let id = builder.reserve_bb();
+        builder.continue_bb(id);
+
         parse_basic_blocks(i, &mut ctxt, &mut labels, &mut builder)?;
-        let mut parsed_init_blocks = builder.finalize();
+        let mut parsed_init_blocks = builder.finalize_bbs();
         if parsed_init_blocks.len() != 1
             || parsed_init_blocks[0].instructions.instruction_storage.len() != 1
         {

@@ -19,11 +19,9 @@ use crate::ir::context::Context;
 use crate::parsable::Parse;
 use crate::{wasm_stream_reader::WasmBinaryReader, ParseResult, ParserError, ValidationError};
 use module::instructions::*;
-use module::objects::instruction::ControlInstruction;
-use module::InstructionEncoder;
+use module::InstructionConsumer;
 use wasm_types::*;
 
 type C<'a> = Context<'a>;
 type I<'a> = WasmBinaryReader<'a>;
-type O = InstructionEncoder;
 type PR = ParseResult;

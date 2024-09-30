@@ -5,26 +5,17 @@ use super::*;
 pub(crate) fn r#else(
     _: &mut Context,
     _: &mut WasmBinaryReader,
-    o: &mut InstructionEncoder,
+    o: &mut dyn InstructionConsumer,
 ) -> ParseResult {
-    o.write(Else {});
+    o.write_else();
     Ok(())
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct End {}
-
-impl Instruction for End {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.finish(ControlInstruction::End);
-    }
 }
 
 pub(crate) fn end(
     _: &mut Context,
     _: &mut WasmBinaryReader,
-    o: &mut InstructionEncoder,
+    o: &mut dyn InstructionConsumer,
 ) -> ParseResult {
-    o.write(End {});
+    o.write_end();
     Ok(())
 }

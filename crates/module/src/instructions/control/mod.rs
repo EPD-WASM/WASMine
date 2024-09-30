@@ -23,5 +23,4 @@ pub use r#return::*;
 pub use unreachable::*;
 
 use super::*;
-use crate::objects::instruction::ControlInstruction;
 use wasm_types::BlockType;

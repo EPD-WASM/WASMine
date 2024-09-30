@@ -79,7 +79,7 @@ impl Function {
 pub struct FunctionIR {
     pub locals: Vec<ValType>,
     pub bbs: Vec<BasicBlock>,
-    pub num_vars: u32,
+    pub num_vars: usize,
 }
 
 /// Function import information.

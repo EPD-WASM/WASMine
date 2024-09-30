@@ -1,9 +1,9 @@
 use crate::{control_flow::util::break_util, InterpreterContext, InterpreterError};
-use module::objects::value::ValueRaw;
+use module::{instructions::VariableID, objects::value::ValueRaw};
 
 pub(super) fn handle_jmp_table(
     ctx: &mut InterpreterContext,
-    cond_var: u32,
+    cond_var: VariableID,
     targets: &[u32],
     default_target: u32,
 ) -> Result<Option<Vec<ValueRaw>>, InterpreterError> {

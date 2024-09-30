@@ -5,10 +5,10 @@ use wasm_types::*;
 pub(crate) fn local_get(
     ctxt: &mut Context,
     i: &mut WasmBinaryReader,
-    o: &mut InstructionEncoder,
+    o: &mut dyn InstructionConsumer,
 ) -> ParseResult {
     let local_idx = LocalIdx::parse(i)?;
-    let local_ty = match ctxt.func.locals.get(local_idx as usize) {
+    let local_ty = match ctxt.locals.get(local_idx as usize) {
         Some(local_ty) => local_ty,
         None => {
             return Err(ValidationError::Msg(format!(
@@ -19,7 +19,7 @@ pub(crate) fn local_get(
     };
 
     let out = ctxt.create_var(*local_ty);
-    o.write(LocalGetInstruction {
+    o.write_local_get(LocalGetInstruction {
         out1: out.id,
         local_idx,
     });
@@ -30,7 +30,7 @@ pub(crate) fn local_get(
 pub(crate) fn global_get(
     ctxt: &mut Context,
     i: &mut WasmBinaryReader,
-    o: &mut InstructionEncoder,
+    o: &mut dyn InstructionConsumer,
 ) -> ParseResult {
     let global_idx = GlobalIdx::parse(i)?;
     let global = match ctxt.module.globals.get(global_idx as usize) {
@@ -48,7 +48,7 @@ pub(crate) fn global_get(
         GlobalType::Mut(t) => t,
     };
     let out = ctxt.create_var(*global_type);
-    o.write(GlobalGetInstruction {
+    o.write_global_get(GlobalGetInstruction {
         out1: out.id,
         global_idx,
     });
@@ -59,11 +59,11 @@ pub(crate) fn global_get(
 pub(crate) fn local_set(
     ctxt: &mut Context,
     i: &mut WasmBinaryReader,
-    o: &mut InstructionEncoder,
+    o: &mut dyn InstructionConsumer,
 ) -> ParseResult {
     let local_idx = LocalIdx::parse(i)?;
-    let local_ty = match ctxt.func.locals.get(local_idx as usize) {
-        Some(local_ty) => local_ty,
+    let local_ty = match ctxt.locals.get(local_idx as usize) {
+        Some(local_ty) => *local_ty,
         None => {
             ctxt.poison::<()>(ValidationError::Msg(format!(
                 "local variable with index {local_idx} not found",
@@ -73,24 +73,24 @@ pub(crate) fn local_set(
     };
 
     let value = ctxt.pop_var_with_type(local_ty);
-    if value.type_ != *local_ty {
+    if value.type_ != local_ty {
         ctxt.poison(ValidationError::Msg(format!(
             "stack value type does not match local {} type: {:?} vs {:?}",
             local_idx, value.type_, local_ty
         )))
+    } else {
+        o.write_local_set(LocalSetInstruction {
+            local_idx,
+            in1: value.id,
+        });
     }
-
-    o.write(LocalSetInstruction {
-        local_idx,
-        in1: value.id,
-    });
     Ok(())
 }
 
 pub(crate) fn global_set(
     ctxt: &mut Context,
     i: &mut WasmBinaryReader,
-    o: &mut InstructionEncoder,
+    o: &mut dyn InstructionConsumer,
 ) -> ParseResult {
     let global_idx = GlobalIdx::parse(i)?;
     let global = match ctxt.module.globals.get(global_idx as usize) {
@@ -110,18 +110,18 @@ pub(crate) fn global_set(
             )));
             return Ok(());
         }
-        GlobalType::Mut(t) => t,
+        GlobalType::Mut(t) => *t,
     };
 
     let value = ctxt.pop_var_with_type(global_type);
-    if value.type_ != *global_type {
+    if value.type_ != global_type {
         ctxt.poison(ValidationError::Msg(format!(
             "stack value type does not match global {} type: {:?} vs {:?}",
             global_idx, value.type_, global_type
         )))
     }
 
-    o.write(GlobalSetInstruction {
+    o.write_global_set(GlobalSetInstruction {
         global_idx,
         in1: value.id,
     });
@@ -131,11 +131,11 @@ pub(crate) fn global_set(
 pub(crate) fn local_tee(
     ctxt: &mut Context,
     i: &mut WasmBinaryReader,
-    o: &mut InstructionEncoder,
+    o: &mut dyn InstructionConsumer,
 ) -> ParseResult {
     let local_idx = LocalIdx::parse(i)?;
-    let local_ty = match ctxt.func.locals.get(local_idx as usize) {
-        Some(local_ty) => local_ty,
+    let local_ty = match ctxt.locals.get(local_idx as usize) {
+        Some(local_ty) => *local_ty,
         None => {
             ctxt.poison::<()>(ValidationError::Msg(format!(
                 "local variable with index {local_idx} not found",
@@ -145,16 +145,16 @@ pub(crate) fn local_tee(
     };
 
     let in_stack_var = ctxt.pop_var_with_type(local_ty);
-    if in_stack_var.type_ != *local_ty {
+    if in_stack_var.type_ != local_ty {
         ctxt.poison(ValidationError::Msg(format!(
             "stack value type does not match local {} type: {:?} vs {:?}",
             local_idx, in_stack_var.type_, local_ty
         )))
     }
 
-    let out_stack_var = ctxt.create_var(*local_ty);
+    let out_stack_var = ctxt.create_var(local_ty);
 
-    o.write(LocalTeeInstruction {
+    o.write_local_tee(LocalTeeInstruction {
         local_idx,
         in1: in_stack_var.id,
         out1: out_stack_var.id,

@@ -1,5 +1,6 @@
 use crate::{util, InterpreterContext, StackFrame, VariableStore};
-use module::{basic_block::BasicBlockID, InstructionDecoder};
+use module::{basic_block::BasicBlockID, instructions::VariableID, InstructionDecoder};
+use wasm_types::FuncIdx;
 
 pub(super) fn break_util(ctx: &mut InterpreterContext, target: BasicBlockID) {
     let stack_frame = ctx.stack.last_mut().unwrap();
@@ -25,10 +26,10 @@ pub(super) fn break_util(ctx: &mut InterpreterContext, target: BasicBlockID) {
 
 pub(super) fn call_util(
     ctx: &mut InterpreterContext,
-    func_idx: u32,
-    call_params: &[u32],
-    return_bb: u32,
-    return_vars: &[u32],
+    func_idx: FuncIdx,
+    call_params: &[VariableID],
+    return_bb: BasicBlockID,
+    return_vars: &[VariableID],
 ) {
     let stack_frame = ctx.stack.last_mut().unwrap();
     let func = &ctx.module.meta.functions[func_idx as usize];
@@ -48,7 +49,7 @@ pub(super) fn call_util(
     for (idx, &param) in call_params.iter().enumerate() {
         let var = stack_frame.vars.get(param);
         // println!("{}: {}", idx, var);
-        new_stack_frame.fn_local_vars.set(idx as u32, var);
+        new_stack_frame.fn_local_vars.set(idx as VariableID, var);
     }
 
     stack_frame.last_bb_id = stack_frame.bb_id;

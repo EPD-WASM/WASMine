@@ -8,12 +8,6 @@ pub struct LocalGetInstruction {
 }
 
 impl Instruction for LocalGetInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Variable(VariableInstructionType::LocalGet));
-        o.write_immediate(self.local_idx);
-        o.write_variable(self.out1);
-    }
-
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         let local_idx = i.read_immediate()?;
         let out1 = i.read_variable()?;
@@ -34,14 +28,6 @@ pub struct GlobalGetInstruction {
 }
 
 impl Instruction for GlobalGetInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Variable(
-            VariableInstructionType::GlobalGet,
-        ));
-        o.write_immediate(self.global_idx);
-        o.write_variable(self.out1);
-    }
-
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         let global_idx = i.read_immediate()?;
         let out1 = i.read_variable()?;
@@ -62,12 +48,6 @@ pub struct LocalSetInstruction {
 }
 
 impl Instruction for LocalSetInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Variable(VariableInstructionType::LocalSet));
-        o.write_immediate(self.local_idx);
-        o.write_variable(self.in1);
-    }
-
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         let local_idx = i.read_immediate()?;
         let in1 = i.read_variable()?;
@@ -88,14 +68,6 @@ pub struct GlobalSetInstruction {
 }
 
 impl Instruction for GlobalSetInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Variable(
-            VariableInstructionType::GlobalSet,
-        ));
-        o.write_immediate(self.global_idx);
-        o.write_variable(self.in1);
-    }
-
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         let global_idx = i.read_immediate()?;
         let in1 = i.read_variable()?;
@@ -117,13 +89,6 @@ pub struct LocalTeeInstruction {
 }
 
 impl Instruction for LocalTeeInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Variable(VariableInstructionType::LocalTee));
-        o.write_immediate(self.local_idx);
-        o.write_variable(self.in1);
-        o.write_variable(self.out1);
-    }
-
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         let local_idx = i.read_immediate()?;
         let in1 = i.read_variable()?;

@@ -13,10 +13,6 @@ pub enum EngineError {
     #[error("LLVM execution error: {0}")]
     LLVMExecutionError(#[from] llvm_gen::ExecutionError),
 
-    #[cfg(feature = "llvm")]
-    #[error("LLVM translation error: {0}")]
-    LLVMTranslationError(#[from] llvm_gen::TranslationError),
-
     #[cfg(feature = "interp")]
     #[error("Interpreter error: {0}")]
     InterpreterError(#[from] interpreter::InterpreterError),
@@ -26,13 +22,16 @@ pub enum EngineError {
 
     #[error("Function with index {0} not exported.")]
     FunctionNotFound(FuncIdx),
+
+    #[error("Module error: {0}")]
+    ModuleError(#[from] module::ModuleError),
 }
 
 #[allow(private_interfaces)]
 pub struct Engine(Box<dyn WasmEngine>);
 
 pub trait WasmEngine {
-    fn init(&mut self, wasm_module: Rc<WasmModule>) -> Result<(), EngineError>;
+    fn init(&mut self, wasm_module: WasmModule) -> Result<Rc<WasmModule>, EngineError>;
 
     fn set_symbol_addr(&mut self, name: &str, address: RawPointer);
 
@@ -79,13 +78,11 @@ impl DerefMut for Engine {
 #[cfg(feature = "llvm")]
 mod llvm_engine_impl {
     use super::*;
-    use llvm_gen::Translator;
     use wasm_types::GlobalIdx;
 
     pub(crate) struct LLVMEngine {
         context: Rc<llvm_gen::Context>,
         executor: llvm_gen::JITExecutor,
-        module_already_translated: bool,
         wasm_module: Option<Rc<WasmModule>>,
     }
 
@@ -96,17 +93,21 @@ mod llvm_engine_impl {
             Ok(Self {
                 context,
                 executor,
-                module_already_translated: false,
                 wasm_module: None,
             })
         }
     }
 
     impl WasmEngine for LLVMEngine {
-        fn init(&mut self, wasm_module: Rc<WasmModule>) -> Result<(), EngineError> {
+        fn init(&mut self, mut wasm_module: WasmModule) -> Result<Rc<WasmModule>, EngineError> {
+            wasm_module.load_meta(llvm_gen::ModuleMetaLoader)?;
+            wasm_module.load_all_functions(llvm_gen::FunctionLoader)?;
+
+            let wasm_module = Rc::new(wasm_module);
             self.wasm_module = Some(wasm_module.clone());
 
-            // aot case
+            // Option 1: AOT llvm object buffer from cwasm available
+            // -> add object file to executor
             if let Some(first_function) = wasm_module.meta.functions.first() {
                 if let Some(precomp_info) = first_function.get_precompiled_llvm() {
                     self.executor.add_object_file(unsafe {
@@ -115,14 +116,24 @@ mod llvm_engine_impl {
                             precomp_info.size,
                         )
                     })?;
-                    self.module_already_translated = true;
-                    return Ok(());
+                    return Ok(wasm_module);
                 }
             }
 
-            let llvm_module = Translator::translate_module(self.context.clone(), wasm_module)?;
+            // Option 2 || !Option 2: Additional resources contain LLVM module
+            // = cached translation
+            // -> add module to executor
+            let llvm_module = wasm_module
+                .additional_resources
+                .first()
+                .unwrap()
+                .downcast_ref::<llvm_gen::LLVMAdditionalResources>()
+                .unwrap()
+                .module
+                .clone();
             self.executor.add_module(llvm_module)?;
-            Ok(())
+
+            return Ok(wasm_module);
         }
 
         fn get_global_value(&self, global_idx: GlobalIdx) -> Result<ValueRaw, EngineError> {
@@ -180,9 +191,11 @@ mod interpreter_engine_impl {
 
     impl WasmEngine for InterpreterEngine {
         // this is to set the module to be run so it does not have to be provided when the Engine is created
-        fn init(&mut self, wasm_module: Rc<WasmModule>) -> Result<(), EngineError> {
-            self.interpreter.set_module(wasm_module);
-            Ok(())
+        fn init(&mut self, mut wasm_module: WasmModule) -> Result<Rc<WasmModule>, EngineError> {
+            wasm_module.load_all_functions(parser::FunctionLoader)?;
+            let wasm_module = Rc::new(wasm_module);
+            self.interpreter.set_module(wasm_module.clone());
+            Ok(wasm_module)
         }
 
         fn set_symbol_addr(&mut self, name: &str, address: RawPointer) {

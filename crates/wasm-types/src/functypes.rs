@@ -6,7 +6,7 @@ use std::sync::RwLock;
 use std::{collections::HashMap, sync::atomic::AtomicU64};
 
 // https://webassembly.github.io/spec/core/syntax/types.html#result-types
-#[derive(Debug, Clone, Copy, Archive, Deserialize, Serialize)]
+#[derive(Debug, Default, Clone, Copy, Archive, Deserialize, Serialize)]
 pub struct FuncType(u64);
 
 #[derive(Default)]

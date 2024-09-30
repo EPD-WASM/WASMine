@@ -41,23 +41,7 @@ impl<'a> ModuleParser<'a> {
             )));
         }
 
-        // non-custom sections must appear in module at least once in a certain order defined by the spec.
-        // This vector contains the section types in the reverse order, so we can pop the last element an
-        // compare it with the read section.
-        let mut required_sections = vec![
-            Section::Data,
-            Section::Code,
-            Section::DataCount,
-            Section::Element,
-            Section::Start,
-            Section::Export,
-            Section::Global,
-            Section::Memory,
-            Section::Table,
-            Section::Function,
-            Section::Import,
-            Section::Type,
-        ];
+        let mut last_section_number = -1;
         loop {
             let section = match Section::parse(i) {
                 Ok(b) => b,
@@ -70,14 +54,12 @@ impl<'a> ModuleParser<'a> {
                 continue;
             }
 
-            if required_sections.is_empty() {
+            if last_section_number >= Section::Data as i32 {
                 return Err(ParserError::Msg("invalid additional module section".into()));
             }
 
-            while section != required_sections.pop().unwrap() {
-                if required_sections.is_empty() {
-                    return Err(ParserError::Msg("invalid module section order".into()));
-                }
+            if section.clone() as i32 <= last_section_number {
+                return Err(ParserError::Msg("invalid module section order".into()));
             }
 
             match section {
@@ -95,17 +77,16 @@ impl<'a> ModuleParser<'a> {
                 Section::Data => self.parse_data_section(i)?,
                 Section::Custom => unreachable!(),
             }
+            last_section_number = section as i32;
         }
         if self
             .module
             .functions
             .iter()
             .skip(self.next_empty_function as usize)
-            .enumerate()
-            .any(|(i, _)| {
+            .any(|f| {
                 // function has neither unparsed binary nor is an import => was not yet parsed!
-                self.module.functions[i].get_unparsed_mem().is_none()
-                    && self.module.functions[i].get_import().is_none()
+                f.get_unparsed_mem().is_none() && f.get_import().is_none()
             })
         {
             return Err(ParserError::Msg("function without code".into()));

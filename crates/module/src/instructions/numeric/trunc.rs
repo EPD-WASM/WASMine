@@ -13,19 +13,6 @@ pub struct TruncInstruction {
 }
 
 impl Instruction for TruncInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Numeric(
-            NumericInstructionCategory::Conversion(ConversionOp::Trunc),
-        ));
-        o.write_variable(self.in1);
-        o.write_value_type(ValType::Number(self.in1_type));
-
-        o.write_variable(self.out1);
-        o.write_value_type(ValType::Number(self.out1_type));
-
-        o.write_immediate(self.signed as u8);
-    }
-
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         Ok(TruncInstruction {
             in1: i.read_variable()?,
@@ -61,17 +48,6 @@ pub struct TruncSaturationInstruction {
 }
 
 impl Instruction for TruncSaturationInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Numeric(
-            NumericInstructionCategory::Conversion(ConversionOp::TruncSat),
-        ));
-        o.write_variable(self.in1);
-        o.write_variable(self.out1);
-        o.write_value_type(ValType::Number(self.in1_type));
-        o.write_value_type(ValType::Number(self.out1_type));
-        o.write_immediate(self.signed as u8);
-    }
-
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         let in1 = i.read_variable()?;
         let out1 = i.read_variable()?;

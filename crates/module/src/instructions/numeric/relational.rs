@@ -12,16 +12,6 @@ pub struct IRelationalInstruction {
 }
 
 impl Instruction for IRelationalInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Numeric(
-            NumericInstructionCategory::IRelational(self.op.clone()),
-        ));
-        o.write_value_type(ValType::Number(self.input_types));
-        o.write_variable(self.in1);
-        o.write_variable(self.in2);
-        o.write_variable(self.out1);
-    }
-
     fn deserialize(
         i: &mut InstructionDecoder,
         type_: InstructionType,
@@ -61,16 +51,6 @@ pub struct FRelationalInstruction {
 }
 
 impl Instruction for FRelationalInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Numeric(
-            NumericInstructionCategory::FRelational(self.op.clone()),
-        ));
-        o.write_value_type(ValType::Number(self.input_types));
-        o.write_variable(self.in1);
-        o.write_variable(self.in2);
-        o.write_variable(self.out1);
-    }
-
     fn deserialize(
         i: &mut InstructionDecoder,
         r#type: InstructionType,

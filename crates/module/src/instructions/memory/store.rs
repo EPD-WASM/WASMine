@@ -10,17 +10,6 @@ pub struct StoreInstruction {
 }
 
 impl Instruction for StoreInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Memory(MemoryInstructionCategory::Store(
-            self.operation.clone(),
-        )));
-        o.write_immediate(self.memarg.align);
-        o.write_immediate(self.memarg.offset);
-        o.write_variable(self.addr_in);
-        o.write_variable(self.value_in);
-        o.write_value_type(ValType::Number(self.in_type))
-    }
-
     fn deserialize(i: &mut InstructionDecoder, t: InstructionType) -> Result<Self, DecodingError> {
         let align = i.read_immediate()?;
         let offset = i.read_immediate()?;

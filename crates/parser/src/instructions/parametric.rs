@@ -5,7 +5,7 @@ use wasm_types::*;
 pub(crate) fn drop(
     ctxt: &mut Context,
     _: &mut WasmBinaryReader,
-    _: &mut InstructionEncoder,
+    _: &mut dyn InstructionConsumer,
 ) -> ParseResult {
     ctxt.pop_var();
     Ok(())
@@ -14,9 +14,9 @@ pub(crate) fn drop(
 pub(crate) fn select_numeric(
     ctxt: &mut Context,
     _: &mut WasmBinaryReader,
-    o: &mut InstructionEncoder,
+    o: &mut dyn InstructionConsumer,
 ) -> ParseResult {
-    let select_val = ctxt.pop_var_with_type(&ValType::i32());
+    let select_val = ctxt.pop_var_with_type(ValType::i32());
 
     let val2 = ctxt.pop_var();
     let val1 = ctxt.pop_var();
@@ -35,7 +35,7 @@ pub(crate) fn select_numeric(
     }
 
     let out = ctxt.create_var(val1.type_);
-    o.write(SelectInstruction {
+    o.write_select(SelectInstruction {
         input_vals: [val1.id, val2.id],
         select_val: select_val.id,
         out1: out.id,
@@ -47,7 +47,7 @@ pub(crate) fn select_numeric(
 pub(crate) fn select_generic(
     ctxt: &mut Context,
     i: &mut WasmBinaryReader,
-    o: &mut InstructionEncoder,
+    o: &mut dyn InstructionConsumer,
 ) -> ParseResult {
     let num_val_types = i.read_leb128::<u32>()?;
     if num_val_types != 1 {
@@ -56,12 +56,12 @@ pub(crate) fn select_generic(
         )))
     }
     let val_type = ValType::parse(i)?;
-    let select_val = ctxt.pop_var_with_type(&ValType::i32());
+    let select_val = ctxt.pop_var_with_type(ValType::i32());
 
-    let val2 = ctxt.pop_var_with_type(&val_type);
-    let val1 = ctxt.pop_var_with_type(&val_type);
+    let val2 = ctxt.pop_var_with_type(val_type);
+    let val1 = ctxt.pop_var_with_type(val_type);
     let out = ctxt.create_var(val_type);
-    o.write(SelectInstruction {
+    o.write_select(SelectInstruction {
         input_vals: [val1.id, val2.id],
         select_val: select_val.id,
         out1: out.id,

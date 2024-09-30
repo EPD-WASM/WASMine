@@ -10,8 +10,10 @@ pub(crate) type ParseResult = Result<(), ParserError>;
 
 pub use crate::module_parser::ModuleParser;
 pub use error::{ParserError, ValidationError};
+pub use ir::context::Context;
+pub use ir::function_builder::FunctionBuilderInterface;
 
-use ir::FunctionIRParser;
+pub use ir::FunctionParser;
 use module::{
     objects::module::{FunctionLoaderInterface, ModuleMetaLoaderInterface, ModuleStorerInterface},
     ModuleError, ModuleMetadata,
@@ -45,6 +47,7 @@ impl ModuleMetaLoader {
         module: &mut ModuleMetadata,
         buffer: &ResourceBuffer,
     ) -> Result<(), ParserError> {
+        log::info!("Loading module meta using `parser`");
         let mut instance = ModuleParser {
             module,
             is_complete: false,
@@ -71,6 +74,7 @@ impl ModuleMetaLoader {
         module: &mut ModuleMetadata,
         buffer: &ResourceBuffer,
     ) -> Result<(), ParserError> {
+        log::info!("Loading aot module meta using `parser`");
         let input = buffer.get()?;
         let wasm_module_buffer_size = u32::from_be_bytes(input[0..4].try_into().unwrap()) as usize;
 
@@ -88,6 +92,7 @@ impl ModuleMetaLoaderInterface for ModuleMetaLoader {
         &self,
         module: &mut ModuleMetadata,
         buffer: &ResourceBuffer,
+        _: &mut Vec<Box<dyn std::any::Any>>,
     ) -> Result<(), module::error::ModuleError> {
         match buffer.kind() {
             SourceFormat::Wasm => self.parse_module_meta(module, buffer),
@@ -110,7 +115,8 @@ impl FunctionLoader {
         module: &mut ModuleMetadata,
         buffer: &ResourceBuffer,
     ) -> Result<(), ParserError> {
-        FunctionIRParser::parse_all_functions(module, buffer)
+        log::info!("Loading functions using `parser` to ir");
+        FunctionParser::parse_all_functions(module, buffer)
     }
 
     fn load_aot_functions(
@@ -118,6 +124,7 @@ impl FunctionLoader {
         module: &mut ModuleMetadata,
         buffer: &ResourceBuffer,
     ) -> Result<(), ParserError> {
+        log::info!("Loading aot llvm functions using `parser`");
         let input = buffer.get()?;
         let llvm_memory_buffer_offset =
             u32::from_be_bytes(input[4..8].try_into().unwrap()) as usize;
@@ -137,6 +144,7 @@ impl FunctionLoaderInterface for FunctionLoader {
         &self,
         module: &mut ModuleMetadata,
         buffer: &ResourceBuffer,
+        _: &mut Vec<Box<dyn std::any::Any>>,
     ) -> Result<(), ModuleError> {
         match buffer.kind() {
             SourceFormat::Wasm => self.load_wasm_functions_ir(module, buffer),

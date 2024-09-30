@@ -1,4 +1,5 @@
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
+use llvm_gen::LLVMAdditionalResources;
 use runtime_lib::{ClusterConfig, ResourceBuffer};
 use std::rc::Rc;
 use wasi::WasiContextBuilder;
@@ -38,15 +39,21 @@ pub fn wasmine_llvm_aot_criterion(c: &mut Criterion) {
                         let source = ResourceBuffer::from_wasm_buf(wasm_bytes);
                         let mut module = module::Module::new(source);
                         module.load_meta(parser::ModuleMetaLoader).unwrap();
-                        module.load_all_functions(parser::FunctionLoader).unwrap();
+                        module.load_meta(llvm_gen::ModuleMetaLoader).unwrap();
+                        module.load_all_functions(llvm_gen::FunctionLoader).unwrap();
                         let module = Rc::new(module);
 
                         let context = Rc::new(llvm_gen::Context::create());
                         let mut executor = llvm_gen::JITExecutor::new(context.clone()).unwrap();
 
-                        let llvm_module =
-                            llvm_gen::Translator::translate_module(context.clone(), module.clone())
-                                .unwrap();
+                        let llvm_module = module
+                            .additional_resources
+                            .first()
+                            .unwrap()
+                            .downcast_ref::<LLVMAdditionalResources>()
+                            .unwrap()
+                            .module
+                            .clone();
                         executor.add_module(llvm_module).unwrap();
                         let llvm_module_object_buf =
                             executor.get_module_as_object_buffer(0).unwrap();
@@ -77,9 +84,7 @@ pub fn wasmine_llvm_aot_criterion(c: &mut Criterion) {
 
                     let mut module = module::Module::new(source);
                     module.load_meta(parser::ModuleMetaLoader).unwrap();
-                    module.load_all_functions(parser::FunctionLoader).unwrap();
-                    let wasmine_module = Rc::new(module);
-                    wasmine_engine.init(wasmine_module.clone()).unwrap();
+                    let wasmine_module = wasmine_engine.init(module).unwrap();
 
                     let wasi_ctxt = {
                         let mut builder = WasiContextBuilder::new();

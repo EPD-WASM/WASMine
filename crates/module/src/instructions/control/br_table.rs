@@ -8,13 +8,6 @@ pub struct BrTable {
 }
 
 impl Instruction for BrTable {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.finish(ControlInstruction::BrTable(
-            self.default_label_idx,
-            self.label_indices,
-        ));
-    }
-
     fn deserialize(_: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         unimplemented!(
             "Control instructions are not serialized and can therefore not be deserialized."

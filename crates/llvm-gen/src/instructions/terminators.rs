@@ -6,10 +6,7 @@ use llvm_sys::{
 use module::basic_block::BasicBlockGlue;
 use wasm_types::ValType;
 
-#[cfg(debug_assertions)]
-use crate::util::build_llvm_function_name;
-
-impl Translator {
+impl Translator<'_> {
     pub(crate) fn translate_terminator(
         &self,
         terminator: &BasicBlockGlue,
@@ -30,7 +27,7 @@ impl Translator {
             } => {
                 let jmp_bool = self.builder.build_icmp(
                     llvm_sys::LLVMIntPredicate::LLVMIntNE,
-                    variable_map[*cond_var as usize],
+                    variable_map[*cond_var],
                     self.builder.const_zero(ValType::i32()),
                     "ToBool",
                 );
@@ -42,20 +39,16 @@ impl Translator {
             }
             BasicBlockGlue::Return { return_vars } => {
                 debug_assert!(
-                    !return_vars
-                        .iter()
-                        .any(|v| { variable_map[*v as usize].is_null() }),
+                    !return_vars.iter().any(|v| { variable_map[*v].is_null() }),
                     "Return variable does not have a value assigned."
                 );
                 match return_vars.len() {
                     0 => self.builder.build_ret_void(),
-                    1 => self
-                        .builder
-                        .build_ret(variable_map[return_vars[0] as usize]),
+                    1 => self.builder.build_ret(variable_map[return_vars[0]]),
                     _ => {
                         let mut return_values = return_vars
                             .iter()
-                            .map(|var| variable_map[*var as usize])
+                            .map(|var| variable_map[*var])
                             .collect::<Vec<_>>();
                         self.builder.build_aggregate_ret(&mut return_values);
                     }
@@ -67,15 +60,10 @@ impl Translator {
                 call_params,
                 return_vars,
             } => {
-                // TODO: remove this
-                #[cfg(debug_assertions)]
-                let _called_fun_name =
-                    build_llvm_function_name(*func_idx, &self.wasm_module.meta, false);
-
-                let function = &self.llvm_functions[*func_idx as usize];
+                let function = &self.llvm_functions.borrow()[*func_idx as usize];
                 let mut parameters = vec![llvm_function.get_param(0)];
                 for var_id in call_params.iter() {
-                    let llvm_val = variable_map[*var_id as usize];
+                    let llvm_val = variable_map[*var_id];
                     parameters.push(llvm_val);
                 }
                 let call_res_val = self.builder.build_call(
@@ -90,11 +78,11 @@ impl Translator {
                 match return_vars.len() {
                     0 => (),
                     1 => {
-                        variable_map[return_vars[0] as usize] = call_res_val;
+                        variable_map[return_vars[0]] = call_res_val;
                     }
                     _ => {
                         for (i, var) in return_vars.iter().enumerate() {
-                            variable_map[*var as usize] = unsafe {
+                            variable_map[*var] = unsafe {
                                 LLVMBuildExtractValue(
                                     self.builder.get(),
                                     call_res_val,
@@ -115,7 +103,7 @@ impl Translator {
                 default_target,
                 ..
             } => {
-                let selector_val = variable_map[*cond_var as usize];
+                let selector_val = variable_map[*cond_var];
                 let default_target_bb = function_bbs[*default_target as usize];
                 let switch = self.builder.build_switch(
                     selector_val,
@@ -143,7 +131,7 @@ impl Translator {
                 call_params,
                 return_vars,
             } => {
-                let selector_var = variable_map[*selector_var as usize];
+                let selector_var = variable_map[*selector_var];
                 let resolved_func_ptr = self.indirect_call(
                     Self::get_rt_ref(llvm_function),
                     *table_idx,
@@ -156,7 +144,7 @@ impl Translator {
 
                 let mut parameters = vec![llvm_function.get_param(0)];
                 for var_id in call_params {
-                    let llvm_val = variable_map[*var_id as usize];
+                    let llvm_val = variable_map[*var_id];
                     parameters.push(llvm_val);
                 }
                 let indirect_func_call_res = self.builder.build_call(
@@ -170,10 +158,10 @@ impl Translator {
                 );
                 match return_vars.len() {
                     0 => (),
-                    1 => variable_map[return_vars[0] as usize] = indirect_func_call_res,
+                    1 => variable_map[return_vars[0]] = indirect_func_call_res,
                     _ => {
                         for (i, var) in return_vars.iter().enumerate() {
-                            variable_map[*var as usize] = unsafe {
+                            variable_map[*var] = unsafe {
                                 LLVMBuildExtractValue(
                                     self.builder.get(),
                                     indirect_func_call_res,

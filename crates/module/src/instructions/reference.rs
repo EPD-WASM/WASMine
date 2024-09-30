@@ -8,15 +8,6 @@ pub struct ReferenceIsNullInstruction {
 }
 
 impl Instruction for ReferenceIsNullInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Reference(
-            ReferenceInstructionType::RefIsNull,
-        ));
-        o.write_variable(self.in1);
-        o.write_value_type(self.in1_type);
-        o.write_variable(self.out1);
-    }
-
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         let in1 = i.read_variable()?;
         let in1_type = i.read_value_type()?;
@@ -46,14 +37,6 @@ pub struct ReferenceNullInstruction {
 }
 
 impl Instruction for ReferenceNullInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Reference(
-            ReferenceInstructionType::RefNull,
-        ));
-        o.write_variable(self.out1);
-        o.write_value_type(ValType::Reference(self.out1_type));
-    }
-
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         let out1 = i.read_variable()?;
         let out1_type = match i.read_value_type()? {
@@ -77,14 +60,6 @@ pub struct ReferenceFunctionInstruction {
 }
 
 impl Instruction for ReferenceFunctionInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Reference(
-            ReferenceInstructionType::RefFunc,
-        ));
-        o.write_variable(self.out1);
-        o.write_immediate(self.func_idx);
-    }
-
     fn deserialize(i: &mut InstructionDecoder, _: InstructionType) -> Result<Self, DecodingError> {
         let out1 = i.read_variable()?;
         let func_idx = i.read_immediate()?;

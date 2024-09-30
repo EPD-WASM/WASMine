@@ -5,3 +5,5 @@ mod reference;
 mod table;
 mod terminators;
 mod variable;
+
+pub(crate) mod instruction_consumer;

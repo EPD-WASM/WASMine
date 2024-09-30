@@ -171,7 +171,7 @@ struct BasicBlockGlueDisplayContext<'a> {
     bbg: &'a BasicBlockGlue,
 }
 
-fn format_vars(vars: &[u32]) -> String {
+fn format_vars(vars: &[VariableID]) -> String {
     let vars: Vec<String> = vars.iter().map(|v| format!("%{v}",)).collect();
     vars.join(", ")
 }

@@ -11,16 +11,6 @@ pub struct IBinaryInstruction {
 }
 
 impl Instruction for IBinaryInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Numeric(
-            NumericInstructionCategory::IBinary(self.op.clone()),
-        ));
-        o.write_value_type(ValType::Number(self.types));
-        o.write_variable(self.lhs);
-        o.write_variable(self.rhs);
-        o.write_variable(self.out1);
-    }
-
     fn deserialize(i: &mut InstructionDecoder, t: InstructionType) -> Result<Self, DecodingError> {
         let op = match t {
             InstructionType::Numeric(NumericInstructionCategory::IBinary(op)) => op,
@@ -56,16 +46,6 @@ pub struct FBinaryInstruction {
 }
 
 impl Instruction for FBinaryInstruction {
-    fn serialize(self, o: &mut InstructionEncoder) {
-        o.write_instruction_type(InstructionType::Numeric(
-            NumericInstructionCategory::FBinary(self.op.clone()),
-        ));
-        o.write_value_type(ValType::Number(self.types));
-        o.write_variable(self.lhs);
-        o.write_variable(self.rhs);
-        o.write_variable(self.out1);
-    }
-
     fn deserialize(i: &mut InstructionDecoder, t: InstructionType) -> Result<Self, DecodingError> {
         let op = match t {
             InstructionType::Numeric(NumericInstructionCategory::FBinary(op)) => op,

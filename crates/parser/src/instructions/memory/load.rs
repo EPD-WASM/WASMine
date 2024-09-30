@@ -3,7 +3,7 @@ use super::*;
 fn parse_load(
     ctxt: &mut Context,
     i: &mut WasmBinaryReader,
-    o: &mut InstructionEncoder,
+    o: &mut dyn InstructionConsumer,
     out_type: NumType,
     operation: LoadOp,
 ) -> ParseResult {
@@ -21,9 +21,9 @@ fn parse_load(
         return Err(ParserError::AlignmentLargerThanNatural);
     }
 
-    let in_ = ctxt.pop_var_with_type(&ValType::i32());
+    let in_ = ctxt.pop_var_with_type(ValType::i32());
     let out = ctxt.create_var(ValType::Number(out_type));
-    o.write(LoadInstruction {
+    o.write_load(LoadInstruction {
         memarg,
         out1: out.id,
         out1_type: out_type,
@@ -37,22 +37,22 @@ fn parse_load(
 #[rustfmt::skip]
 mod load_specializations {
     use super::*;
-    pub(crate) fn i32_load(c: &mut C, i: &mut I, o: &mut O) -> PR {parse_load(c, i, o, NumType::I32, LoadOp::INNLoad)}
-    pub(crate) fn i64_load(c: &mut C, i: &mut I, o: &mut O) -> PR {parse_load(c, i, o, NumType::I64, LoadOp::INNLoad)}
-    pub(crate) fn f32_load(c: &mut C, i: &mut I, o: &mut O) -> PR {parse_load(c, i, o, NumType::F32, LoadOp::FNNLoad)}
-    pub(crate) fn f64_load(c: &mut C, i: &mut I, o: &mut O) -> PR {parse_load(c, i, o, NumType::F64, LoadOp::FNNLoad)}
+    pub(crate) fn i32_load(c: &mut C, i: &mut I, o: &mut dyn InstructionConsumer) -> PR {parse_load(c, i, o, NumType::I32, LoadOp::INNLoad)}
+    pub(crate) fn i64_load(c: &mut C, i: &mut I, o: &mut dyn InstructionConsumer) -> PR {parse_load(c, i, o, NumType::I64, LoadOp::INNLoad)}
+    pub(crate) fn f32_load(c: &mut C, i: &mut I, o: &mut dyn InstructionConsumer) -> PR {parse_load(c, i, o, NumType::F32, LoadOp::FNNLoad)}
+    pub(crate) fn f64_load(c: &mut C, i: &mut I, o: &mut dyn InstructionConsumer) -> PR {parse_load(c, i, o, NumType::F64, LoadOp::FNNLoad)}
 
-    pub(crate) fn i32_load8_s(c: &mut C, i: &mut I, o: &mut O) -> PR {parse_load(c, i, o, NumType::I32, LoadOp::INNLoad8S)}
-    pub(crate) fn i32_load8_u(c: &mut C, i: &mut I, o: &mut O) -> PR {parse_load(c, i, o, NumType::I32, LoadOp::INNLoad8U)}
-    pub(crate) fn i32_load16_s(c: &mut C, i: &mut I, o: &mut O) -> PR {parse_load(c, i, o, NumType::I32, LoadOp::INNLoad16S)}
-    pub(crate) fn i32_load16_u(c: &mut C, i: &mut I, o: &mut O) -> PR {parse_load(c, i, o, NumType::I32, LoadOp::INNLoad16U)}
+    pub(crate) fn i32_load8_s(c: &mut C, i: &mut I, o: &mut dyn InstructionConsumer) -> PR {parse_load(c, i, o, NumType::I32, LoadOp::INNLoad8S)}
+    pub(crate) fn i32_load8_u(c: &mut C, i: &mut I, o: &mut dyn InstructionConsumer) -> PR {parse_load(c, i, o, NumType::I32, LoadOp::INNLoad8U)}
+    pub(crate) fn i32_load16_s(c: &mut C, i: &mut I, o: &mut dyn InstructionConsumer) -> PR {parse_load(c, i, o, NumType::I32, LoadOp::INNLoad16S)}
+    pub(crate) fn i32_load16_u(c: &mut C, i: &mut I, o: &mut dyn InstructionConsumer) -> PR {parse_load(c, i, o, NumType::I32, LoadOp::INNLoad16U)}
 
-    pub(crate) fn i64_load8_s(c: &mut C, i: &mut I, o: &mut O) -> PR {parse_load(c, i, o, NumType::I64, LoadOp::INNLoad8S)}
-    pub(crate) fn i64_load8_u(c: &mut C, i: &mut I, o: &mut O) -> PR {parse_load(c, i, o, NumType::I64, LoadOp::INNLoad8U)}
-    pub(crate) fn i64_load16_s(c: &mut C, i: &mut I, o: &mut O) -> PR {parse_load(c, i, o, NumType::I64, LoadOp::INNLoad16S)}
-    pub(crate) fn i64_load16_u(c: &mut C, i: &mut I, o: &mut O) -> PR {parse_load(c, i, o, NumType::I64, LoadOp::INNLoad16U)}
-    pub(crate) fn i64_load32_s(c: &mut C, i: &mut I, o: &mut O) -> PR {parse_load(c, i, o, NumType::I64, LoadOp::INNLoad32S)}
-    pub(crate) fn i64_load32_u(c: &mut C, i: &mut I, o: &mut O) -> PR {parse_load(c, i, o, NumType::I64, LoadOp::INNLoad32U)}
+    pub(crate) fn i64_load8_s(c: &mut C, i: &mut I, o: &mut dyn InstructionConsumer) -> PR {parse_load(c, i, o, NumType::I64, LoadOp::INNLoad8S)}
+    pub(crate) fn i64_load8_u(c: &mut C, i: &mut I, o: &mut dyn InstructionConsumer) -> PR {parse_load(c, i, o, NumType::I64, LoadOp::INNLoad8U)}
+    pub(crate) fn i64_load16_s(c: &mut C, i: &mut I, o: &mut dyn InstructionConsumer) -> PR {parse_load(c, i, o, NumType::I64, LoadOp::INNLoad16S)}
+    pub(crate) fn i64_load16_u(c: &mut C, i: &mut I, o: &mut dyn InstructionConsumer) -> PR {parse_load(c, i, o, NumType::I64, LoadOp::INNLoad16U)}
+    pub(crate) fn i64_load32_s(c: &mut C, i: &mut I, o: &mut dyn InstructionConsumer) -> PR {parse_load(c, i, o, NumType::I64, LoadOp::INNLoad32S)}
+    pub(crate) fn i64_load32_u(c: &mut C, i: &mut I, o: &mut dyn InstructionConsumer) -> PR {parse_load(c, i, o, NumType::I64, LoadOp::INNLoad32U)}
 }
-use module::{instructions::LoadInstruction, objects::memory::MemArg};
 pub(crate) use load_specializations::*;
+use module::{instructions::LoadInstruction, objects::memory::MemArg};
