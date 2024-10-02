@@ -1,7 +1,14 @@
 [package]
 name = "wasm_rt"
+authors = ["Lukas Döllerer <lukas.doellerer@tum.de>", "Enrico Fazzi <enrico.fazzi@tum.de>"]
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.78"
+license = "MIT"
+description = "A high-performance standalone WebAssembly runtime"
+readme = "README.md"
+homepage = "https://gitlab.db.in.tum.de/epd24s/wasm-rt"
+repository = "https://gitlab.db.in.tum.de/epd24s/wasm-rt"
 
 [dependencies]
 runtime-lib = { workspace = true }

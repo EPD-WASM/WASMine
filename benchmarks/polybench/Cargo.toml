@@ -13,7 +13,7 @@ wasi = { workspace = true }
 criterion = "0.5"
 wasmparser = "0.217.0"
 wasmtime = { version = "25.0.1", features = ["winch"] }
-wasmedge-sdk = { version = "0.14.0", default-features = false, features = ["standalone"] }
+wasmedge-sdk = { version = "0.14.0", default-features = false, features = ["standalone", "aot"] }
 iai-callgrind = "0.13.4"
 gag = "1.0.0"
 wasmtime-wasi = "25.0.1"
@@ -43,4 +43,14 @@ harness = false
 [[bench]]
 name = "wasmine_llvm_aot_iai"
 path = "benches/wasmine_llvm_aot_iai.rs"
+harness = false
+
+[[bench]]
+name = "wasmedge_aot_criterion"
+path = "benches/wasmedge_aot_criterion.rs"
+harness = false
+
+[[bench]]
+name = "wasmedge_jit_criterion"
+path = "benches/wasmedge_jit_criterion.rs"
 harness = false

@@ -1,9 +1,8 @@
 #![allow(dead_code)]
-use criterion::{black_box, BatchSize, BenchmarkId, Criterion, Throughput};
+#![allow(unused_imports)]
+use criterion::{BatchSize, BenchmarkId, Criterion, Throughput};
 use once_cell::sync::Lazy;
-use runtime_lib::{ClusterConfig, FunctionLoader, ModuleMetaLoader, ResourceBuffer, WasmModule};
-use std::path::PathBuf;
-use wasi::{PreopenDirInheritPerms, PreopenDirPerms, WasiContextBuilder};
+use std::{collections::HashMap, path::PathBuf, rc::Rc};
 
 pub static PATH_505: Lazy<PathBuf> =
     Lazy::new(|| PathBuf::from(std::env::var_os("PATH_505").unwrap()));
@@ -78,207 +77,552 @@ pub static SPECCPU_557: Lazy<SpeccpuBenchmark> = Lazy::new(|| {
 }
 });
 
-pub fn wasmine_parser_criterion(bm: SpeccpuBenchmark, c: &mut Criterion) {
-    let wasm_bytes = std::fs::read(bm.wasm_path).unwrap();
-    let mut group = c.benchmark_group("speccpu");
-    group.throughput(Throughput::Bytes(wasm_bytes.len() as u64));
+mod wasmine {
+    use super::*;
+    use llvm_gen::{FunctionLoader, LLVMAdditionalResources, ModuleMetaLoader};
+    use runtime_lib::{ClusterConfig, ResourceBuffer, WasmModule};
+    use wasi::{PreopenDirInheritPerms, PreopenDirPerms, WasiContextBuilder};
 
-    group.bench_function(BenchmarkId::new("wasmine_parser", &bm.name), |b| {
-        b.iter_batched(
-            || wasm_bytes.clone(),
-            |wasm_bytes| {
-                let source = ResourceBuffer::from_wasm_buf(wasm_bytes);
-                let mut module = WasmModule::new(source);
-                module.load_meta(ModuleMetaLoader).unwrap();
-                module.load_all_functions(FunctionLoader).unwrap();
-                module
+    pub fn wasmine_parser_criterion(bm: SpeccpuBenchmark, c: &mut Criterion) {
+        let wasm_bytes = std::fs::read(bm.wasm_path).unwrap();
+        let mut group = c.benchmark_group("speccpu");
+        group.throughput(Throughput::Bytes(wasm_bytes.len() as u64));
+
+        group.bench_function(BenchmarkId::new("wasmine_parser", &bm.name), |b| {
+            b.iter_batched(
+                || wasm_bytes.clone(),
+                |wasm_bytes| {
+                    let source = ResourceBuffer::from_wasm_buf(wasm_bytes);
+                    let mut module = WasmModule::new(source);
+                    module.load_meta(ModuleMetaLoader).unwrap();
+                    module.load_all_functions(FunctionLoader).unwrap();
+                    module
+                },
+                BatchSize::SmallInput,
+            );
+        });
+    }
+
+    pub fn wasmine_llvm_jit_criterion(bm: SpeccpuBenchmark, c: &mut Criterion) {
+        let mut group = c.benchmark_group("speccpu");
+        group.throughput(Throughput::Elements(1));
+        group.sample_size(10);
+        group.warm_up_time(std::time::Duration::from_secs(5));
+        group.sampling_mode(criterion::SamplingMode::Flat);
+
+        let wasm_bytes = std::fs::read(bm.wasm_path).unwrap();
+        group.bench_function(BenchmarkId::new("wasmine_llvm_jit", bm.name), |b| {
+            b.iter_batched(
+                || wasm_bytes.clone(),
+                |wasm_bytes| {
+                    let _stdout_dropper = gag::Gag::stdout().unwrap();
+                    // let _stderr_dropper = gag::Gag::stderr().unwrap();
+
+                    let source = ResourceBuffer::from_wasm_buf(wasm_bytes);
+                    let mut module = WasmModule::new(source);
+                    module.load_meta(ModuleMetaLoader).unwrap();
+
+                    let wasmine_cluster = runtime_lib::Cluster::new(ClusterConfig::default());
+                    let mut wasmine_engine = runtime_lib::Engine::llvm().unwrap();
+                    let wasmine_module = wasmine_engine.init(module).unwrap();
+
+                    let wasi_ctxt = {
+                        let mut builder = WasiContextBuilder::new();
+                        builder.args(bm.args.clone());
+                        for dir in bm.dirs.iter() {
+                            builder
+                                .preopen_dir(
+                                    dir.0.clone(),
+                                    dir.1.clone(),
+                                    PreopenDirPerms::all(),
+                                    PreopenDirInheritPerms::all(),
+                                )
+                                .unwrap();
+                        }
+                        builder.inherit_stdio();
+                        builder.finish()
+                    };
+
+                    let wasmine_instance = runtime_lib::BoundLinker::new(&wasmine_cluster)
+                        .instantiate_and_link_with_wasi(
+                            wasmine_module.clone(),
+                            wasmine_engine,
+                            wasi_ctxt,
+                        )
+                        .unwrap();
+
+                    wasmine_instance
+                        .get_function_by_idx(wasmine_instance.query_start_function().unwrap())
+                        .unwrap()
+                        .call(&[])
+                        .unwrap();
+                },
+                BatchSize::SmallInput,
+            );
+        });
+    }
+
+    pub fn wasmine_llvm_jit_iai(bm: SpeccpuBenchmark) {
+        let wasm_bytes = std::fs::read(bm.wasm_path).unwrap();
+        let _stdout_dropper = gag::Gag::stdout().unwrap();
+        // let _stderr_dropper = gag::Gag::stderr().unwrap();
+
+        let source = ResourceBuffer::from_wasm_buf(wasm_bytes);
+        let mut module = WasmModule::new(source);
+        module.load_meta(ModuleMetaLoader).unwrap();
+
+        let wasmine_cluster = runtime_lib::Cluster::new(ClusterConfig::default());
+        let mut wasmine_engine = runtime_lib::Engine::llvm().unwrap();
+        let wasmine_module = wasmine_engine.init(module).unwrap();
+
+        let wasi_ctxt = {
+            let mut builder = WasiContextBuilder::new();
+            builder.args(bm.args.clone());
+            for dir in bm.dirs.iter() {
+                builder
+                    .preopen_dir(
+                        dir.0.clone(),
+                        dir.1.clone(),
+                        PreopenDirPerms::all(),
+                        PreopenDirInheritPerms::all(),
+                    )
+                    .unwrap();
+            }
+            builder.inherit_stdio();
+            builder.finish()
+        };
+
+        let wasmine_instance = runtime_lib::BoundLinker::new(&wasmine_cluster)
+            .instantiate_and_link_with_wasi(wasmine_module.clone(), wasmine_engine, wasi_ctxt)
+            .unwrap();
+
+        wasmine_instance
+            .get_function_by_idx(wasmine_instance.query_start_function().unwrap())
+            .unwrap()
+            .call(&[])
+            .unwrap();
+    }
+
+    pub fn wasmine_llvm_aot_criterion(bm: SpeccpuBenchmark, c: &mut Criterion) {
+        let mut group = c.benchmark_group("speccpu");
+        group.throughput(Throughput::Elements(1));
+        group.sample_size(10);
+        group.sampling_mode(criterion::SamplingMode::Auto);
+
+        let bm_path = bm.wasm_path;
+        let wasm_bytes = std::fs::read(bm_path).unwrap();
+
+        let compiled_file_path = tempfile::NamedTempFile::new()
+            .unwrap()
+            .into_temp_path()
+            .with_extension("cwasm");
+        group.bench_with_input(
+            BenchmarkId::new("wasmine_llvm_aot_compile", bm.name.clone()),
+            &wasm_bytes,
+            |b, wasm_bytes| {
+                b.iter_batched(
+                    || wasm_bytes.clone(),
+                    |wasm_bytes| {
+                        let _stdout_dropper = gag::Gag::stdout().unwrap();
+                        let _stderr_dropper = gag::Gag::stderr().unwrap();
+
+                        let source = ResourceBuffer::from_wasm_buf(wasm_bytes);
+                        let mut module = module::Module::new(source);
+                        module.load_meta(parser::ModuleMetaLoader).unwrap();
+                        module.load_meta(llvm_gen::ModuleMetaLoader).unwrap();
+                        module.load_all_functions(llvm_gen::FunctionLoader).unwrap();
+                        let module = Rc::new(module);
+
+                        let context = Rc::new(llvm_gen::Context::create());
+                        let mut executor = llvm_gen::JITExecutor::new(context.clone()).unwrap();
+
+                        let llvm_module = module
+                            .additional_resources
+                            .first()
+                            .unwrap()
+                            .downcast_ref::<LLVMAdditionalResources>()
+                            .unwrap()
+                            .module
+                            .clone();
+                        executor.add_module(llvm_module).unwrap();
+                        let llvm_module_object_buf =
+                            executor.get_module_as_object_buffer(0).unwrap();
+                        module
+                            .store(
+                                parser::ModuleStorer,
+                                llvm_module_object_buf,
+                                &compiled_file_path,
+                            )
+                            .unwrap();
+                    },
+                    BatchSize::SmallInput,
+                )
             },
-            BatchSize::SmallInput,
         );
-    });
+
+        group.bench_with_input(
+            BenchmarkId::new("wasmine_llvm_aot_execute", bm.name),
+            &compiled_file_path,
+            |b, compiled_file_path| {
+                b.iter(|| {
+                    let _stdout_dropper = gag::Gag::stdout().unwrap();
+                    let _stderr_dropper = gag::Gag::stderr().unwrap();
+
+                    let source = ResourceBuffer::from_file(compiled_file_path).unwrap();
+                    let mut wasmine_engine = runtime_lib::Engine::llvm().unwrap();
+                    let wasmine_cluster = runtime_lib::Cluster::new(ClusterConfig::default());
+
+                    let mut module = module::Module::new(source);
+                    module.load_meta(parser::ModuleMetaLoader).unwrap();
+                    let wasmine_module = wasmine_engine.init(module).unwrap();
+
+                    let wasi_ctxt = {
+                        let mut builder = WasiContextBuilder::new();
+                        builder.args(bm.args.clone());
+                        for dir in bm.dirs.iter() {
+                            builder
+                                .preopen_dir(
+                                    dir.0.clone(),
+                                    dir.1.clone(),
+                                    PreopenDirPerms::all(),
+                                    PreopenDirInheritPerms::all(),
+                                )
+                                .unwrap();
+                        }
+                        builder.inherit_stdio();
+                        builder.finish()
+                    };
+
+                    let wasmine_instance = runtime_lib::BoundLinker::new(&wasmine_cluster)
+                        .instantiate_and_link_with_wasi(
+                            wasmine_module.clone(),
+                            wasmine_engine,
+                            wasi_ctxt,
+                        )
+                        .unwrap();
+
+                    wasmine_instance
+                        .get_function_by_idx(wasmine_instance.query_start_function().unwrap())
+                        .unwrap()
+                        .call(&[])
+                        .unwrap();
+                });
+            },
+        );
+        std::fs::remove_file(compiled_file_path).unwrap();
+    }
+
+    pub fn wasmine_parse_iai(bm: SpeccpuBenchmark) -> WasmModule {
+        let _stdout_dropper = gag::Gag::stdout().unwrap();
+        let _stderr_dropper = gag::Gag::stderr().unwrap();
+
+        let wasm_file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("fixtures")
+            .join(bm.wasm_path);
+
+        let wasm_bytes = std::fs::read(wasm_file_path).unwrap();
+        let source = ResourceBuffer::from_wasm_buf(wasm_bytes);
+        let mut module = WasmModule::new(source);
+        module.load_meta(ModuleMetaLoader).unwrap();
+        module.load_all_functions(FunctionLoader).unwrap();
+        module
+    }
 }
+pub use wasmine::*;
 
-pub fn wasmine_llvm_jit_criterion(bm: SpeccpuBenchmark, c: &mut Criterion) {
-    let mut group = c.benchmark_group("speccpu");
-    group.throughput(Throughput::Elements(1));
-    group.sample_size(10);
-    group.warm_up_time(std::time::Duration::from_secs(5));
-    group.sampling_mode(criterion::SamplingMode::Flat);
+mod wasmtime {
+    use std::io::Write;
 
-    let wasm_bytes = std::fs::read(bm.wasm_path).unwrap();
-    group.bench_function(BenchmarkId::new("wasmine_llvm_jit", bm.name), |b| {
-        b.iter_batched(
-            || wasm_bytes.clone(),
-            |wasm_bytes| {
-                let _stdout_dropper = gag::Gag::stdout().unwrap();
-                // let _stderr_dropper = gag::Gag::stderr().unwrap();
+    use super::*;
+    use ::wasmtime::{Config, Engine, Linker, Module, OptLevel, Store, Strategy};
+    use criterion::black_box;
 
-                let source = ResourceBuffer::from_wasm_buf(wasm_bytes);
-                let mut module = WasmModule::new(source);
-                module.load_meta(ModuleMetaLoader).unwrap();
+    pub fn wasmtime_parser_criterion(bm: SpeccpuBenchmark, c: &mut Criterion) {
+        let wasm_bytes = std::fs::read(bm.wasm_path).unwrap();
 
-                let wasmine_cluster = runtime_lib::Cluster::new(ClusterConfig::default());
-                let mut wasmine_engine = runtime_lib::Engine::llvm().unwrap();
-                let wasmine_module = wasmine_engine.init(module).unwrap();
+        let mut group = c.benchmark_group("speccpu");
+        group.throughput(Throughput::Bytes(wasm_bytes.len() as u64));
 
-                let wasi_ctxt = {
-                    let mut builder = WasiContextBuilder::new();
-                    builder.args(bm.args.clone());
+        group.bench_function(BenchmarkId::new("wasmtime_parser", &bm.name), |b| {
+            b.iter_batched(
+                || wasm_bytes.clone(),
+                |wasm_bytes| {
+                    let _stdout_dropper = gag::Gag::stdout().unwrap();
+                    let _stderr_dropper = gag::Gag::stderr().unwrap();
+
+                    wasmparser::Validator::new()
+                        .validate_all(black_box(&wasm_bytes))
+                        .unwrap()
+                },
+                BatchSize::SmallInput,
+            );
+        });
+    }
+
+    pub fn wasmtime_jit_criterion(bm: SpeccpuBenchmark, c: &mut Criterion) {
+        let mut group = c.benchmark_group("speccpu");
+        group.throughput(Throughput::Elements(1));
+        group.sample_size(10);
+        group.warm_up_time(std::time::Duration::from_secs(5));
+        group.sampling_mode(criterion::SamplingMode::Flat);
+
+        let wasm_bytes = std::fs::read(bm.wasm_path).unwrap();
+        group.bench_function(BenchmarkId::new("wasmtime_jit", bm.name), |b| {
+            b.iter_batched(
+                || wasm_bytes.clone(),
+                |wasm_bytes| {
+                    let _stdout_dropper = gag::Gag::stdout().unwrap();
+                    let _stderr_dropper = gag::Gag::stderr().unwrap();
+
+                    let engine = Engine::default();
+                    let mut linker = Linker::<wasmtime_wasi::preview1::WasiP1Ctx>::new(&engine);
+                    wasmtime_wasi::preview1::add_to_linker_sync(&mut linker, |t| t).unwrap();
+                    let mut wasi_ctx_builder = wasmtime_wasi::WasiCtxBuilder::new();
+                    wasi_ctx_builder.inherit_stdio().args(&bm.args);
                     for dir in bm.dirs.iter() {
-                        builder
-                            .preopen_dir(
+                        wasi_ctx_builder
+                            .preopened_dir(
                                 dir.0.clone(),
                                 dir.1.clone(),
-                                PreopenDirPerms::all(),
-                                PreopenDirInheritPerms::all(),
+                                wasmtime_wasi::DirPerms::all(),
+                                wasmtime_wasi::FilePerms::all(),
                             )
                             .unwrap();
                     }
-                    builder.inherit_stdio();
-                    builder.finish()
-                };
+                    let wasi_ctx: wasmtime_wasi::preview1::WasiP1Ctx = wasi_ctx_builder.build_p1();
+                    let mut store = Store::new(&engine, wasi_ctx);
+                    let module = Module::new(&engine, wasm_bytes).unwrap();
+                    linker
+                        .instantiate(&mut store, &module)
+                        .unwrap()
+                        .get_func(&mut store, "_start")
+                        .unwrap()
+                        .call(&mut store, &[], &mut [])
+                        .unwrap()
+                },
+                BatchSize::SmallInput,
+            );
+        });
+    }
 
-                let wasmine_instance = runtime_lib::BoundLinker::new(&wasmine_cluster)
-                    .instantiate_and_link_with_wasi(
-                        wasmine_module.clone(),
-                        wasmine_engine,
-                        wasi_ctxt,
-                    )
-                    .unwrap();
+    pub fn wasmtime_aot_criterion(bm: SpeccpuBenchmark, c: &mut Criterion) {
+        let mut group = c.benchmark_group("speccpu");
+        group.throughput(Throughput::Elements(1));
+        group.sample_size(10);
+        group.sampling_mode(criterion::SamplingMode::Auto);
 
-                wasmine_instance
-                    .get_function_by_idx(wasmine_instance.query_start_function().unwrap())
-                    .unwrap()
-                    .call(&[])
-                    .unwrap();
-            },
-            BatchSize::SmallInput,
-        );
-    });
-}
+        let bm_path = bm.wasm_path;
+        let wasm_bytes = std::fs::read(bm_path).unwrap();
 
-pub fn wasmine_llvm_jit_iai(bm: SpeccpuBenchmark) {
-    let wasm_bytes = std::fs::read(bm.wasm_path).unwrap();
-    let _stdout_dropper = gag::Gag::stdout().unwrap();
-    // let _stderr_dropper = gag::Gag::stderr().unwrap();
+        let mut compiled_file = tempfile::NamedTempFile::new().unwrap();
+        group.bench_with_input(
+            BenchmarkId::new("wasmtime_aot_compile", bm.name.clone()),
+            &wasm_bytes,
+            |b, wasm_bytes| {
+                b.iter_batched(
+                    || wasm_bytes.clone(),
+                    |wasm_bytes| {
+                        let _stdout_dropper = gag::Gag::stdout().unwrap();
+                        let _stderr_dropper = gag::Gag::stderr().unwrap();
 
-    let source = ResourceBuffer::from_wasm_buf(wasm_bytes);
-    let mut module = WasmModule::new(source);
-    module.load_meta(ModuleMetaLoader).unwrap();
+                        let mut config = Config::new();
+                        config.strategy(Strategy::Cranelift);
+                        config.cranelift_opt_level(OptLevel::Speed);
+                        config.disable_cache();
 
-    let wasmine_cluster = runtime_lib::Cluster::new(ClusterConfig::default());
-    let mut wasmine_engine = runtime_lib::Engine::llvm().unwrap();
-    let wasmine_module = wasmine_engine.init(module).unwrap();
+                        let engine = wasmtime::Engine::new(&config).unwrap();
+                        let compiled_module =
+                            engine.precompile_module(wasm_bytes.as_slice()).unwrap();
 
-    let wasi_ctxt = {
-        let mut builder = WasiContextBuilder::new();
-        builder.args(bm.args.clone());
-        for dir in bm.dirs.iter() {
-            builder
-                .preopen_dir(
-                    dir.0.clone(),
-                    dir.1.clone(),
-                    PreopenDirPerms::all(),
-                    PreopenDirInheritPerms::all(),
+                        compiled_file.write_all(compiled_module.as_slice()).unwrap();
+                    },
+                    BatchSize::SmallInput,
                 )
-                .unwrap();
-        }
-        builder.inherit_stdio();
-        builder.finish()
+            },
+        );
+
+        group.bench_with_input(
+            BenchmarkId::new("wasmtime_aot_execute", bm.name),
+            &compiled_file,
+            |b, compiled_file| {
+                b.iter(|| {
+                    let _stdout_dropper = gag::Gag::stdout().unwrap();
+                    let _stderr_dropper = gag::Gag::stderr().unwrap();
+
+                    let mut config = wasmtime::Config::new();
+                    config.strategy(wasmtime::Strategy::Cranelift);
+
+                    let engine = wasmtime::Engine::new(&config).unwrap();
+                    let mut linker =
+                        wasmtime::Linker::<wasmtime_wasi::preview1::WasiP1Ctx>::new(&engine);
+                    wasmtime_wasi::preview1::add_to_linker_sync(&mut linker, |t| t).unwrap();
+                    let mut wasi_ctx_builder = wasmtime_wasi::WasiCtxBuilder::new();
+                    wasi_ctx_builder.inherit_stdio().args(&bm.args);
+                    for dir in bm.dirs.iter() {
+                        wasi_ctx_builder
+                            .preopened_dir(
+                                dir.0.clone(),
+                                dir.1.clone(),
+                                wasmtime_wasi::DirPerms::all(),
+                                wasmtime_wasi::FilePerms::all(),
+                            )
+                            .unwrap();
+                    }
+                    let wasi_ctx: wasmtime_wasi::preview1::WasiP1Ctx = wasi_ctx_builder.build_p1();
+                    let mut store = wasmtime::Store::new(&engine, wasi_ctx);
+
+                    let module = unsafe {
+                        wasmtime::Module::deserialize_file(&engine, compiled_file.path()).unwrap()
+                    };
+                    linker
+                        .instantiate(&mut store, &module)
+                        .unwrap()
+                        .get_func(&mut store, "_start")
+                        .unwrap()
+                        .call(&mut store, &[], &mut [])
+                        .unwrap()
+                });
+            },
+        );
+    }
+}
+pub use wasmtime::*;
+
+mod wasmedge {
+    use super::*;
+    use wasmedge_sdk::{
+        config::{
+            CommonConfigOptions, CompilerConfigOptions, Config, ConfigBuilder,
+            RuntimeConfigOptions, StatisticsConfigOptions,
+        },
+        wasi::WasiModule,
+        Compiler, CompilerOptimizationLevel, CompilerOutputFormat, Module, Store, Vm,
     };
 
-    let wasmine_instance = runtime_lib::BoundLinker::new(&wasmine_cluster)
-        .instantiate_and_link_with_wasi(wasmine_module.clone(), wasmine_engine, wasi_ctxt)
-        .unwrap();
+    pub fn wasmedge_jit_criterion(bm: SpeccpuBenchmark, c: &mut Criterion) {
+        let mut group = c.benchmark_group("speccpu");
+        group.throughput(Throughput::Elements(1));
+        group.sample_size(10);
+        group.warm_up_time(std::time::Duration::from_secs(5));
+        group.sampling_mode(criterion::SamplingMode::Flat);
 
-    wasmine_instance
-        .get_function_by_idx(wasmine_instance.query_start_function().unwrap())
-        .unwrap()
-        .call(&[])
-        .unwrap();
-}
+        let wasm_bytes = std::fs::read(bm.wasm_path).unwrap();
+        group.bench_function(BenchmarkId::new("wasmedge_jit", bm.name), |b| {
+            b.iter_batched(
+                || wasm_bytes.clone(),
+                |wasm_bytes| {
+                    let _stdout_dropper = gag::Gag::stdout().unwrap();
+                    let _stderr_dropper = gag::Gag::stderr().unwrap();
 
-pub fn wasmine_parse_iai(bm: SpeccpuBenchmark) -> WasmModule {
-    let _stdout_dropper = gag::Gag::stdout().unwrap();
-    let _stderr_dropper = gag::Gag::stderr().unwrap();
+                    let preopens = bm
+                        .dirs
+                        .iter()
+                        .map(|(path, alias)| format!("{}:{}", alias, path.to_str().unwrap()))
+                        .collect::<Vec<_>>();
 
-    let wasm_file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("fixtures")
-        .join(bm.wasm_path);
+                    let arg_refs = bm.args.iter().map(|s| s.as_str()).collect::<Vec<_>>();
+                    let preopens_refs = preopens.iter().map(|s| s.as_str()).collect::<Vec<_>>();
+                    let mut wasi_module =
+                        WasiModule::create(Some(arg_refs), None, Some(preopens_refs)).unwrap();
+                    let mut instances = HashMap::new();
+                    instances.insert(wasi_module.name().to_string(), wasi_module.as_mut());
 
-    let wasm_bytes = std::fs::read(wasm_file_path).unwrap();
-    let source = ResourceBuffer::from_wasm_buf(wasm_bytes);
-    let mut module = WasmModule::new(source);
-    module.load_meta(ModuleMetaLoader).unwrap();
-    module.load_all_functions(FunctionLoader).unwrap();
-    module
-}
+                    let config =
+                        ConfigBuilder::new(CommonConfigOptions::default().interpreter_mode(false))
+                            .build()
+                            .unwrap();
+                    let store = Store::new(Some(&config), instances).unwrap();
+                    let mut vm = Vm::new(store);
+                    let module = Module::from_bytes(None, wasm_bytes).unwrap();
+                    vm.register_module(Some("main"), module).unwrap();
+                    vm.run_func(Some("main"), "_start", []).unwrap()
+                },
+                BatchSize::SmallInput,
+            );
+        });
+        group.finish();
+    }
 
-pub fn wasmtime_parser_criterion(bm: SpeccpuBenchmark, c: &mut Criterion) {
-    let wasm_bytes = std::fs::read(bm.wasm_path).unwrap();
+    pub fn wasmedge_aot_criterion(bm: SpeccpuBenchmark, c: &mut Criterion) {
+        let mut group = c.benchmark_group("speccpu");
+        group.throughput(Throughput::Elements(1));
+        group.sample_size(10);
+        group.sampling_mode(criterion::SamplingMode::Auto);
 
-    let mut group = c.benchmark_group("speccpu");
-    group.throughput(Throughput::Bytes(wasm_bytes.len() as u64));
+        let bm_path = bm.wasm_path;
+        let wasm_bytes = std::fs::read(bm_path).unwrap();
 
-    group.bench_function(BenchmarkId::new("wasmtime_parser", &bm.name), |b| {
-        b.iter_batched(
-            || wasm_bytes.clone(),
-            |wasm_bytes| {
-                let _stdout_dropper = gag::Gag::stdout().unwrap();
-                let _stderr_dropper = gag::Gag::stderr().unwrap();
+        let compiled_file_path = tempfile::NamedTempFile::new()
+            .unwrap()
+            .into_temp_path()
+            .with_extension("so");
+        group.bench_with_input(
+            BenchmarkId::new("wasmedge_aot_compile", bm.name.clone()),
+            &wasm_bytes,
+            |b, wasm_bytes| {
+                b.iter_batched(
+                    || wasm_bytes.clone(),
+                    |wasm_bytes| {
+                        let _stdout_dropper = gag::Gag::stdout().unwrap();
+                        let _stderr_dropper = gag::Gag::stderr().unwrap();
 
-                wasmparser::Validator::new()
-                    .validate_all(black_box(&wasm_bytes))
-                    .unwrap()
-            },
-            BatchSize::SmallInput,
-        );
-    });
-}
-
-pub fn wasmtime_jit_criterion(bm: SpeccpuBenchmark, c: &mut Criterion) {
-    let mut group = c.benchmark_group("speccpu");
-    group.throughput(Throughput::Elements(1));
-    group.sample_size(10);
-    group.warm_up_time(std::time::Duration::from_secs(5));
-    group.sampling_mode(criterion::SamplingMode::Flat);
-
-    let wasm_bytes = std::fs::read(bm.wasm_path).unwrap();
-    group.bench_function(BenchmarkId::new("wasmtime_jit", bm.name), |b| {
-        b.iter_batched(
-            || wasm_bytes.clone(),
-            |wasm_bytes| {
-                let _stdout_dropper = gag::Gag::stdout().unwrap();
-                let _stderr_dropper = gag::Gag::stderr().unwrap();
-
-                let engine = wasmtime::Engine::default();
-                let mut linker =
-                    wasmtime::Linker::<wasmtime_wasi::preview1::WasiP1Ctx>::new(&engine);
-                wasmtime_wasi::preview1::add_to_linker_sync(&mut linker, |t| t).unwrap();
-                let mut wasi_ctx_builder = wasmtime_wasi::WasiCtxBuilder::new();
-                wasi_ctx_builder.inherit_stdio().args(&bm.args);
-                for dir in bm.dirs.iter() {
-                    wasi_ctx_builder
-                        .preopened_dir(
-                            dir.0.clone(),
-                            dir.1.clone(),
-                            wasmtime_wasi::DirPerms::all(),
-                            wasmtime_wasi::FilePerms::all(),
+                        let config = ConfigBuilder::new(CommonConfigOptions::default())
+                            .with_compiler_config(
+                                CompilerConfigOptions::default()
+                                    .optimization_level(CompilerOptimizationLevel::O3)
+                                    .out_format(CompilerOutputFormat::Wasm)
+                                    .dump_ir(false),
+                            )
+                            .build()
+                            .unwrap();
+                        let compiler = Compiler::new(Some(&config)).unwrap();
+                        compiler.compile_from_bytes(
+                            wasm_bytes,
+                            compiled_file_path.file_stem().unwrap().to_str().unwrap(),
+                            compiled_file_path.parent().unwrap().to_str().unwrap(),
                         )
-                        .unwrap();
-                }
-                let wasi_ctx: wasmtime_wasi::preview1::WasiP1Ctx = wasi_ctx_builder.build_p1();
-                let mut store = wasmtime::Store::new(&engine, wasi_ctx);
-                let module = wasmtime::Module::new(&engine, wasm_bytes).unwrap();
-                linker
-                    .instantiate(&mut store, &module)
-                    .unwrap()
-                    .get_func(&mut store, "_start")
-                    .unwrap()
-                    .call(&mut store, &[], &mut [])
-                    .unwrap()
+                    },
+                    BatchSize::SmallInput,
+                )
             },
-            BatchSize::SmallInput,
         );
-    });
+
+        group.bench_with_input(
+            BenchmarkId::new("wasmedge_aot_execute", bm.name),
+            &compiled_file_path,
+            |b, compiled_file_path| {
+                b.iter(|| {
+                    let _stdout_dropper = gag::Gag::stdout().unwrap();
+                    let _stderr_dropper = gag::Gag::stderr().unwrap();
+
+                    let preopens = bm
+                        .dirs
+                        .iter()
+                        .map(|(path, alias)| format!("{}:{}", alias, path.to_str().unwrap()))
+                        .collect::<Vec<_>>();
+
+                    let arg_refs = bm.args.iter().map(|s| s.as_str()).collect::<Vec<_>>();
+                    let preopens_refs = preopens.iter().map(|s| s.as_str()).collect::<Vec<_>>();
+
+                    let mut wasi_module =
+                        WasiModule::create(Some(arg_refs), None, Some(preopens_refs)).unwrap();
+
+                    let mut instances = HashMap::new();
+                    instances.insert(wasi_module.name().to_string(), wasi_module.as_mut());
+
+                    let config =
+                        ConfigBuilder::new(CommonConfigOptions::default().interpreter_mode(false))
+                            .build()
+                            .unwrap();
+                    let store = Store::new(Some(&config), instances).unwrap();
+                    let mut vm = Vm::new(store);
+                    let module = Module::from_file(None, compiled_file_path).unwrap();
+                    vm.register_module(Some("main"), module).unwrap();
+                    vm.run_func(Some("main"), "_start", []).unwrap()
+                });
+            },
+        );
+        std::fs::remove_file(compiled_file_path).unwrap();
+    }
 }
+pub use wasmedge::*;
