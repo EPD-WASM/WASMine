@@ -14,4 +14,4 @@ pub use instructions::encoder::InstructionEncoder;
 pub use instructions::instruction_consumer::InstructionConsumer;
 
 pub use error::ModuleError;
-pub use objects::module::{Module, ModuleMetadata};
+pub use objects::module::{FunctionLoaderInterface, Module, ModuleMetadata};

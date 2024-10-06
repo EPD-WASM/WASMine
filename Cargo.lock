@@ -1064,6 +1064,7 @@ name = "fuzz"
 version = "0.1.0"
 dependencies = [
  "libfuzzer-sys",
+ "llvm-gen",
  "runtime-lib",
  "wasm-smith",
 ]
@@ -1582,6 +1583,7 @@ dependencies = [
  "once_cell",
  "parser",
  "resource-buffer",
+ "rkyv",
  "runtime-interface",
  "smallvec",
  "tempfile",
@@ -1856,7 +1858,6 @@ dependencies = [
  "log",
  "module",
  "resource-buffer",
- "rkyv",
  "smallvec",
  "thiserror",
  "wasm-types",
@@ -2584,6 +2585,7 @@ name = "sightglass-connector"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "llvm-gen",
  "resource-buffer",
  "runtime-lib",
  "wasi 0.1.0",

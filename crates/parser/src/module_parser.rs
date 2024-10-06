@@ -2,6 +2,7 @@ use super::parsable::{Parse, ParseWithContext};
 use super::ParseResult;
 use super::{error::ParserError, wasm_stream_reader::WasmBinaryReader};
 use module::objects::data::{Data, DataMode};
+use module::objects::function::{FunctionSource, FunctionUnparsed};
 use module::objects::{
     element::Element,
     export::{Export, WasmExports},
@@ -84,10 +85,7 @@ impl<'a> ModuleParser<'a> {
             .functions
             .iter()
             .skip(self.next_empty_function as usize)
-            .any(|f| {
-                // function has neither unparsed binary nor is an import => was not yet parsed!
-                f.get_unparsed_mem().is_none() && f.get_import().is_none()
-            })
+            .any(Function::is_placeholder)
         {
             return Err(ParserError::Msg("function without code".into()));
         }
@@ -133,8 +131,7 @@ impl<'a> ModuleParser<'a> {
                     }
                     self.module.functions.push(Function {
                         type_idx: *type_idx,
-                        source_import: Some(FunctionImport { import_idx }),
-                        ..Default::default()
+                        source: FunctionSource::Import(FunctionImport { import_idx }),
                     });
                 }
                 ImportDesc::Table(r#type) => self.module.tables.push(Table {
@@ -166,7 +163,7 @@ impl<'a> ModuleParser<'a> {
             return Ok(());
         }
         let mut parsed_functions = (0..num_functions)
-            .map(|_| TypeIdx::parse(i).map(Function::new))
+            .map(|_| TypeIdx::parse(i).map(Function::placeholder))
             .collect::<Result<Vec<Function>, ParserError>>()?;
         let max_func_type: u32 = parsed_functions.iter().map(|f| f.type_idx).max().unwrap();
         if max_func_type as usize >= self.module.function_types.len() {
@@ -289,24 +286,17 @@ impl<'a> ModuleParser<'a> {
             .iter()
             .enumerate()
             .skip(self.next_empty_function as usize)
-            .filter_map(|(idx, _)| {
-                if self
-                    .module
-                    .functions
-                    .get(idx)
-                    .and_then(|f| f.get_import())
-                    .is_some()
-                {
-                    None
-                } else {
-                    Some(idx as FuncIdx)
-                }
-            })
+            .filter(|(_, func)| !matches!(func.source, FunctionSource::Import(_)))
+            .map(|(idx, _)| idx as FuncIdx)
             .take(num_remaining_function_defs as usize)
             .collect::<Vec<_>>();
         for func_idx in functions_to_parse {
             let function_size = i.read_leb128::<u32>()?;
-            self.module.functions[func_idx as usize].add_unparsed_mem(i.pos, function_size);
+            self.module.functions[func_idx as usize].source =
+                FunctionSource::Wasm(FunctionUnparsed {
+                    offset: i.pos,
+                    size: function_size as usize,
+                });
             i.advance(function_size as usize);
             self.next_empty_function = func_idx + 1;
         }

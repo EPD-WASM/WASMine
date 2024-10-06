@@ -1,5 +1,6 @@
-use module::Module;
-use runtime_lib::ResourceBuffer;
+use module::ModuleError;
+use parser::Parser;
+use runtime_lib::FunctionLoaderInterface;
 use wast::Wast;
 
 pub fn test_parser(file_path: &str) {
@@ -19,17 +20,16 @@ pub fn test_parser(file_path: &str) {
         match directive {
             wast::WastDirective::Wat(wast::QuoteWat::Wat(wast::Wat::Module(mut module))) => {
                 let binary_mod = module.encode().unwrap();
-                let source = ResourceBuffer::from_wasm_buf(binary_mod.clone());
-                let mut module = Module::new(source);
-                if module
-                    .load_meta(parser::ModuleMetaLoader)
-                    .and_then(|_| module.load_all_functions(parser::FunctionLoader))
-                    .is_err()
-                {
+                let module = Parser::parse_from_buf(binary_mod.clone());
+                if module.is_err() {
                     std::fs::write("test_module_dump.wasm", binary_mod).unwrap();
                     eprintln!(
                         "Parsing failed of spec test file: {file_path:?}:{line}:{col}\nWriting binary module to ./test_module_dump.wasm"
                     );
+                }
+                let module = module.unwrap();
+                if parser::FunctionLoader.parse_all_functions(&module).is_err() {
+                    eprintln!("Failed to parse IR functions {file_path:?}:{line}:{col}");
                 }
             }
             wast::WastDirective::AssertMalformed {
@@ -38,13 +38,10 @@ pub fn test_parser(file_path: &str) {
                 message,
             } => {
                 let binary_mod = module.encode().unwrap();
-                let source = ResourceBuffer::from_wasm_buf(binary_mod.clone());
-                let mut module = Module::new(source);
-                if module
-                    .load_meta(parser::ModuleMetaLoader)
-                    .and_then(|_| module.load_all_functions(parser::FunctionLoader))
-                    .is_ok()
-                {
+                let module = Parser::parse_from_buf(binary_mod.clone())
+                    .map_err(|e| ModuleError::Msg(e.to_string()))
+                    .and_then(|m| parser::FunctionLoader.parse_all_functions(&m));
+                if module.is_ok() {
                     std::fs::write("test_module_dump.wasm", binary_mod).unwrap();
                     panic!(
                         "expected parsing failure \"{message}\" for malformed module in spec test file {file_path:?}:{line}:{col}, but parsed successfully.\nnWriting binary module to ./test_module_dump.wasm"

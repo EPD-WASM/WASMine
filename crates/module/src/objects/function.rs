@@ -1,15 +1,17 @@
-use crate::{basic_block::BasicBlock, ModuleMetadata};
+use crate::ModuleMetadata;
 use rkyv::{Archive, Deserialize, Serialize};
-use std::vec::Vec;
-use wasm_types::{FuncIdx, TypeIdx, ValType};
+use wasm_types::{FuncIdx, TypeIdx};
 
-#[derive(Debug, Default, Clone, Deserialize, Serialize, Archive)]
+#[derive(Debug, Clone, Deserialize, Serialize, Archive)]
 pub struct Function {
     pub type_idx: u32,
-    pub source_ir: Option<FunctionIR>,
-    pub source_import: Option<FunctionImport>,
-    pub source_unparsed: Option<FunctionUnparsed>,
-    pub source_llvm: Option<FunctionLLVM>,
+    pub source: FunctionSource,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, Archive)]
+pub enum FunctionSource {
+    Import(FunctionImport),
+    Wasm(FunctionUnparsed),
 }
 
 impl Function {
@@ -23,64 +25,48 @@ impl Function {
             .unwrap_or(format!("<anonymous:{func_idx}>"))
     }
 
-    pub fn new(type_idx: TypeIdx) -> Self {
+    pub fn create_raw_wasm(type_idx: TypeIdx, offset: usize, size: usize) -> Self {
         Self {
             type_idx,
-            ..Default::default()
+            source: FunctionSource::Wasm(FunctionUnparsed { offset, size }),
         }
     }
 
-    #[inline]
-    pub fn get_ir(&self) -> Option<&FunctionIR> {
-        self.source_ir.as_ref()
+    pub fn create_import(type_idx: TypeIdx, import_idx: u32) -> Self {
+        Self {
+            type_idx,
+            source: FunctionSource::Import(FunctionImport { import_idx }),
+        }
     }
 
-    #[inline]
-    pub fn add_ir(&mut self, ir: FunctionIR) {
-        self.source_ir = Some(ir);
+    pub fn placeholder(type_idx: TypeIdx) -> Self {
+        Self {
+            type_idx,
+            source: FunctionSource::Wasm(FunctionUnparsed {
+                offset: usize::MAX,
+                size: usize::MAX,
+            }),
+        }
     }
 
-    #[inline]
-    pub fn get_import(&self) -> Option<&FunctionImport> {
-        self.source_import.as_ref()
-    }
-
-    #[inline]
-    pub fn add_import(&mut self, import: FunctionImport) {
-        self.source_import = Some(import);
-    }
-
-    #[inline]
-    pub fn get_unparsed_mem(&self) -> Option<FunctionUnparsed> {
-        self.source_unparsed.clone()
-    }
-
-    #[inline]
-    pub fn add_unparsed_mem(&mut self, offset: usize, length: u32) {
-        self.source_unparsed = Some(FunctionUnparsed {
-            offset,
-            size: length as usize,
-        });
-    }
-
-    #[inline]
-    pub fn add_precompiled_llvm(&mut self, offset: u64, size: usize) {
-        self.source_llvm = Some(FunctionLLVM { offset, size });
-    }
-
-    #[inline]
-    pub fn get_precompiled_llvm(&self) -> Option<FunctionLLVM> {
-        self.source_llvm.clone()
+    pub fn is_placeholder(&self) -> bool {
+        matches!(
+            self.source,
+            FunctionSource::Wasm(FunctionUnparsed {
+                offset: usize::MAX,
+                size: usize::MAX
+            })
+        )
     }
 }
 
-/// Intermediate representation of the function.
-#[derive(Debug, Clone, Default, Deserialize, Serialize, Archive)]
-pub struct FunctionIR {
-    pub locals: Vec<ValType>,
-    pub bbs: Vec<BasicBlock>,
-    pub num_vars: usize,
-}
+// /// Intermediate representation of the function.
+// #[derive(Debug, Clone, Default, Deserialize, Serialize, Archive)]
+// pub struct FunctionIR {
+//     pub locals: Vec<ValType>,
+//     pub bbs: Vec<BasicBlock>,
+//     pub num_vars: usize,
+// }
 
 /// Function import information.
 #[derive(Debug, Clone, Archive, Deserialize, Serialize)]
@@ -95,12 +81,12 @@ pub struct FunctionUnparsed {
     pub size: usize,
 }
 
-/// Precompiled LLVM function, stored in memory.
-///
-/// Note: This is used for AOT compiled functions.
-///       The stored value is a pointer + size to an LLVM memory buffer of the object file containing the function's symbol.
-#[derive(Debug, Clone, Archive, Deserialize, Serialize)]
-pub struct FunctionLLVM {
-    pub offset: u64,
-    pub size: usize,
-}
+// /// Precompiled LLVM function, stored in memory.
+// ///
+// /// Note: This is used for AOT compiled functions.
+// ///       The stored value is a pointer + size to an LLVM memory buffer of the object file containing the function's symbol.
+// #[derive(Debug, Clone, Archive, Deserialize, Serialize)]
+// pub struct FunctionLLVM {
+//     pub offset: u64,
+//     pub size: usize,
+// }

@@ -16,6 +16,7 @@ mod error;
 mod helper;
 mod linker;
 mod objects;
+pub mod sugar;
 
 pub use cluster::{Cluster, ClusterConfig};
 pub use error::RuntimeError;
@@ -23,8 +24,8 @@ pub use linker::{BoundLinker, Linker};
 
 // reexports
 pub use config::{Config, ConfigBuilder};
-pub use module::objects::module::Module as WasmModule;
-pub use parser::{FunctionLoader, ModuleMetaLoader, ModuleStorer, ParserError, ValidationError};
+pub use module::{objects::module::FunctionLoaderInterface, objects::module::Module as WasmModule};
+pub use parser::{FunctionLoader, Parser, ParserError, ValidationError};
 pub use resource_buffer::ResourceBuffer;
 
 pub const WASM_PAGE_SIZE: u32 = 2_u32.pow(16);

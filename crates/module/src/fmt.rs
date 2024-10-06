@@ -2,9 +2,15 @@ use super::{
     basic_block::{BasicBlock, BasicBlockGlue},
     InstructionDecoder,
 };
-use crate::{instructions::*, objects::global::Global};
 use crate::{
-    objects::function::{Function, FunctionIR, FunctionImport},
+    instructions::*,
+    objects::{
+        function::{FunctionSource, FunctionUnparsed},
+        global::Global,
+    },
+};
+use crate::{
+    objects::function::{Function, FunctionImport},
     ModuleMetadata,
 };
 use std::fmt::{Display, Formatter};
@@ -48,34 +54,21 @@ impl<'a> Display for FunctionDisplayContext<'a> {
         let ret_types_str = ret_types.join(", ");
         write!(f, " {ret_types_str}")?;
 
-        if let Some(FunctionImport { import_idx }) = self.function.get_import() {
-            let import = &self.module.imports[*import_idx as usize];
-            let import_name = format!("{}.{}", import.module, import.name);
-            let input_types: Vec<String> = function_type
-                .params_iter()
-                .map(|t| format!("{t}"))
-                .collect();
-            let input_types_str = input_types.join(", ");
-            writeln!(f, " ({input_types_str}) {{",)?;
-            write!(f, "/* imported: {import_name} */",)?
-        }
-
-        if let Some(FunctionIR { bbs, locals, .. }) = self.function.get_ir() {
-            let input_types: Vec<String> = locals
-                .iter()
-                .take(function_type.num_params())
-                .map(|t| format!("{t}",))
-                .collect();
-            let input_types_str = input_types.join(", ");
-            writeln!(f, " ({input_types_str}) {{",)?;
-
-            for bb in bbs.iter() {
-                writeln!(f, "bb{}:", bb.id)?;
-                let bb = BasicBlockDisplayContext {
-                    module: self.module,
-                    bb,
-                };
-                write!(f, "{bb}",)?;
+        match self.function.source {
+            FunctionSource::Import(FunctionImport { import_idx }) => {
+                let import = &self.module.imports[import_idx as usize];
+                let import_name = format!("{}.{}", import.module, import.name);
+                let input_types: Vec<String> = function_type
+                    .params_iter()
+                    .map(|t| format!("{t}"))
+                    .collect();
+                let input_types_str = input_types.join(", ");
+                writeln!(f, " ({input_types_str}) {{",)?;
+                write!(f, "/* imported: {import_name} */",)?
+            }
+            FunctionSource::Wasm(FunctionUnparsed { .. }) => {
+                writeln!(f, " {{",)?;
+                write!(f, "/* raw wasm (unparsed) */",)?
             }
         }
         write!(f, "}}")

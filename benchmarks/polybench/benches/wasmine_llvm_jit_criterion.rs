@@ -1,6 +1,8 @@
+use std::rc::Rc;
+
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
-use resource_buffer::ResourceBuffer;
-use runtime_lib::ClusterConfig;
+use parser::Parser;
+use runtime_lib::{ClusterConfig, FunctionLoaderInterface};
 use wasi::WasiContextBuilder;
 
 mod utils;
@@ -26,13 +28,16 @@ pub fn wasmine_llvm_jit_criterion(c: &mut Criterion) {
                         let _stdout_dropper = gag::Gag::stdout().unwrap();
                         let _stderr_dropper = gag::Gag::stderr().unwrap();
 
-                        let source = ResourceBuffer::from_wasm_buf(wasm_bytes);
-                        let mut module = module::Module::new(source);
-                        module.load_meta(parser::ModuleMetaLoader).unwrap();
-                        module.load_all_functions(parser::FunctionLoader).unwrap();
+                        let module = Parser::parse_from_buf(wasm_bytes).unwrap();
+                        llvm_gen::Translator::translate_module_meta(&module).unwrap();
+                        llvm_gen::FunctionLoader
+                            .parse_all_functions(&module)
+                            .unwrap();
+                        let module = Rc::new(module);
+
                         let wasmine_cluster = runtime_lib::Cluster::new(ClusterConfig::default());
                         let mut wasmine_engine = runtime_lib::Engine::llvm().unwrap();
-                        let wasmine_module = wasmine_engine.init(module).unwrap();
+                        wasmine_engine.init(module.clone()).unwrap();
 
                         let wasi_ctxt = {
                             let mut builder = WasiContextBuilder::new();
@@ -42,7 +47,7 @@ pub fn wasmine_llvm_jit_criterion(c: &mut Criterion) {
 
                         let wasmine_instance = runtime_lib::BoundLinker::new(&wasmine_cluster)
                             .instantiate_and_link_with_wasi(
-                                wasmine_module.clone(),
+                                module.clone(),
                                 wasmine_engine,
                                 wasi_ctxt,
                             )

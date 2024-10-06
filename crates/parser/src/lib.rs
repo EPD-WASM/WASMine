@@ -13,47 +13,46 @@ pub use error::{ParserError, ValidationError};
 pub use ir::context::Context;
 pub use ir::function_builder::FunctionBuilderInterface;
 
-pub use ir::FunctionParser;
-use module::{
-    objects::module::{FunctionLoaderInterface, ModuleMetaLoaderInterface, ModuleStorerInterface},
-    ModuleError, ModuleMetadata,
-};
+use ir::FunctionParser;
+use module::objects::function::FunctionUnparsed;
+use module::{objects::module::FunctionLoaderInterface, Module, ModuleError, ModuleMetadata};
 use resource_buffer::{ResourceBuffer, SourceFormat};
-use rkyv::ser::{
-    serializers::{
-        AllocScratch, CompositeSerializer, FallbackScratch, HeapScratch, SharedSerializeMap,
-        WriteSerializer,
-    },
-    Serializer,
-};
 use std::io::Write;
-use std::{
-    fs::File,
-    io::{Seek, SeekFrom},
-    path::Path,
-};
+use std::path::Path;
 use wasm_stream_reader::WasmBinaryReader;
+use wasm_types::FuncIdx;
 
-#[derive(Debug, Default)]
-pub struct ModuleMetaLoader;
+#[derive(Default)]
+pub struct Parser;
 
-impl ModuleMetaLoader {
-    pub fn new() -> Self {
-        Self::default()
+impl Parser {
+    pub fn parse_from_file(input_path: impl AsRef<Path>) -> Result<Module, ParserError> {
+        log::info!(
+            "Loading module meta using `parser` from path: {:?}",
+            input_path.as_ref()
+        );
+        let buffer = ResourceBuffer::from_file(input_path)?;
+        Self::parse(buffer)
     }
 
-    fn parse_module_meta(
-        &self,
-        module: &mut ModuleMetadata,
-        buffer: &ResourceBuffer,
-    ) -> Result<(), ParserError> {
-        log::info!("Loading module meta using `parser`");
+    pub fn parse_from_buf(buf: Vec<u8>) -> Result<Module, ParserError> {
+        log::info!("Loading module meta using `parser` from buffer");
+        let buffer = ResourceBuffer::from_wasm_buf(buf);
+        Self::parse(buffer)
+    }
+
+    pub fn parse(buffer: ResourceBuffer) -> Result<Module, ParserError> {
+        let mut module = Module {
+            meta: ModuleMetadata::default(),
+            source: buffer,
+            artifact_registry: Default::default(),
+        };
         let mut instance = ModuleParser {
-            module,
+            module: &mut module.meta,
             is_complete: false,
             next_empty_function: 0,
         };
-        let input = buffer.get()?;
+        let input = module.source.get()?;
         let mut reader = WasmBinaryReader::new(&input);
         match instance.parse_module(&mut reader) {
             Err(e) => Err(ParserError::PositionalError(Box::new(e), reader.pos)),
@@ -62,43 +61,11 @@ impl ModuleMetaLoader {
                 {
                     // write parsed module to file as string
                     let mut f = std::fs::File::create("debug_output.parsed").unwrap();
-                    f.write_all(module.to_string().as_bytes()).unwrap();
+                    f.write_all(module.meta.to_string().as_bytes()).unwrap();
                 }
-                Ok(())
+                Ok(module)
             }
         }
-    }
-
-    fn load_aot_module_meta(
-        &self,
-        module: &mut ModuleMetadata,
-        buffer: &ResourceBuffer,
-    ) -> Result<(), ParserError> {
-        log::info!("Loading aot module meta using `parser`");
-        let input = buffer.get()?;
-        let wasm_module_buffer_size = u32::from_be_bytes(input[0..4].try_into().unwrap()) as usize;
-
-        #[allow(never_type_fallback_flowing_into_unsafe)]
-        let module_meta =
-            unsafe { rkyv::from_bytes_unchecked(&input[8..8 + wasm_module_buffer_size]) }
-                .map_err(|e| ParserError::Msg(format!("Failed to decode module metadata: {e}")))?;
-        *module = module_meta;
-        Ok(())
-    }
-}
-
-impl ModuleMetaLoaderInterface for ModuleMetaLoader {
-    fn load_module_meta(
-        &self,
-        module: &mut ModuleMetadata,
-        buffer: &ResourceBuffer,
-        _: &mut Vec<Box<dyn std::any::Any>>,
-    ) -> Result<(), module::error::ModuleError> {
-        match buffer.kind() {
-            SourceFormat::Wasm => self.parse_module_meta(module, buffer),
-            SourceFormat::Cwasm => self.load_aot_module_meta(module, buffer),
-        }
-        .map_err(|e| ModuleError::Msg(e.to_string()))
     }
 }
 
@@ -110,81 +77,40 @@ impl FunctionLoader {
         Self::default()
     }
 
-    fn load_wasm_functions_ir(
-        &self,
-        module: &mut ModuleMetadata,
-        buffer: &ResourceBuffer,
-    ) -> Result<(), ParserError> {
+    fn load_wasm_functions_ir(&self, module: &Module) -> Result<(), ParserError> {
         log::info!("Loading functions using `parser` to ir");
-        FunctionParser::parse_all_functions(module, buffer)
+        FunctionParser::parse_all_functions(module)
     }
 
-    fn load_aot_functions(
+    pub fn parse_single_function(
         &self,
-        module: &mut ModuleMetadata,
         buffer: &ResourceBuffer,
-    ) -> Result<(), ParserError> {
-        log::info!("Loading aot llvm functions using `parser`");
-        let input = buffer.get()?;
-        let llvm_memory_buffer_offset =
-            u32::from_be_bytes(input[4..8].try_into().unwrap()) as usize;
-        let llvm_memory_buffer = &input[llvm_memory_buffer_offset..];
-        for function in module.functions.iter_mut() {
-            function.add_precompiled_llvm(
-                llvm_memory_buffer.as_ptr() as u64,
-                input.len() - llvm_memory_buffer_offset,
-            );
-        }
-        Ok(())
+        function_idx: FuncIdx,
+        function_unparsed: &FunctionUnparsed,
+        module: &ModuleMetadata,
+        builder: &mut impl FunctionBuilderInterface,
+    ) -> ParseResult {
+        log::info!("Loading function using `parser` to ir");
+        FunctionParser::parse_single_function(
+            buffer,
+            function_idx,
+            function_unparsed,
+            module,
+            builder,
+        )
     }
 }
 
 impl FunctionLoaderInterface for FunctionLoader {
-    fn parse_all_functions(
-        &self,
-        module: &mut ModuleMetadata,
-        buffer: &ResourceBuffer,
-        _: &mut Vec<Box<dyn std::any::Any>>,
-    ) -> Result<(), ModuleError> {
-        match buffer.kind() {
-            SourceFormat::Wasm => self.load_wasm_functions_ir(module, buffer),
-            SourceFormat::Cwasm => self.load_aot_functions(module, buffer),
+    fn parse_all_functions(&self, module: &Module) -> Result<(), ModuleError> {
+        match module.source.kind() {
+            SourceFormat::Wasm => self.load_wasm_functions_ir(module),
+            SourceFormat::Cwasm => {
+                return Err(ModuleError::Msg(
+                    "AOT execution is only supported via the llvm function parser.".to_string(),
+                ));
+            }
         }
         .map_err(|e| ModuleError::Msg(e.to_string()))
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct ModuleStorer;
-
-impl ModuleStorerInterface for ModuleStorer {
-    fn store(
-        &self,
-        module: &ModuleMetadata,
-        llvm_memory_buffer: impl AsRef<[u8]>,
-        output_path: impl AsRef<Path>,
-    ) -> Result<(), ModuleError> {
-        let mut out_file = File::create(output_path)?;
-        out_file.seek(SeekFrom::Start(8))?;
-
-        let mut serializer = CompositeSerializer::new(
-            WriteSerializer::new(&mut out_file),
-            <FallbackScratch<HeapScratch<1024>, AllocScratch>>::default(),
-            SharedSerializeMap::default(),
-        );
-        debug_assert_eq!(serializer.pos(), 0);
-        serializer.serialize_value(module).unwrap();
-        let wasm_module_serialized_size = serializer.pos();
-
-        let llvm_obj_offset =
-            (2 * std::mem::size_of::<u32>() + wasm_module_serialized_size).next_multiple_of(2);
-
-        out_file.seek(SeekFrom::Start(0))?;
-        out_file.write_all(&u32::to_be_bytes(wasm_module_serialized_size as u32))?;
-        out_file.write_all(&u32::to_be_bytes(llvm_obj_offset as u32))?;
-
-        out_file.seek(SeekFrom::Start(llvm_obj_offset as u64))?;
-        out_file.write_all(llvm_memory_buffer.as_ref())?;
-        Ok(())
     }
 }

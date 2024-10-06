@@ -1,6 +1,6 @@
-use module::{objects::value::Value, Module};
+use module::objects::value::Value;
 use runtime_lib::{Cluster, Config, Engine, Linker, RuntimeError};
-use std::path::Path;
+use std::{path::Path, rc::Rc};
 use utils::parse_input_params_for_function;
 use wasi::{PreopenDirInheritPerms, PreopenDirPerms, WasiContextBuilder};
 
@@ -17,10 +17,9 @@ fn run_internal(
 ) -> Result<Vec<Value>, RuntimeError> {
     log::debug!("run_internal: {:?}", config);
 
-    let buffer = resource_buffer::ResourceBuffer::from_file(path)?;
-    let mut module = Module::new(buffer);
-    module.load_meta(parser::ModuleMetaLoader)?;
-    let module = engine.init(module)?;
+    let module = parser::Parser::parse_from_file(path)?;
+    let module = Rc::new(module);
+    engine.init(module.clone())?;
 
     let start_function = config.start_function.clone();
 
@@ -100,6 +99,7 @@ mod c_wasm_compilation {
     use super::*;
     use llvm_gen::LLVMAdditionalResources;
     use resource_buffer::SourceFormat;
+    use runtime_lib::ResourceBuffer;
     use std::rc::Rc;
 
     pub fn compile_internal(in_path: &Path, out_path: &Path) -> Result<(), RuntimeError> {
@@ -108,27 +108,27 @@ mod c_wasm_compilation {
                 "Cwasm files can't be compiled AGAIN... Please provide a wasm file.".to_owned(),
             ));
         }
-        let source = resource_buffer::ResourceBuffer::from_file(in_path)?;
-        let mut module = module::Module::new(source);
-        module.load_meta(parser::ModuleMetaLoader).unwrap();
-        module.load_meta(llvm_gen::ModuleMetaLoader).unwrap();
-        module.load_all_functions(llvm_gen::FunctionLoader).unwrap();
+        let module = ResourceBuffer::from_file(in_path)?;
+        let module = llvm_gen::aot::parse_aot_module(module)?;
         let module = Rc::new(module);
 
-        let context = Rc::new(llvm_gen::Context::create());
-        let mut executor = llvm_gen::JITExecutor::new(context.clone())?;
+        let (llvm_module, llvm_context) = {
+            let artifacts_ref = module.artifact_registry.read().unwrap();
+            let llvm_resources = artifacts_ref.get("llvm-module").unwrap().read().unwrap();
+            let llvm_resources = llvm_resources
+                .downcast_ref::<LLVMAdditionalResources>()
+                .unwrap();
+            (
+                llvm_resources.module.clone(),
+                llvm_resources.context.clone(),
+            )
+        };
 
-        let llvm_module = module
-            .additional_resources
-            .first()
-            .unwrap()
-            .downcast_ref::<LLVMAdditionalResources>()
-            .unwrap()
-            .module
-            .clone();
+        let mut executor = llvm_gen::JITExecutor::new(llvm_context)?;
         executor.add_module(llvm_module)?;
+
         let llvm_module_object_buf = executor.get_module_as_object_buffer(0)?;
-        module.store(parser::ModuleStorer, llvm_module_object_buf, out_path)?;
+        llvm_gen::aot::store_aot_module(&module, llvm_module_object_buf, out_path)?;
         Ok(())
     }
 

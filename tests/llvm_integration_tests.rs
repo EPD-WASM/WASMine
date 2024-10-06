@@ -1,5 +1,7 @@
 use core::panic;
 use gen_util::generate_spec_test_cases;
+use module::objects::function::FunctionSource;
+use module::FunctionLoaderInterface;
 use module::{
     objects::{
         function::Function,
@@ -9,11 +11,11 @@ use module::{
     utils::numeric_transmutes::{Bit32, Bit64},
     ModuleError,
 };
+use parser::Parser;
 use runtime_lib::{
-    BoundLinker, Cluster, ClusterConfig, Engine, InstanceHandle, Linker, ResourceBuffer,
-    RuntimeError,
+    BoundLinker, Cluster, ClusterConfig, Engine, InstanceHandle, Linker, RuntimeError,
 };
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf, rc::Rc};
 use test_log::test;
 use wasm_types::ValType;
 use wast::{
@@ -32,11 +34,11 @@ type DeclaredModulesMap<'a> = HashMap<
 generate_spec_test_cases!(test_llvm, llvm);
 
 pub fn translate_module<'a>(
-    module: module::objects::module::Module,
+    module: Rc<module::objects::module::Module>,
     linker: &mut BoundLinker<'a>,
 ) -> Result<(InstanceHandle<'a>, bool), RuntimeError> {
     let mut engine = Engine::llvm()?;
-    let module = engine.init(module)?;
+    engine.init(module.clone())?;
     let instance_handle = linker.instantiate_and_link(module.clone(), engine)?;
     Ok((instance_handle, false))
 }
@@ -59,10 +61,10 @@ fn execute_via_llvm_backend(
     if !*already_started {
         if let Some(entry_point) = instance.wasm_module().meta.entry_point {
             // if the entry point is an import, we don't need to run it
-            if instance.wasm_module().meta.functions[entry_point as usize]
-                .get_import()
-                .is_none()
-            {
+            if matches!(
+                instance.wasm_module().meta.functions[entry_point as usize].source,
+                FunctionSource::Import(_),
+            ) {
                 let fn_name =
                     Function::query_function_name(entry_point, &instance.wasm_module().meta)
                         .map(|s| s.to_owned())
@@ -137,17 +139,19 @@ fn execute_via_llvm_backend(
         .call(&input_params)
 }
 
-fn parse_module(module: &mut QuoteWat) -> Result<Module, ModuleError> {
+fn parse_module(module: &mut QuoteWat) -> Result<Rc<Module>, ModuleError> {
     let binary_mod = module
         .encode()
         .map_err(|e| ModuleError::Msg(e.to_string()))?;
-    let source = ResourceBuffer::from_wasm_buf(binary_mod.clone());
-    let mut module = Module::new(source);
-    module.load_meta(parser::ModuleMetaLoader)?;
-    module.load_meta(llvm_gen::ModuleMetaLoader)?;
-    module.load_all_functions(parser::FunctionLoader)?;
-    module.load_all_functions(llvm_gen::FunctionLoader)?;
-    Ok(module)
+    let module =
+        parser::Parser::parse_from_buf(binary_mod).map_err(|e| ModuleError::Msg(e.to_string()))?;
+    parser::FunctionLoader::default().parse_all_functions(&module)?;
+    llvm_gen::Translator::translate_module_meta(&module)
+        .map_err(|e| ModuleError::Msg(e.to_string()))?;
+    // llvm_gen::Translator::translate_functions_from_ir(&module)
+    //     .map_err(|e| ModuleError::Msg(e.to_string()))?;
+    llvm_gen::FunctionLoader::default().parse_all_functions(&module)?;
+    Ok(Rc::new(module))
 }
 
 pub fn test_llvm(file_path: &str) {
@@ -174,9 +178,8 @@ pub fn test_llvm(file_path: &str) {
 
     let spectest_module_path =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/spectest.wasm");
-    let source = ResourceBuffer::from_file(&spectest_module_path).unwrap();
-    let mut module = Module::new(source);
-    module.load_meta(parser::ModuleMetaLoader).unwrap();
+    let module = Parser::parse_from_file(&spectest_module_path).unwrap();
+    let module = Rc::new(module);
     let spectest_module = translate_module(module, &mut linker).unwrap();
     linker.transfer("spectest", spectest_module.0).unwrap();
 
@@ -402,12 +405,23 @@ pub fn test_llvm(file_path: &str) {
                 let binary_mod: Vec<u8> = module.encode().unwrap_or_else(|e| {
                     panic!("Error during encoding: {:?} {file_path:?}:{line}:{col}", e);
                 });
-                let source = ResourceBuffer::from_wasm_buf(binary_mod.clone());
-                let mut module = Module::new(source);
-                module
-                    .load_meta(parser::ModuleMetaLoader)
+                let module = Parser::parse_from_buf(binary_mod).unwrap_or_else(|e| {
+                    panic!("Error during parsing: {:?} {file_path:?}:{line}:{col}", e)
+                });
+                let module = Rc::new(module);
+                llvm_gen::Translator::translate_module_meta(&module).unwrap_or_else(|e| {
+                    panic!(
+                        "Error during llvm meta translation: {:?} {file_path:?}:{line}:{col}",
+                        e
+                    )
+                });
+                llvm_gen::FunctionLoader
+                    .parse_all_functions(&module)
                     .unwrap_or_else(|e| {
-                        panic!("Error during parsing: {:?} {file_path:?}:{line}:{col}", e)
+                        panic!(
+                            "Error during llvm function parsing: {:?} {file_path:?}:{line}:{col}",
+                            e
+                        )
                     });
 
                 let mut engine = Engine::llvm().unwrap_or_else(|e| {
@@ -416,14 +430,14 @@ pub fn test_llvm(file_path: &str) {
                         e
                     );
                 });
-                let module = engine.init(module).unwrap_or_else(|e| {
+                engine.init(module.clone()).unwrap_or_else(|e| {
                     panic!(
                         "Error during engine init: {:?} {file_path:?}:{line}:{col}",
                         e
                     );
                 });
 
-                if linker.instantiate_and_link(module.clone(), engine).is_ok() {
+                if linker.instantiate_and_link(module, engine).is_ok() {
                     panic!("Expected Unlinkable: {file_path:?}:{line}:{col}")
                 }
             }

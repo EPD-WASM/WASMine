@@ -16,4 +16,3 @@ module = { workspace = true }
 resource-buffer = { workspace = true }
 itertools = { workspace = true }
 smallvec = { workspace = true }
-rkyv = { workspace = true }

@@ -25,13 +25,17 @@ pub enum EngineError {
 
     #[error("Module error: {0}")]
     ModuleError(#[from] module::ModuleError),
+
+    #[cfg(feature = "llvm")]
+    #[error("LLVM translation error: {0}")]
+    TranslationError(#[from] llvm_gen::TranslationError),
 }
 
 #[allow(private_interfaces)]
 pub struct Engine(Box<dyn WasmEngine>);
 
 pub trait WasmEngine {
-    fn init(&mut self, wasm_module: WasmModule) -> Result<Rc<WasmModule>, EngineError>;
+    fn init(&mut self, wasm_module: Rc<WasmModule>) -> Result<(), EngineError>;
 
     fn set_symbol_addr(&mut self, name: &str, address: RawPointer);
 
@@ -99,41 +103,29 @@ mod llvm_engine_impl {
     }
 
     impl WasmEngine for LLVMEngine {
-        fn init(&mut self, mut wasm_module: WasmModule) -> Result<Rc<WasmModule>, EngineError> {
-            wasm_module.load_meta(llvm_gen::ModuleMetaLoader)?;
-            wasm_module.load_all_functions(llvm_gen::FunctionLoader)?;
-
-            let wasm_module = Rc::new(wasm_module);
+        fn init(&mut self, wasm_module: Rc<WasmModule>) -> Result<(), EngineError> {
             self.wasm_module = Some(wasm_module.clone());
 
-            // Option 1: AOT llvm object buffer from cwasm available
-            // -> add object file to executor
-            if let Some(first_function) = wasm_module.meta.functions.first() {
-                if let Some(precomp_info) = first_function.get_precompiled_llvm() {
-                    self.executor.add_object_file(unsafe {
-                        &*std::ptr::slice_from_raw_parts(
-                            precomp_info.offset as *const u8,
-                            precomp_info.size,
-                        )
-                    })?;
-                    return Ok(wasm_module);
-                }
-            }
+            llvm_gen::Translator::translate_module_meta(&wasm_module)?;
+            wasm_module.load_all_functions(llvm_gen::FunctionLoader)?;
 
-            // Option 2 || !Option 2: Additional resources contain LLVM module
-            // = cached translation
-            // -> add module to executor
             let llvm_module = wasm_module
-                .additional_resources
-                .first()
+                .artifact_registry
+                .read()
+                .unwrap()
+                .get("llvm-module")
+                .ok_or(EngineError::ModuleError(module::ModuleError::Msg(
+                    "LLVM resources not found in module. Parse module meta before running function parser."
+                        .to_string(),
+                )))?
+                .read()
                 .unwrap()
                 .downcast_ref::<llvm_gen::LLVMAdditionalResources>()
                 .unwrap()
                 .module
                 .clone();
             self.executor.add_module(llvm_module)?;
-
-            return Ok(wasm_module);
+            Ok(())
         }
 
         fn get_global_value(&self, global_idx: GlobalIdx) -> Result<ValueRaw, EngineError> {
@@ -191,11 +183,10 @@ mod interpreter_engine_impl {
 
     impl WasmEngine for InterpreterEngine {
         // this is to set the module to be run so it does not have to be provided when the Engine is created
-        fn init(&mut self, mut wasm_module: WasmModule) -> Result<Rc<WasmModule>, EngineError> {
+        fn init(&mut self, wasm_module: Rc<WasmModule>) -> Result<(), EngineError> {
             wasm_module.load_all_functions(parser::FunctionLoader)?;
-            let wasm_module = Rc::new(wasm_module);
             self.interpreter.set_module(wasm_module.clone());
-            Ok(wasm_module)
+            Ok(())
         }
 
         fn set_symbol_addr(&mut self, name: &str, address: RawPointer) {

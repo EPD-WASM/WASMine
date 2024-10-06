@@ -58,7 +58,6 @@ members = [
     "fuzz",
 
     "crates/runtime-lib",
-    "crates/interpreter",
     "crates/module",
     "crates/parser",
     "crates/wasm-types",

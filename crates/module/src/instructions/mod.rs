@@ -20,7 +20,7 @@ pub use reference::*;
 pub use table::*;
 pub use variable::*;
 
-use crate::{DecodingError, InstructionDecoder};
+use crate::{BasicBlock, DecodingError, InstructionDecoder};
 use std::fmt::{self, Display, Formatter};
 use wasm_types::*;
 
@@ -50,3 +50,11 @@ macro_rules! extract_numtype {
     };
 }
 pub(crate) use extract_numtype;
+
+/// Intermediate representation of the function.
+#[derive(Debug, Clone, Default)]
+pub struct FunctionIR {
+    pub locals: Vec<ValType>,
+    pub bbs: Vec<BasicBlock>,
+    pub num_vars: usize,
+}

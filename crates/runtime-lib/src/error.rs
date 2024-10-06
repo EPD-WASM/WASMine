@@ -38,6 +38,10 @@ pub enum RuntimeError {
     LLVMExecutionError(#[from] llvm_gen::ExecutionError),
 
     #[cfg(feature = "llvm")]
+    #[error("LLVM aot error: {0}")]
+    LLVMAotError(#[from] llvm_gen::aot::AOTError),
+
+    #[cfg(feature = "llvm")]
     #[error("LLVM translation error: {0}")]
     LLVMTranslationError(#[from] llvm_gen::TranslationError),
 

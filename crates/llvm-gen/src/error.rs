@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use thiserror::Error;
 
-#[derive(Error, Debug, Clone)]
+#[derive(Debug, Error, Clone)]
 pub enum TranslationError {
     #[error("Unimplemented: {0}")]
     Unimplemented(String),

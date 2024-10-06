@@ -1,12 +1,22 @@
 use crate::{parsable::Parse, wasm_stream_reader::WasmBinaryReader, ParseResult, ParserError};
 use context::Context;
 use function_builder::{FunctionBuilderInterface, FunctionIRBuilder};
-use module::{instructions::VariableID, objects::instruction::ControlInstruction, ModuleMetadata};
+use module::{
+    instructions::{FunctionIR, VariableID},
+    objects::{
+        function::{FunctionSource, FunctionUnparsed},
+        instruction::ControlInstruction,
+    },
+    Module, ModuleMetadata,
+};
 use parse_basic_blocks::{parse_basic_blocks, validate_and_extract_result_from_stack, Label};
 use resource_buffer::ResourceBuffer;
 use smallvec::SmallVec;
 use stack::ParserStack;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    RwLock,
+};
 use wasm_types::{FuncIdx, ValType};
 
 pub(crate) mod context;
@@ -15,12 +25,13 @@ mod opcode_tbl;
 pub(crate) mod parse_basic_blocks;
 pub(crate) mod stack;
 
-pub struct FunctionParser;
+pub(crate) struct FunctionParser;
 
 impl FunctionParser {
     pub fn parse_single_function(
         buffer: &ResourceBuffer,
         function_idx: FuncIdx,
+        function_unparsed: &FunctionUnparsed,
         module: &ModuleMetadata,
         builder: &mut impl FunctionBuilderInterface,
     ) -> Result<(), ParserError> {
@@ -28,12 +39,8 @@ impl FunctionParser {
         let mut binary_source = WasmBinaryReader::new(&binary_source);
 
         // spool to function code / restrict source to function code
-        let unparsed_mem = match module.functions[function_idx as usize].get_unparsed_mem() {
-            Some(mem) => mem,
-            None => return Err(ParserError::MissingFunctionImplementation(function_idx)),
-        };
-        binary_source.advance(unparsed_mem.offset);
-        binary_source.set_limit(unparsed_mem.offset + unparsed_mem.size);
+        binary_source.advance(function_unparsed.offset);
+        binary_source.set_limit(function_unparsed.offset + function_unparsed.size);
 
         let type_idx = module.functions[function_idx as usize].type_idx;
         let function_type = module.function_types[type_idx as usize];
@@ -107,19 +114,39 @@ impl FunctionParser {
         Ok(())
     }
 
-    pub(crate) fn parse_all_functions(
-        module: &mut ModuleMetadata,
-        buffer: &ResourceBuffer,
-    ) -> ParseResult {
-        for func_idx in 0..module.functions.len() {
-            let function = &module.functions[func_idx];
-            if function.get_import().is_some() || function.get_ir().is_some() {
+    pub(crate) fn parse_all_functions(module: &Module) -> ParseResult {
+        if !module.artifact_registry.read().unwrap().contains_key("ir") {
+            module.artifact_registry.write().unwrap().insert(
+                "ir".to_string(),
+                RwLock::new(Box::new(Vec::<FunctionIR>::new())),
+            );
+        }
+        let artifact_registry = module.artifact_registry.read().unwrap();
+        let artifact_ref = artifact_registry.get("ir").unwrap();
+        let mut artifact_ref = artifact_ref.write().unwrap();
+        let ir = artifact_ref.downcast_mut::<Vec<FunctionIR>>().unwrap();
+
+        ir.resize(module.meta.functions.len(), FunctionIR::default());
+        for func_idx in 0..module.meta.functions.len() {
+            if ir[func_idx].bbs.len() > 0 {
                 continue;
             }
 
-            let mut builder = FunctionIRBuilder::new();
-            Self::parse_single_function(buffer, func_idx as FuncIdx, module, &mut builder)?;
-            module.functions[func_idx].add_ir(builder.finalize());
+            let function_meta = &module.meta.functions[func_idx];
+            match &function_meta.source {
+                FunctionSource::Import(_) => continue,
+                FunctionSource::Wasm(function_unparsed) => {
+                    let mut builder = FunctionIRBuilder::new();
+                    Self::parse_single_function(
+                        &module.source,
+                        func_idx as FuncIdx,
+                        function_unparsed,
+                        &module.meta,
+                        &mut builder,
+                    )?;
+                    ir[func_idx] = builder.finalize();
+                }
+            }
         }
         Ok(())
     }

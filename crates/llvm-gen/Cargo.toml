@@ -10,7 +10,6 @@ workspace = true
 
 [dependencies]
 llvm-sys = { package = "llvm-sys", version = "181.1.1", features = ["prefer-dynamic"] }
-
 module = { workspace = true }
 thiserror = { workspace = true }
 wasm-types = { workspace = true }
@@ -22,3 +21,4 @@ tempfile = { workspace = true }
 parser = { workspace = true }
 smallvec = { workspace = true }
 resource-buffer = { workspace = true }
+rkyv = { workspace = true }

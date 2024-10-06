@@ -2,8 +2,7 @@ use super::context::Context;
 use itertools::Itertools;
 use module::{
     basic_block::{BasicBlock, BasicBlockGlue, BasicBlockID},
-    instructions::{PhiNode, Variable, VariableID},
-    objects::function::FunctionIR,
+    instructions::{FunctionIR, PhiNode, Variable, VariableID},
     InstructionConsumer, InstructionEncoder,
 };
 use smallvec::SmallVec;

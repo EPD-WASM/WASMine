@@ -2,19 +2,24 @@ use crate::abstraction::context::Context;
 use crate::abstraction::function::Function;
 use crate::abstraction::module::Module;
 use crate::util::{build_llvm_function_name, c_str};
+use crate::LLVMAdditionalResources;
 use crate::{abstraction::builder::Builder, error::TranslationError};
 use llvm_sys::core::LLVMBuildExtractValue;
 use llvm_sys::prelude::{LLVMBasicBlockRef, LLVMTypeRef, LLVMValueRef};
 use llvm_sys::{LLVMCallConv, LLVMLinkage};
+use module::instructions::FunctionIR;
 use module::objects::function::{
-    Function as WasmFunction, FunctionIR as WasmFunctionIR, FunctionImport as WasmFunctionImport,
-    FunctionUnparsed,
+    Function as WasmFunction, FunctionImport as WasmFunctionImport, FunctionSource,
 };
-use module::{basic_block::BasicBlock, InstructionDecoder, ModuleMetadata as WasmModuleMeta};
+use module::{
+    basic_block::BasicBlock, InstructionDecoder, Module as WasmModule,
+    ModuleMetadata as WasmModuleMeta,
+};
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::ptr::null_mut;
 use std::rc::Rc;
+use std::sync::RwLock;
 use wasm_types::*;
 
 pub struct Translator<'wasm> {
@@ -26,97 +31,100 @@ pub struct Translator<'wasm> {
 }
 
 impl<'wasm> Translator<'wasm> {
-    pub fn translate_full_module(
-        context: Rc<Context>,
-        wasm_module_meta: &'wasm WasmModuleMeta,
-    ) -> Result<Rc<Module>, TranslationError> {
-        let (module, functions) =
-            Translator::translate_module_meta(context.clone(), wasm_module_meta)?;
-        Translator::translate_functions(
-            context.clone(),
-            wasm_module_meta,
-            module.clone(),
-            functions.clone(),
-        )?;
-        Ok(module)
-    }
+    pub fn translate_module_meta(module: &'wasm WasmModule) -> Result<(), TranslationError> {
+        // only parse module meta if not already done
+        if module
+            .artifact_registry
+            .read()
+            .unwrap()
+            .get("llvm-module")
+            .is_some()
+        {
+            log::info!("Module meta already parsed by `llvm-gen`. Skipping.");
+            return Ok(());
+        }
 
-    pub(crate) fn translate_module_meta(
-        context: Rc<Context>,
-        wasm_module_meta: &'wasm WasmModuleMeta,
-    ) -> Result<(Rc<Module>, Rc<RefCell<Vec<Function>>>), TranslationError> {
-        let module = Rc::new(Module::new("main", &context));
-        let builder = context.create_builder(module.clone());
-        let mut instance = Self {
-            context,
-            builder,
-            module,
-            wasm_module_meta,
-            llvm_functions: Rc::default(),
+        let llvm_context = Rc::new(Context::create());
+        let llvm_module = Rc::new(Module::new("main", &llvm_context));
+        let llvm_functions = {
+            let llvm_builder = llvm_context.create_builder(llvm_module.clone());
+            let llvm_functions = Rc::new(RefCell::new(Vec::new()));
+            let mut translator_instance = Self {
+                context: llvm_context.clone(),
+                builder: llvm_builder,
+                module: llvm_module.clone(),
+                wasm_module_meta: &module.meta,
+                llvm_functions: llvm_functions.clone(),
+            };
+            translator_instance.translate_module_meta_internal()?;
+            llvm_functions
         };
-        instance.translate_module_meta_internal()?;
-        Ok((instance.module, instance.llvm_functions))
-    }
 
-    pub(crate) fn translate_functions(
-        context: Rc<Context>,
-        wasm_module_meta: &'wasm WasmModuleMeta,
-        llvm_module: Rc<Module>,
-        llvm_functions: Rc<RefCell<Vec<Function>>>,
-    ) -> Result<(), TranslationError> {
-        let builder = context.create_builder(llvm_module.clone());
-        let instance = Self {
-            context,
-            builder,
+        let resources = LLVMAdditionalResources {
             module: llvm_module,
-            wasm_module_meta,
-            llvm_functions,
+            context: llvm_context,
+            functions: llvm_functions,
+            functions_parsed: false,
+        };
+        module
+            .artifact_registry
+            .write()
+            .unwrap()
+            .insert("llvm-module".to_string(), RwLock::new(Box::new(resources)));
+        Ok(())
+    }
+
+    pub fn translate_functions_from_ir(module: &'wasm WasmModule) -> Result<(), TranslationError> {
+        let artifacts = module.artifact_registry.read().unwrap();
+        let llvm_resources_locked = match artifacts.get("llvm-module") {
+            Some(llvm_resources) => llvm_resources,
+            None => {
+                return Err(TranslationError::Msg(
+                    "LLVM resources not found in module. Parse module meta before running ir function translator."
+                        .to_string(),
+                ))
+            }
+        };
+        let llvm_resources_read = llvm_resources_locked.read().unwrap();
+        let llvm_resources: &LLVMAdditionalResources = llvm_resources_read.downcast_ref().unwrap();
+
+        let ir_locked = match artifacts.get("ir") {
+            Some(ir) => ir,
+            None => {
+                return Err(TranslationError::Msg(
+                    "IR not found in module. Parse IR before running ir function translator."
+                        .to_string(),
+                ))
+            }
+        };
+        let ir_read = ir_locked.read().unwrap();
+        let ir: &Vec<FunctionIR> = ir_read.downcast_ref().unwrap();
+
+        let builder = llvm_resources
+            .context
+            .create_builder(llvm_resources.module.clone());
+        let instance = Self {
+            context: llvm_resources.context.clone(),
+            builder,
+            module: llvm_resources.module.clone(),
+            wasm_module_meta: &module.meta,
+            llvm_functions: llvm_resources.functions.clone(),
         };
 
-        for func_idx in 0..wasm_module_meta.functions.len() {
-            let wasm_func_type = wasm_module_meta.functions[func_idx].type_idx;
-            if let Some(ir) = wasm_module_meta.functions[func_idx].get_ir() {
-                let llvm_func = instance.llvm_functions.borrow()[func_idx];
-                instance.translate_internal_function(
-                    &ir,
-                    wasm_func_type,
-                    &llvm_func,
-                    func_idx as FuncIdx,
-                )?;
-            }
+        for func_idx in 0..module.meta.functions.len() {
+            let wasm_func_type = module.meta.functions[func_idx].type_idx;
+            let llvm_func = instance.llvm_functions.borrow()[func_idx];
+            instance.translate_internal_function(
+                &ir[func_idx],
+                wasm_func_type,
+                &llvm_func,
+                func_idx as FuncIdx,
+            )?;
         }
         Ok(())
     }
 
-    pub(crate) fn translate_single_function(
-        context: Rc<Context>,
-        wasm_module_meta: &'wasm WasmModuleMeta,
-        llvm_module: Rc<Module>,
-        llvm_functions: Rc<RefCell<Vec<Function>>>,
-        ir: &WasmFunctionIR,
-        func_idx: usize,
-    ) -> Result<(), TranslationError> {
-        let builder = context.create_builder(llvm_module.clone());
-        let instance = Self {
-            context,
-            builder,
-            module: llvm_module,
-            wasm_module_meta,
-            llvm_functions,
-        };
-
-        let wasm_func_type = wasm_module_meta.functions[func_idx].type_idx;
-        let llvm_func = instance.llvm_functions.borrow()[func_idx];
-        instance.translate_internal_function(
-            &ir,
-            wasm_func_type,
-            &llvm_func,
-            func_idx as FuncIdx,
-        )?;
-        Ok(())
-    }
-
-    fn translate_module_meta_internal(&mut self) -> Result<Rc<Module>, TranslationError> {
+    fn translate_module_meta_internal(&mut self) -> Result<(), TranslationError> {
         for (global_idx, global) in self.wasm_module_meta.globals.iter().enumerate() {
             let name = format!("__wasmine_global__{global_idx}");
             let global_val_ty = match global.r#type {
@@ -141,22 +149,23 @@ impl<'wasm> Translator<'wasm> {
         }
 
         for (i, func) in self.wasm_module_meta.functions.iter().enumerate() {
-            if let Some(WasmFunctionImport { import_idx }) = func.get_import().cloned() {
-                let wasm_import = &self.wasm_module_meta.imports[import_idx as usize];
-                let name = format!("{}.{}", wasm_import.module, wasm_import.name);
-                self.llvm_functions
-                    .borrow_mut()
-                    .push(self.declare_imported_function(&name, i as FuncIdx, func.type_idx)?);
-            } else if let Some(WasmFunctionIR { .. }) = func.get_ir() {
-                self.llvm_functions
-                    .borrow_mut()
-                    .push(self.declare_internal_function(i as FuncIdx, func)?);
-            } else if let Some(FunctionUnparsed { .. }) = func.get_unparsed_mem() {
-                self.llvm_functions
-                    .borrow_mut()
-                    .push(self.declare_internal_function(i as FuncIdx, func)?);
-            } else {
-                panic!("unexpected function source: {func:?}");
+            match &func.source {
+                FunctionSource::Import(WasmFunctionImport { import_idx }) => {
+                    let wasm_import = &self.wasm_module_meta.imports[*import_idx as usize];
+                    let name = format!("{}.{}", wasm_import.module, wasm_import.name);
+                    self.llvm_functions
+                        .borrow_mut()
+                        .push(self.declare_imported_function(
+                            &name,
+                            i as FuncIdx,
+                            func.type_idx,
+                        )?);
+                }
+                FunctionSource::Wasm(_) => {
+                    self.llvm_functions
+                        .borrow_mut()
+                        .push(self.declare_internal_function(i as FuncIdx, func)?);
+                }
             }
         }
 
@@ -188,7 +197,7 @@ impl<'wasm> Translator<'wasm> {
         #[cfg(debug_assertions)]
         self.verify_module()?;
 
-        Ok(self.module.clone())
+        Ok(())
     }
 
     pub(crate) fn llvm_external_func_type_from_wasm(
@@ -386,7 +395,7 @@ impl<'wasm> Translator<'wasm> {
 
     fn translate_basic_block_map(
         &self,
-        wasm_function: &WasmFunctionIR,
+        wasm_function: &FunctionIR,
         llvm_function: &Function,
     ) -> Vec<LLVMBasicBlockRef> {
         let bbs = &wasm_function.bbs;
@@ -406,7 +415,7 @@ impl<'wasm> Translator<'wasm> {
 
     fn translate_internal_function(
         &self,
-        wasm_function: &WasmFunctionIR,
+        wasm_function: &FunctionIR,
         wasm_ty_idx: TypeIdx,
         llvm_function: &Function,
         _function_idx: FuncIdx,
@@ -546,7 +555,7 @@ impl<'wasm> Translator<'wasm> {
     fn allocate_locals(
         &self,
         func_type: &FuncType,
-        function: &WasmFunctionIR,
+        function: &FunctionIR,
         llvm_function: &Function,
     ) -> Result<Vec<(LLVMValueRef, LLVMTypeRef)>, TranslationError> {
         let bb = self

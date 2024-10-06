@@ -8,6 +8,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 wasi = { workspace = true }
+llvm-gen = { workspace = true }
 resource-buffer = { workspace = true }
 runtime-lib = { workspace = true }
 anyhow = "1.0.89"
