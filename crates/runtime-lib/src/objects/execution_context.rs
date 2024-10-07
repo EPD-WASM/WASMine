@@ -69,10 +69,19 @@ impl ExecutionContextWrapper<'_> {
                     .into());
                 }
 
-                if func_ptr.is_none() {
-                    *func_ptr = Some(engine.get_internal_function_ptr(*func_idx)?);
+                #[cfg(feature = "lazy-tables")]
+                {
+                    if func_ptr.is_none() {
+                        {
+                            *func_ptr = Some(engine.get_internal_function_ptr(*func_idx)?);
+                        }
+                    }
+                    Ok(func_ptr.unwrap())
                 }
-                Ok(func_ptr.unwrap())
+                #[cfg(not(feature = "lazy-tables"))]
+                {
+                    Ok(*func_ptr)
+                }
             }
             TableItem::ExternReference { func_ptr } => Ok(func_ptr.unwrap()),
             TableItem::Null => Err(TableError::NullDeref.into()),

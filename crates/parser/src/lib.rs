@@ -17,6 +17,7 @@ use ir::FunctionParser;
 use module::objects::function::FunctionUnparsed;
 use module::{objects::module::FunctionLoaderInterface, Module, ModuleError, ModuleMetadata};
 use resource_buffer::{ResourceBuffer, SourceFormat};
+#[cfg(debug_assertions)]
 use std::io::Write;
 use std::path::Path;
 use wasm_stream_reader::WasmBinaryReader;
@@ -27,7 +28,7 @@ pub struct Parser;
 
 impl Parser {
     pub fn parse_from_file(input_path: impl AsRef<Path>) -> Result<Module, ParserError> {
-        log::info!(
+        log::debug!(
             "Loading module meta using `parser` from path: {:?}",
             input_path.as_ref()
         );
@@ -36,7 +37,7 @@ impl Parser {
     }
 
     pub fn parse_from_buf(buf: Vec<u8>) -> Result<Module, ParserError> {
-        log::info!("Loading module meta using `parser` from buffer");
+        log::debug!("Loading module meta using `parser` from buffer");
         let buffer = ResourceBuffer::from_wasm_buf(buf);
         Self::parse(buffer)
     }
@@ -78,7 +79,7 @@ impl FunctionLoader {
     }
 
     fn load_wasm_functions_ir(&self, module: &Module) -> Result<(), ParserError> {
-        log::info!("Loading functions using `parser` to ir");
+        log::debug!("Loading functions using `parser` to ir");
         FunctionParser::parse_all_functions(module)
     }
 
@@ -90,7 +91,6 @@ impl FunctionLoader {
         module: &ModuleMetadata,
         builder: &mut impl FunctionBuilderInterface,
     ) -> ParseResult {
-        log::info!("Loading function using `parser` to ir");
         FunctionParser::parse_single_function(
             buffer,
             function_idx,

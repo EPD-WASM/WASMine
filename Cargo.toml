@@ -122,7 +122,10 @@ smallvec = "1.13.2"
 
 
 [features]
-default = ["llvm", "interp"]
+default = ["llvm", "interp", "lazy-tables"]
 llvm = ["runtime-lib/llvm"]
 interp = ["runtime-lib/interp"]
 asm = []
+
+# debug features
+lazy-tables = ["runtime-lib/lazy-tables", "llvm-gen/lazy-tables"]

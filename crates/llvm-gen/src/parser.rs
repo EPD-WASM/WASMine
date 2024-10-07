@@ -3,7 +3,7 @@ use module::{objects::function::FunctionSource, Module as WasmModule, ModuleErro
 use wasm_types::FuncIdx;
 
 pub fn parse_wasm_functions(module: &WasmModule) -> Result<(), ModuleError> {
-    log::info!("Loading functions using `llvm-gen`.");
+    log::debug!("Loading functions using `llvm-gen`.");
     let artifact_registry = module.artifact_registry.read().unwrap();
     let llvm_resources = artifact_registry.get("llvm-module");
     if llvm_resources.is_none() {

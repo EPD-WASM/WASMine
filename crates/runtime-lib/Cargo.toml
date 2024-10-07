@@ -34,3 +34,6 @@ default = ["llvm", "interp"]
 llvm = ["dep:llvm-gen"]
 interp = ["dep:interpreter"]
 asm = []
+
+# debug features
+lazy-tables = ["llvm-gen/lazy-tables"]

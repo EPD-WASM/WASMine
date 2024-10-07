@@ -48,7 +48,11 @@ pub(crate) enum TableItem {
     FunctionReference {
         func_idx: FuncIdx,
         func_type: TypeIdx,
+
+        #[cfg(feature = "lazy-tables")]
         func_ptr: Option<RawPointer>,
+        #[cfg(not(feature = "lazy-tables"))]
+        func_ptr: RawPointer,
     },
     ExternReference {
         func_ptr: Option<RawPointer>,
@@ -132,6 +136,7 @@ impl InstanceHandle<'_> {
 impl TableInstance<'_> {
     pub(crate) fn set(
         &mut self,
+        engine: &Engine,
         wasm_module: &WasmModule,
         value: u64,
         idx: u32,
@@ -149,10 +154,21 @@ impl TableInstance<'_> {
             RefType::FunctionReference => {
                 let func_idx = value.as_funcref();
                 debug_assert!(func_idx < wasm_module.meta.functions.len() as u32);
-                self.values.0[idx as usize] = TableItem::FunctionReference {
-                    func_idx,
-                    func_ptr: None,
-                    func_type: wasm_module.meta.functions[func_idx as usize].type_idx,
+                #[cfg(feature = "lazy-tables")]
+                {
+                    self.values.0[idx as usize] = TableItem::FunctionReference {
+                        func_idx,
+                        func_ptr: None,
+                        func_type: wasm_module.meta.functions[func_idx as usize].type_idx,
+                    }
+                }
+                #[cfg(not(feature = "lazy-tables"))]
+                {
+                    self.values.0[idx as usize] = TableItem::FunctionReference {
+                        func_idx,
+                        func_ptr: engine.get_internal_function_ptr(func_idx)?,
+                        func_type: wasm_module.meta.functions[func_idx as usize].type_idx,
+                    }
                 }
             }
             RefType::ExternReference => {
@@ -183,6 +199,7 @@ impl TableInstance<'_> {
 
     pub(crate) fn grow(
         &mut self,
+        engine: &Engine,
         wasm_module: &WasmModule,
         size: u32,
         value_to_fill: u64,
@@ -211,12 +228,29 @@ impl TableInstance<'_> {
             return Ok(old_len as u32);
         } else {
             let table_value_to_fill = match self.ty.ref_type {
-                RefType::FunctionReference => TableItem::FunctionReference {
-                    func_idx: value_to_fill.as_funcref(),
-                    func_ptr: None,
-                    func_type: wasm_module.meta.functions[value_to_fill.as_funcref() as usize]
-                        .type_idx,
-                },
+                RefType::FunctionReference => {
+                    #[cfg(feature = "lazy-tables")]
+                    {
+                        TableItem::FunctionReference {
+                            func_idx: value_to_fill.as_funcref(),
+                            func_ptr: None,
+                            func_type: wasm_module.meta.functions
+                                [value_to_fill.as_funcref() as usize]
+                                .type_idx,
+                        }
+                    }
+                    #[cfg(not(feature = "lazy-tables"))]
+                    {
+                        TableItem::FunctionReference {
+                            func_idx: value_to_fill.as_funcref(),
+                            func_ptr: engine
+                                .get_internal_function_ptr(value_to_fill.as_funcref())?,
+                            func_type: wasm_module.meta.functions
+                                [value_to_fill.as_funcref() as usize]
+                                .type_idx,
+                        }
+                    }
+                }
                 RefType::ExternReference => TableItem::ExternReference {
                     func_ptr: RawPointer::new(value_to_fill.as_externref() as _),
                 },
@@ -228,6 +262,7 @@ impl TableInstance<'_> {
 
     pub(crate) fn fill(
         &mut self,
+        engine: &Engine,
         wasm_module: &WasmModule,
         start: u32,
         len: u32,
@@ -247,9 +282,16 @@ impl TableInstance<'_> {
             TableItem::Null
         } else {
             match self.ty.ref_type {
+                #[cfg(feature = "lazy-tables")]
                 RefType::FunctionReference => TableItem::FunctionReference {
                     func_idx: value.as_funcref(),
                     func_ptr: None,
+                    func_type: wasm_module.meta.functions[value.as_funcref() as usize].type_idx,
+                },
+                #[cfg(not(feature = "lazy-tables"))]
+                RefType::FunctionReference => TableItem::FunctionReference {
+                    func_idx: value.as_funcref(),
+                    func_ptr: engine.get_internal_function_ptr(value.as_funcref())?,
                     func_type: wasm_module.meta.functions[value.as_funcref() as usize].type_idx,
                 },
                 RefType::ExternReference => TableItem::ExternReference {
@@ -327,11 +369,21 @@ impl TableInstance<'_> {
                         ConstantValue::FuncPtr(func_idx) => Value::funcref(func_idx),
                     };
                     self.values.0[(dst_offset as usize) + i] = match val {
+                        #[cfg(feature = "lazy-tables")]
                         Value::Number(Number::I32(func_idx))
                         | Value::Reference(Reference::Function(func_idx)) => {
                             TableItem::FunctionReference {
                                 func_idx,
                                 func_ptr: None,
+                                func_type: wasm_module.meta.functions[func_idx as usize].type_idx,
+                            }
+                        }
+                        #[cfg(not(feature = "lazy-tables"))]
+                        Value::Number(Number::I32(func_idx))
+                        | Value::Reference(Reference::Function(func_idx)) => {
+                            TableItem::FunctionReference {
+                                func_idx,
+                                func_ptr: engine.get_internal_function_ptr(func_idx)?,
                                 func_type: wasm_module.meta.functions[func_idx as usize].type_idx,
                             }
                         }
@@ -351,11 +403,22 @@ impl TableInstance<'_> {
                     .cloned()
                     .enumerate()
                 {
-                    self.values.0[(dst_offset as usize) + i] = TableItem::FunctionReference {
-                        func_idx,
-                        func_ptr: None,
-                        func_type: wasm_module.meta.functions[func_idx as usize].type_idx,
-                    };
+                    #[cfg(feature = "lazy-tables")]
+                    {
+                        self.values.0[(dst_offset as usize) + i] = TableItem::FunctionReference {
+                            func_idx,
+                            func_ptr: None,
+                            func_type: wasm_module.meta.functions[func_idx as usize].type_idx,
+                        };
+                    }
+                    #[cfg(not(feature = "lazy-tables"))]
+                    {
+                        self.values.0[(dst_offset as usize) + i] = TableItem::FunctionReference {
+                            func_idx,
+                            func_ptr: engine.get_internal_function_ptr(func_idx)?,
+                            func_type: wasm_module.meta.functions[func_idx as usize].type_idx,
+                        };
+                    }
                 }
             }
         };
@@ -379,11 +442,17 @@ fn table_set_impl(
     value: u64,
     idx: u32,
 ) -> Result<(), TableError> {
+    let execution_context_ptr = ctxt as *mut ExecutionContext;
     let mut ctxt = ExecutionContextWrapper(ctxt);
     let wasm_module = ctxt.0.wasm_module.clone();
     let tables = ctxt.get_tables();
     let table = &mut tables[table_idx];
-    table.set(&wasm_module, value, idx)
+    table.set(
+        unsafe { &*((*execution_context_ptr).engine as *mut Engine) },
+        &wasm_module,
+        value,
+        idx,
+    )
 }
 
 fn table_get_impl(
@@ -403,11 +472,17 @@ fn table_grow_impl(
     size: u32,
     value_to_fill: u64,
 ) -> Result<u32, TableError> {
+    let execution_context_ptr = ctxt as *mut ExecutionContext;
     let mut ctxt = ExecutionContextWrapper(ctxt);
     let wasm_module = ctxt.0.wasm_module.clone();
     let tables = ctxt.get_tables();
     let table = &mut tables[table_idx as usize];
-    table.grow(&wasm_module, size, value_to_fill)
+    table.grow(
+        unsafe { &*((*execution_context_ptr).engine as *mut Engine) },
+        &wasm_module,
+        size,
+        value_to_fill,
+    )
 }
 
 fn table_size_impl(ctxt: &mut ExecutionContext, table_idx: usize) -> Result<u32, TableError> {
@@ -424,11 +499,18 @@ fn table_fill_impl(
     len: u32,
     value: u64,
 ) -> Result<(), TableError> {
+    let execution_context_ptr = ctxt as *mut ExecutionContext;
     let mut ctxt = ExecutionContextWrapper(ctxt);
     let wasm_module = ctxt.0.wasm_module.clone();
     let tables = ctxt.get_tables();
     let table = &mut tables[table_idx as usize];
-    table.fill(&wasm_module, start, len, value)
+    table.fill(
+        unsafe { &*((*execution_context_ptr).engine as *mut Engine) },
+        &wasm_module,
+        start,
+        len,
+        value,
+    )
 }
 
 fn table_copy_impl(

@@ -43,7 +43,7 @@ pub fn parse_aot_module(buffer: ResourceBuffer) -> Result<WasmModule, AOTError> 
 }
 
 pub fn parse_aot_meta(buffer: ResourceBuffer) -> Result<WasmModule, AOTError> {
-    log::info!("Loading aot module meta using `llvm-gen`.");
+    log::debug!("Loading aot module meta using `llvm-gen`.");
     let input = buffer.get()?;
     let wasm_module_buffer_size = u32::from_be_bytes(input[0..4].try_into().unwrap()) as usize;
 
@@ -58,7 +58,7 @@ pub fn parse_aot_meta(buffer: ResourceBuffer) -> Result<WasmModule, AOTError> {
 }
 
 pub fn parse_aot_functions(wasm_module: &WasmModule) -> Result<(), AOTError> {
-    log::info!("Loading aot llvm functions using `llvm-gen`.");
+    log::debug!("Loading aot llvm functions using `llvm-gen`.");
     let mut artifacts_ref = wasm_module.artifact_registry.write().unwrap();
     if artifacts_ref.contains_key("llvm-obj") {
         log::info!("LLVM aot functions already parsed by `llvm-gen`. Skipping.");

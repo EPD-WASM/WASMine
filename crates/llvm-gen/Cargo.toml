@@ -22,3 +22,7 @@ parser = { workspace = true }
 smallvec = { workspace = true }
 resource-buffer = { workspace = true }
 rkyv = { workspace = true }
+
+[features]
+# debug features
+lazy-tables = []
