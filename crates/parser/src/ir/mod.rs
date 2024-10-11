@@ -35,7 +35,7 @@ impl FunctionParser {
         module: &ModuleMetadata,
         builder: &mut impl FunctionBuilderInterface,
     ) -> Result<(), ParserError> {
-        let binary_source = buffer.get()?;
+        let binary_source = buffer.get();
         let mut binary_source = WasmBinaryReader::new(&binary_source);
 
         // spool to function code / restrict source to function code

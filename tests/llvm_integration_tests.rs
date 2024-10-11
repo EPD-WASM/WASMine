@@ -38,6 +38,8 @@ pub fn translate_module<'a>(
     linker: &mut BoundLinker<'a>,
 ) -> Result<(InstanceHandle<'a>, bool), RuntimeError> {
     let mut engine = Engine::llvm()?;
+    llvm_gen::Translator::translate_module_meta(&module)?;
+    llvm_gen::FunctionLoader::default().parse_all_functions(&module)?;
     engine.init(module.clone())?;
     let instance_handle = linker.instantiate_and_link(module.clone(), engine)?;
     Ok((instance_handle, false))

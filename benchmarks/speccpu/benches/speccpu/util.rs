@@ -79,7 +79,7 @@ pub static SPECCPU_557: Lazy<SpeccpuBenchmark> = Lazy::new(|| {
 
 mod wasmine {
     use super::*;
-    use llvm_gen::{FunctionLoader, LLVMAdditionalResources};
+    use llvm_gen::FunctionLoader;
     use parser::Parser;
     use runtime_lib::{ClusterConfig, FunctionLoaderInterface, ResourceBuffer, WasmModule};
     use wasi::{PreopenDirInheritPerms, PreopenDirPerms, WasiContextBuilder};
@@ -234,29 +234,7 @@ mod wasmine {
                             .parse_all_functions(&module)
                             .unwrap();
                         let module = Rc::new(module);
-
-                        let (llvm_module, context) = {
-                            let artifacts_ref = module.artifact_registry.read().unwrap();
-                            let llvm_resources =
-                                artifacts_ref.get("llvm-module").unwrap().read().unwrap();
-                            let llvm_resources = llvm_resources
-                                .downcast_ref::<LLVMAdditionalResources>()
-                                .unwrap();
-                            (
-                                llvm_resources.module.clone(),
-                                llvm_resources.context.clone(),
-                            )
-                        };
-                        let mut executor = llvm_gen::JITExecutor::new(context.clone()).unwrap();
-                        executor.add_module(llvm_module).unwrap();
-                        let llvm_module_object_buf =
-                            executor.get_module_as_object_buffer(0).unwrap();
-                        llvm_gen::aot::store_aot_module(
-                            &module,
-                            llvm_module_object_buf,
-                            &compiled_file_path,
-                        )
-                        .unwrap()
+                        llvm_gen::aot::store_aot_module(module, &compiled_file_path).unwrap()
                     },
                     BatchSize::SmallInput,
                 )

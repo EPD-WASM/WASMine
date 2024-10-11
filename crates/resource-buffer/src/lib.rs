@@ -78,14 +78,14 @@ impl ResourceBuffer {
         }
     }
 
-    pub fn get<'a>(&'a self) -> Result<&'a [u8], ResourceBufferError> {
+    pub fn get<'a>(&'a self) -> &'a [u8] {
         match &self.source {
             Source::File {
                 file_len,
                 file_mmap,
                 ..
-            } => Ok(&file_mmap[..*file_len]),
-            Source::Mem { buf } => Ok(&buf),
+            } => &file_mmap[..*file_len],
+            Source::Mem { buf } => &buf,
         }
     }
 

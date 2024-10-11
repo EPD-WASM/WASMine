@@ -2,7 +2,6 @@ use std::{path::PathBuf, rc::Rc};
 
 use iai_callgrind::{library_benchmark, library_benchmark_group, main, LibraryBenchmarkConfig};
 mod utils;
-use llvm_gen::LLVMAdditionalResources;
 use parser::Parser;
 use runtime_lib::{ClusterConfig, FunctionLoaderInterface, ResourceBuffer};
 use utils::*;
@@ -58,28 +57,11 @@ pub fn wasmine_llvm_aot_compile(wasm_bytes: Vec<u8>) -> PathBuf {
         .parse_all_functions(&module)
         .unwrap();
     let module = Rc::new(module);
-
-    let (llvm_module, context) = {
-        let artifacts_ref = module.artifact_registry.read().unwrap();
-        let llvm_resources = artifacts_ref.get("llvm-module").unwrap().read().unwrap();
-        let llvm_resources = llvm_resources
-            .downcast_ref::<LLVMAdditionalResources>()
-            .unwrap();
-        (
-            llvm_resources.module.clone(),
-            llvm_resources.context.clone(),
-        )
-    };
-
-    let mut executor = llvm_gen::JITExecutor::new(context.clone()).unwrap();
-    executor.add_module(llvm_module).unwrap();
-    let llvm_module_object_buf = executor.get_module_as_object_buffer(0).unwrap();
-
     let compiled_file_path = tempfile::NamedTempFile::new()
         .unwrap()
         .into_temp_path()
         .with_extension("cwasm");
-    llvm_gen::aot::store_aot_module(&module, llvm_module_object_buf, &compiled_file_path).unwrap();
+    llvm_gen::aot::store_aot_module(module, &compiled_file_path).unwrap();
 
     compiled_file_path
 }
@@ -95,28 +77,11 @@ fn setup_for_execute(bm: &str) -> PathBuf {
         .parse_all_functions(&module)
         .unwrap();
     let module = Rc::new(module);
-
-    let (llvm_module, context) = {
-        let artifacts_ref = module.artifact_registry.read().unwrap();
-        let llvm_resources = artifacts_ref.get("llvm-module").unwrap().read().unwrap();
-        let llvm_resources = llvm_resources
-            .downcast_ref::<LLVMAdditionalResources>()
-            .unwrap();
-        (
-            llvm_resources.module.clone(),
-            llvm_resources.context.clone(),
-        )
-    };
-
-    let mut executor = llvm_gen::JITExecutor::new(context.clone()).unwrap();
-    executor.add_module(llvm_module).unwrap();
-    let llvm_module_object_buf = executor.get_module_as_object_buffer(0).unwrap();
-
     let compiled_file_path = tempfile::NamedTempFile::new()
         .unwrap()
         .into_temp_path()
         .with_extension("cwasm");
-    llvm_gen::aot::store_aot_module(&module, llvm_module_object_buf, &compiled_file_path).unwrap();
+    llvm_gen::aot::store_aot_module(module, &compiled_file_path).unwrap();
     compiled_file_path
 }
 

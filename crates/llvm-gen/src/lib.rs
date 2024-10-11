@@ -19,10 +19,10 @@ use module::{objects::module::FunctionLoaderInterface, Module as WasmModule};
 use resource_buffer::SourceFormat;
 use std::{cell::RefCell, rc::Rc};
 
-pub struct LLVMAdditionalResources {
-    pub module: Rc<Module>,
+pub(crate) struct LLVMAdditionalResources {
+    pub(crate) module: Rc<Module>,
     functions: Rc<RefCell<Vec<Function>>>,
-    pub context: Rc<Context>,
+    pub(crate) context: Rc<Context>,
     functions_parsed: bool,
 }
 

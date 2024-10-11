@@ -42,10 +42,13 @@ name = "wasm_rt_lib"
 
 [profile.release]
 strip = true
+lto = "fat"
+panic = "abort"
 
 [profile.bench]
 debug = true
 strip = false
+lto = "fat"
 
 [workspace]
 resolver = "2"

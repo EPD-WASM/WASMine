@@ -17,7 +17,7 @@ fn run_internal(
 ) -> Result<Vec<Value>, RuntimeError> {
     log::debug!("run_internal: {:?}", config);
 
-    let module = parser::Parser::parse_from_file(path)?;
+    let module = runtime_lib::sugar::module_from_file(path)?;
     let module = Rc::new(module);
     engine.init(module.clone())?;
 
@@ -97,9 +97,8 @@ pub fn run(path: &Path, config: Config, engine: Engine, function_args: Vec<Strin
 #[cfg(feature = "llvm")]
 mod c_wasm_compilation {
     use super::*;
-    use llvm_gen::LLVMAdditionalResources;
     use resource_buffer::SourceFormat;
-    use runtime_lib::ResourceBuffer;
+    use runtime_lib::FunctionLoaderInterface;
     use std::rc::Rc;
 
     pub fn compile_internal(in_path: &Path, out_path: &Path) -> Result<(), RuntimeError> {
@@ -108,27 +107,12 @@ mod c_wasm_compilation {
                 "Cwasm files can't be compiled AGAIN... Please provide a wasm file.".to_owned(),
             ));
         }
-        let module = ResourceBuffer::from_file(in_path)?;
-        let module = llvm_gen::aot::parse_aot_module(module)?;
+        let module = runtime_lib::Parser::parse_from_file(in_path)?;
         let module = Rc::new(module);
 
-        let (llvm_module, llvm_context) = {
-            let artifacts_ref = module.artifact_registry.read().unwrap();
-            let llvm_resources = artifacts_ref.get("llvm-module").unwrap().read().unwrap();
-            let llvm_resources = llvm_resources
-                .downcast_ref::<LLVMAdditionalResources>()
-                .unwrap();
-            (
-                llvm_resources.module.clone(),
-                llvm_resources.context.clone(),
-            )
-        };
-
-        let mut executor = llvm_gen::JITExecutor::new(llvm_context)?;
-        executor.add_module(llvm_module)?;
-
-        let llvm_module_object_buf = executor.get_module_as_object_buffer(0)?;
-        llvm_gen::aot::store_aot_module(&module, llvm_module_object_buf, out_path)?;
+        llvm_gen::Translator::translate_module_meta(&module)?;
+        llvm_gen::FunctionLoader::default().parse_all_functions(&module)?;
+        llvm_gen::aot::store_aot_module(module, out_path)?;
         Ok(())
     }
 

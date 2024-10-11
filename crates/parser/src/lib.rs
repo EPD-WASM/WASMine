@@ -53,7 +53,7 @@ impl Parser {
             is_complete: false,
             next_empty_function: 0,
         };
-        let input = module.source.get()?;
+        let input = module.source.get();
         let mut reader = WasmBinaryReader::new(&input);
         match instance.parse_module(&mut reader) {
             Err(e) => Err(ParserError::PositionalError(Box::new(e), reader.pos)),

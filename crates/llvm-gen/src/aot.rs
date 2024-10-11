@@ -1,3 +1,4 @@
+use crate::{ExecutionError, JITExecutor, TranslationError};
 use module::Module as WasmModule;
 use resource_buffer::ResourceBuffer;
 use rkyv::ser::{
@@ -11,6 +12,7 @@ use std::{
     fs::File,
     io::{Seek, SeekFrom, Write},
     path::Path,
+    rc::Rc,
     sync::RwLock,
 };
 
@@ -24,6 +26,12 @@ pub enum AOTError {
 
     #[error("IO error: {0}")]
     IOError(#[from] std::io::Error),
+
+    #[error("LLVM execution error: {0}")]
+    ExecutionError(#[from] ExecutionError),
+
+    #[error("LLVM translation error: {0}")]
+    TranslationError(#[from] TranslationError),
 }
 
 /// Precompiled LLVM function, stored in memory.
@@ -32,7 +40,7 @@ pub enum AOTError {
 ///       The stored value is a pointer + size to an LLVM memory buffer of the object file containing the function's symbol.
 #[derive(Debug, Clone)]
 pub struct AOTFunctions {
-    pub offset: u64,
+    pub offset: usize,
     pub size: usize,
 }
 
@@ -44,12 +52,13 @@ pub fn parse_aot_module(buffer: ResourceBuffer) -> Result<WasmModule, AOTError> 
 
 pub fn parse_aot_meta(buffer: ResourceBuffer) -> Result<WasmModule, AOTError> {
     log::debug!("Loading aot module meta using `llvm-gen`.");
-    let input = buffer.get()?;
+    let input = buffer.get();
     let wasm_module_buffer_size = u32::from_be_bytes(input[0..4].try_into().unwrap()) as usize;
 
     #[allow(never_type_fallback_flowing_into_unsafe)]
     let module_meta = unsafe { rkyv::from_bytes_unchecked(&input[8..8 + wasm_module_buffer_size]) }
         .map_err(|e| AOTError::Msg(format!("Failed to decode module metadata: {e}")))?;
+
     Ok(WasmModule {
         meta: module_meta,
         source: buffer,
@@ -65,13 +74,12 @@ pub fn parse_aot_functions(wasm_module: &WasmModule) -> Result<(), AOTError> {
         return Ok(());
     }
 
-    let input = wasm_module.source.get()?;
+    let input = wasm_module.source.get();
     let llvm_memory_buffer_offset = u32::from_be_bytes(input[4..8].try_into().unwrap()) as usize;
-    let llvm_memory_buffer = &input[llvm_memory_buffer_offset..];
     artifacts_ref.insert(
         "llvm-obj".to_string(),
         RwLock::new(Box::new(AOTFunctions {
-            offset: llvm_memory_buffer.as_ptr() as u64,
+            offset: llvm_memory_buffer_offset,
             size: input.len() - llvm_memory_buffer_offset,
         })),
     );
@@ -79,10 +87,12 @@ pub fn parse_aot_functions(wasm_module: &WasmModule) -> Result<(), AOTError> {
 }
 
 pub fn store_aot_module(
-    module: &WasmModule,
-    llvm_memory_buffer: impl AsRef<[u8]>,
+    module: Rc<WasmModule>,
     output_path: impl AsRef<Path>,
 ) -> Result<(), AOTError> {
+    let executor = JITExecutor::new(module.clone())?;
+    let llvm_module_object_buf = executor.get_module_as_object_buffer(0)?;
+
     let mut out_file = File::create(output_path)?;
     out_file.seek(SeekFrom::Start(8))?;
 
@@ -103,6 +113,6 @@ pub fn store_aot_module(
     out_file.write_all(&u32::to_be_bytes(llvm_obj_offset as u32))?;
 
     out_file.seek(SeekFrom::Start(llvm_obj_offset as u64))?;
-    out_file.write_all(llvm_memory_buffer.as_ref())?;
+    out_file.write_all(llvm_module_object_buf.as_ref())?;
     Ok(())
 }

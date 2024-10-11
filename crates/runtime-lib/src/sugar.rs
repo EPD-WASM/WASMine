@@ -8,6 +8,7 @@ pub fn module_from_file(file: &Path) -> Result<Module, ModuleError> {
     match buf.kind() {
         SourceFormat::Wasm => {
             let module = parser::Parser::parse(buf).map_err(|e| ModuleError::Msg(e.to_string()))?;
+            parser::FunctionLoader::default().parse_all_functions(&module)?;
             Ok(module)
         }
         #[cfg(feature = "llvm")]

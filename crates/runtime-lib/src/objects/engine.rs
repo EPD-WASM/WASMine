@@ -85,18 +85,14 @@ mod llvm_engine_impl {
     use wasm_types::GlobalIdx;
 
     pub(crate) struct LLVMEngine {
-        context: Rc<llvm_gen::Context>,
-        executor: llvm_gen::JITExecutor,
+        executor: Option<llvm_gen::JITExecutor>,
         wasm_module: Option<Rc<WasmModule>>,
     }
 
     impl LLVMEngine {
         pub(crate) fn new() -> Result<Self, EngineError> {
-            let context = Rc::new(llvm_gen::Context::create());
-            let executor = llvm_gen::JITExecutor::new(context.clone())?;
             Ok(Self {
-                context,
-                executor,
+                executor: None,
                 wasm_module: None,
             })
         }
@@ -105,35 +101,20 @@ mod llvm_engine_impl {
     impl WasmEngine for LLVMEngine {
         fn init(&mut self, wasm_module: Rc<WasmModule>) -> Result<(), EngineError> {
             self.wasm_module = Some(wasm_module.clone());
-
-            llvm_gen::Translator::translate_module_meta(&wasm_module)?;
-            wasm_module.load_all_functions(llvm_gen::FunctionLoader)?;
-
-            let llvm_module = wasm_module
-                .artifact_registry
-                .read()
-                .unwrap()
-                .get("llvm-module")
-                .ok_or(EngineError::ModuleError(module::ModuleError::Msg(
-                    "LLVM resources not found in module. Parse module meta before running function parser."
-                        .to_string(),
-                )))?
-                .read()
-                .unwrap()
-                .downcast_ref::<llvm_gen::LLVMAdditionalResources>()
-                .unwrap()
-                .module
-                .clone();
-            self.executor.add_module(llvm_module)?;
+            self.executor = Some(llvm_gen::JITExecutor::new(wasm_module)?);
             Ok(())
         }
 
         fn get_global_value(&self, global_idx: GlobalIdx) -> Result<ValueRaw, EngineError> {
-            Ok(self.executor.get_global_value(global_idx)?)
+            Ok(self
+                .executor
+                .as_ref()
+                .unwrap()
+                .get_global_value(global_idx)?)
         }
 
         fn set_symbol_addr(&mut self, name: &str, addr: RawPointer) {
-            self.executor.set_symbol_addr(name, addr);
+            self.executor.as_mut().unwrap().set_symbol_addr(name, addr);
         }
 
         fn get_external_function_ptr(
@@ -148,18 +129,29 @@ mod llvm_engine_impl {
                 .exports
                 .find_function_name(function_idx)
                 .ok_or(EngineError::FunctionNotFound(function_idx))?;
-            Ok(unsafe { std::mem::transmute_copy(&self.executor.get_symbol_addr(func_name)?) })
+            Ok(unsafe {
+                std::mem::transmute_copy(
+                    &self.executor.as_ref().unwrap().get_symbol_addr(func_name)?,
+                )
+            })
         }
 
         fn get_internal_function_ptr(
             &self,
             function_idx: FuncIdx,
         ) -> Result<RawPointer, EngineError> {
-            Ok(self.executor.get_symbol_addr(&function_idx.to_string())?)
+            Ok(self
+                .executor
+                .as_ref()
+                .unwrap()
+                .get_symbol_addr(&function_idx.to_string())?)
         }
 
         fn set_global_addr(&mut self, global_idx: GlobalIdx, addr: RawPointer) {
-            self.executor.set_global_addr(global_idx, addr);
+            self.executor
+                .as_mut()
+                .unwrap()
+                .set_global_addr(global_idx, addr);
         }
     }
 }

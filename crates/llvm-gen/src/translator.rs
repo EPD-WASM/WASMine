@@ -32,6 +32,7 @@ pub struct Translator<'wasm> {
 
 impl<'wasm> Translator<'wasm> {
     pub fn translate_module_meta(module: &'wasm WasmModule) -> Result<(), TranslationError> {
+        log::info!("Loading module meta using `llvm-gen`.");
         // only parse module meta if not already done
         if module
             .artifact_registry
