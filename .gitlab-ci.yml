@@ -7,7 +7,7 @@ variables:
   GIT_SUBMODULE_STRATEGY: recursive
 
 .rust-default:
-  image: lukasdoe123/wasm-rt-rust-llvm-img:1.78
+  image: lukasdoe123/wasm-rt-rust-img:1.81
   tags:
     - lukas-debian-runner
   interruptible: true

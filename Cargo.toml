@@ -1,14 +1,17 @@
 [package]
 name = "wasm_rt"
-authors = ["Lukas Döllerer <lukas.doellerer@tum.de>", "Enrico Fazzi <enrico.fazzi@tum.de>"]
-version = "0.1.0"
-edition = "2021"
-rust-version = "1.78"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
 license = "MIT"
 description = "A high-performance standalone WebAssembly runtime"
 readme = "README.md"
 homepage = "https://gitlab.db.in.tum.de/epd24s/wasm-rt"
 repository = "https://gitlab.db.in.tum.de/epd24s/wasm-rt"
+categories = ["wasm"]
+keywords = ["webassembly", "wasm"]
+default-run = "wasm_rt"
 
 [dependencies]
 runtime-lib = { workspace = true }
@@ -77,7 +80,7 @@ members = [
 version = "0.1.0"
 authors = ["Lukas Doellerer", "Enrico Fazzi" ]
 edition = "2021"
-rust-version = "1.78.0"
+rust-version = "1.81.0"
 
 [workspace.lints.rust]
 trivial_numeric_casts = 'warn'

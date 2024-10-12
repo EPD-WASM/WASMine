@@ -1,4 +1,4 @@
-FROM rust:1.78
+FROM rust:1.81
 
 RUN echo "deb http://apt.llvm.org/bookworm/ llvm-toolchain-bookworm-18 main\ndeb-src http://apt.llvm.org/bookworm/ llvm-toolchain-bookworm-18 main" > /etc/apt/sources.list.d/llvm.list &&\
     wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add - &&\

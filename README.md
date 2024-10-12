@@ -7,8 +7,8 @@
 ## Building
 
 Build Requirements:
- - rustc 1.78.0
- - cargo 1.78.0
+ - rustc 1.81.0
+ - cargo 1.81.0
  - [LLVM 18.1.6](https://github.com/llvm/llvm-project/releases/tag/llvmorg-18.1.6)
 
 This project uses `cargo` for its project management. Therefore, a development / debug build is created using
