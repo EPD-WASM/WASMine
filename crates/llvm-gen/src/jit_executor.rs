@@ -4,9 +4,9 @@ use crate::{
     },
     aot::AOTFunctions,
     error::ExecutionError,
-    LLVMAdditionalResources,
+    FunctionLoader, LLVMAdditionalResources, Translator,
 };
-use module::{objects::value::ValueRaw, Module as WasmModule};
+use module::{objects::value::ValueRaw, FunctionLoaderInterface, Module as WasmModule};
 use runtime_interface::RawPointer;
 use std::rc::Rc;
 use wasm_types::GlobalIdx;
@@ -19,39 +19,50 @@ pub struct JITExecutor {
 
 impl JITExecutor {
     pub fn new(module: Rc<WasmModule>) -> Result<Self, ExecutionError> {
-        if let Some(obj_buf) = module.artifact_registry.read().unwrap().get("llvm-obj") {
-            let mut instance = Self {
-                execution_engine: JITExecutionEngine::init()?,
-                context: Rc::new(Context::create()),
-            };
-            let obj_buf = obj_buf.read().unwrap();
-            let obj_buf = obj_buf.downcast_ref::<AOTFunctions>().unwrap();
-            instance.add_object_file(
-                &module.source.get()[obj_buf.offset..obj_buf.offset + obj_buf.size],
-            )?;
-            return Ok(instance);
-        }
+        match module.source.kind() {
+            resource_buffer::SourceFormat::Wasm => {
+                Translator::translate_module_meta(&module)?;
+                FunctionLoader::default()
+                    .parse_all_functions(&module)
+                    .map_err(|e| ExecutionError::Msg(e.to_string()))?;
 
-        let (llvm_module, llvm_context) = {
-            let artifacts_ref = module.artifact_registry.read().unwrap();
-            let llvm_resources = artifacts_ref.get("llvm-module").ok_or_else(|| {
-                ExecutionError::Msg("LLVM module not found in artifact registry. Translate meta using `llvm-gen` first.".to_string())
-            })?;
-            let llvm_resources = llvm_resources.read().unwrap();
-            let llvm_resources = llvm_resources
-                .downcast_ref::<LLVMAdditionalResources>()
-                .unwrap();
-            (
-                llvm_resources.module.clone(),
-                llvm_resources.context.clone(),
-            )
+                let (llvm_module, llvm_context) = {
+                    let artifacts_ref = module.artifact_registry.read().unwrap();
+                    let llvm_resources = artifacts_ref.get("llvm-module").unwrap();
+                    let llvm_resources = llvm_resources.read().unwrap();
+                    let llvm_resources = llvm_resources
+                        .downcast_ref::<LLVMAdditionalResources>()
+                        .unwrap();
+                    (
+                        llvm_resources.module.clone(),
+                        llvm_resources.context.clone(),
+                    )
+                };
+                let mut instance = Self {
+                    execution_engine: JITExecutionEngine::init()?,
+                    context: llvm_context,
+                };
+                instance.add_module(llvm_module)?;
+                return Ok(instance);
+            }
+            resource_buffer::SourceFormat::Cwasm => {
+                crate::aot::parse_aot_functions(&module)
+                    .map_err(|e| ExecutionError::Msg(e.to_string()))?;
+
+                let artifact_ref = module.artifact_registry.read().unwrap();
+                let obj_buf = artifact_ref.get("llvm-obj").unwrap();
+                let mut instance = Self {
+                    execution_engine: JITExecutionEngine::init()?,
+                    context: Rc::new(Context::create()),
+                };
+                let obj_buf = obj_buf.read().unwrap();
+                let obj_buf = obj_buf.downcast_ref::<AOTFunctions>().unwrap();
+                instance.add_object_file(
+                    &module.source.get()[obj_buf.offset..obj_buf.offset + obj_buf.size],
+                )?;
+                return Ok(instance);
+            }
         };
-        let mut instance = Self {
-            execution_engine: JITExecutionEngine::init()?,
-            context: llvm_context,
-        };
-        instance.add_module(llvm_module)?;
-        return Ok(instance);
     }
 
     pub fn get_symbol_addr(&self, name: &str) -> Result<RawPointer, ExecutionError> {
