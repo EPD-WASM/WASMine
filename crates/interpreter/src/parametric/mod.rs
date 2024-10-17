@@ -14,7 +14,7 @@ pub(crate) fn execute_parametric_instruction(
     let i = &mut ctx.stack.last_mut().unwrap().decoder;
 
     match instruction_type {
-        ParametricInstructionType::Drop => DropInstruction::deserialize(i, t)?.execute(ctx), // TODO this is a no-op. Remove altogether?
+        ParametricInstructionType::Drop => DropInstruction::deserialize(i, t)?.execute(ctx),
         ParametricInstructionType::Select => SelectInstruction::deserialize(i, t)?.execute(ctx),
     }
 }

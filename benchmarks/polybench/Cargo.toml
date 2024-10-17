@@ -46,6 +46,11 @@ path = "benches/wasmine_llvm_aot_iai.rs"
 harness = false
 
 [[bench]]
+name = "wasmine_interpreter_criterion"
+path = "benches/wasmine_interpreter_criterion.rs"
+harness = false
+
+[[bench]]
 name = "wasmedge_aot_criterion"
 path = "benches/wasmedge_aot_criterion.rs"
 harness = false

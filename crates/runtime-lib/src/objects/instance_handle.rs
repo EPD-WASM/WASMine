@@ -24,6 +24,8 @@ use std::{
 use wasi::{WasiContext, WasiError};
 use wasm_types::{FuncIdx, FuncType, GlobalIdx, MemIdx, TableIdx};
 
+use super::{engine::EngineError, functions::HostFuncRawContainer};
+
 #[derive(thiserror::Error, Debug)]
 pub enum InstantiationError {
     #[error("Module does not contain start function.")]
@@ -204,6 +206,28 @@ impl<'a> InstanceHandle<'a> {
         })
     }
 
+    fn get_func_from_engine_helper(&self, func_idx: FuncIdx) -> Result<Function, EngineError> {
+        let func_and_info = self.engine.get_external_function_ptr(func_idx)?;
+        let func = func_and_info.func;
+        let info = func_and_info.info;
+
+        match info {
+            // yes I am misusing this. Please contact my lawyer.
+            Some(info) => Ok(Function::from_host_func(
+                Box::into_raw(Box::new(HostFuncRawContainer(Box::new((
+                    self.execution_context_ptr(),
+                    info,
+                ))))),
+                self.get_function_type_from_func_idx(func_idx),
+                func,
+            )),
+            None => Ok(Function::from_wasm_func(
+                self.execution_context_ptr(),
+                self.get_function_type_from_func_idx(func_idx),
+                func,
+            )),
+        }
+    }
     pub fn get_export_by_name(&self, name: &str) -> Result<&Function, RuntimeError> {
         let mut locked_exported_functions = self.exported_functions.lock().unwrap();
         if let Some(function_entry) = locked_exported_functions.get(name) {
@@ -214,11 +238,7 @@ impl<'a> InstanceHandle<'a> {
                         Some(idx) => idx,
                         None => return Err(RuntimeError::FunctionNotFound(name.to_string())),
                     };
-                    let func = Function::from_wasm_func(
-                        self.execution_context_ptr(),
-                        self.get_function_type_from_func_idx(*func_idx),
-                        self.engine.get_external_function_ptr(idx)?,
-                    );
+                    let func = self.get_func_from_engine_helper(*func_idx)?;
                     let func_ref = self.cluster.alloc_function(func);
                     locked_exported_functions.insert(name.to_string(), Either::Left(func_ref));
                     return Ok(func_ref);
@@ -232,11 +252,7 @@ impl<'a> InstanceHandle<'a> {
         if let Some(func_name) = self.module.meta.exports.find_function_name(func_idx) {
             return self.get_export_by_name(func_name);
         }
-        let func = Function::from_wasm_func(
-            self.execution_context_ptr(),
-            self.get_function_type_from_func_idx(func_idx),
-            self.engine.get_external_function_ptr(func_idx)?,
-        );
+        let func = self.get_func_from_engine_helper(func_idx)?;
         let func_ref = self.cluster.alloc_function(func);
         Ok(func_ref)
     }

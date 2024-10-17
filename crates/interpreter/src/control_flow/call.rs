@@ -11,10 +11,12 @@ pub(super) fn handle_call(
     call_params: &[VariableID],
     return_vars: &[VariableID],
 ) -> Result<Option<Vec<ValueRaw>>, InterpreterError> {
-    call_util(ctx, func_idx, call_params, return_bb, return_vars);
-    let vals = return_vars
-        .iter()
-        .map(|&var| ctx.stack.last().unwrap().vars.get(var))
-        .collect();
-    Ok(Some(vals))
+    log::trace!("Handling Call");
+    Ok(call_util(
+        ctx,
+        func_idx,
+        call_params,
+        return_bb,
+        return_vars,
+    ))
 }

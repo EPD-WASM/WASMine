@@ -591,7 +591,7 @@ pub(crate) fn rt_func_imports(
     ]
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct DependencyName {
     pub(crate) module: String,
     pub(crate) name: String,
@@ -605,6 +605,7 @@ pub(crate) struct DependencyStore<'a> {
     pub(crate) memories: Vec<RTMemoryImport>,
 }
 
+#[derive(Debug)]
 pub(crate) struct FunctionDependency<'a> {
     pub(crate) name: DependencyName,
     pub(crate) func: &'a Function,

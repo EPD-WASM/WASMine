@@ -8,15 +8,17 @@ use wasm_types::NumType;
 
 impl Executable for TruncInstruction {
     fn execute(&mut self, ctx: &mut InterpreterContext) -> Result<(), InterpreterError> {
-        // println!("Executing TruncInstruction: {:?}", self);
         let stack_frame = ctx.stack.last_mut().unwrap();
         let in1 = stack_frame.vars.get_number(self.in1, self.in1_type);
-        let in1_trunc = match in1 {
+        let in1_float = match in1 {
             Number::F32(n) => n as f64,
             Number::F64(n) => n,
             a => panic!("Invalid in type for trunc: {}", a),
-        }
-        .trunc();
+        };
+
+        let in1_trunc = in1_float.trunc();
+
+        log::trace!("Truncated {} to {}", in1_float, in1_trunc);
 
         let max = match (self.out1_type, self.signed) {
             (NumType::I32, false) => u32::MAX as f64,
@@ -36,8 +38,7 @@ impl Executable for TruncInstruction {
 
         if in1_trunc.is_nan() || in1_trunc.is_infinite() || in1_trunc < min || in1_trunc > max {
             // undefined
-            stack_frame.vars.set(self.out1, ValueRaw::u64(0));
-            return Ok(());
+            return Err(InterpreterError::TruncError);
         }
 
         let res_u64 = match self.out1_type {

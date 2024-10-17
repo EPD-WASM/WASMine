@@ -83,7 +83,10 @@ impl ExecutionContextWrapper<'_> {
                     Ok(*func_ptr)
                 }
             }
-            TableItem::ExternReference { func_ptr } => Ok(func_ptr.unwrap()),
+            TableItem::ExternReference { func_ptr } => {
+                log::debug!("Indirect call on an external function reference");
+                Ok(func_ptr.unwrap())
+            }
             TableItem::Null => Err(TableError::NullDeref.into()),
         }
     }
@@ -99,5 +102,18 @@ where
     match res {
         Ok(r) => r,
         Err(e) => ExecutionContextWrapper::trap(e.into()),
+    }
+}
+
+pub(crate) trait TrapUnwrap<T, E> {
+    fn unwrap_or_trap(self, ctx: &mut runtime_interface::ExecutionContext) -> T;
+}
+
+impl<T, E> TrapUnwrap<T, E> for Result<T, E>
+where
+    E: Into<RuntimeError> + Display,
+{
+    fn unwrap_or_trap(self, ctx: &mut runtime_interface::ExecutionContext) -> T {
+        trap_on_err::<T, E>(ctx, self)
     }
 }

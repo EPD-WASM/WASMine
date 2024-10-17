@@ -3,7 +3,6 @@ use module::instructions::MemorySizeInstruction;
 
 impl Executable for MemorySizeInstruction {
     fn execute(&mut self, ctx: &mut InterpreterContext) -> Result<(), InterpreterError> {
-        // hehe
         let res = unsafe { runtime_interface::memory_grow(&mut ctx.exec_ctx, 0, 0) };
 
         let stack_frame = ctx.stack.last_mut().unwrap();

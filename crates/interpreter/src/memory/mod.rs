@@ -1,12 +1,14 @@
 use module::instructions::{
-    Instruction, LoadInstruction, MemoryCopyInstruction, MemoryFillInstruction,
-    MemoryGrowInstruction, MemoryInitInstruction, MemorySizeInstruction, StoreInstruction,
+    DataDropInstruction, Instruction, LoadInstruction, MemoryCopyInstruction,
+    MemoryFillInstruction, MemoryGrowInstruction, MemoryInitInstruction, MemorySizeInstruction,
+    StoreInstruction,
 };
 use wasm_types::{InstructionType, MemoryInstructionCategory, MemoryOp};
 
 use crate::{Executable, InterpreterContext, InterpreterError};
 
 mod copy;
+mod drop;
 mod fill;
 mod grow;
 mod init;
@@ -20,6 +22,8 @@ pub(crate) fn execute_memory_instruction(
     t: InstructionType,
 ) -> Result<(), InterpreterError> {
     let i = &mut ctx.stack.last_mut().unwrap().decoder;
+
+    log::trace!("Memory instruction: {:#?}", instruction_category);
 
     match instruction_category {
         MemoryInstructionCategory::Load(_) => LoadInstruction::deserialize(i, t)?.execute(ctx),
@@ -39,6 +43,8 @@ pub(crate) fn execute_memory_instruction(
         MemoryInstructionCategory::Memory(MemoryOp::Init) => {
             MemoryInitInstruction::deserialize(i, t)?.execute(ctx)
         }
-        MemoryInstructionCategory::Memory(MemoryOp::Drop) => todo!(),
+        MemoryInstructionCategory::Memory(MemoryOp::Drop) => {
+            DataDropInstruction::deserialize(i, t)?.execute(ctx)
+        }
     }
 }

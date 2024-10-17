@@ -11,6 +11,10 @@ pub enum DecodingError {
     TypeMismatch,
     #[error("Instruction storage exhausted")]
     InstructionStorageExhausted,
+    #[error("value type storage exhausted")]
+    ValueTypeStorageExhausted,
+    #[error("variable storage exhausted")]
+    VariableStorageExhausted,
 }
 
 #[derive(Debug)]
@@ -38,29 +42,28 @@ impl InstructionDecoder {
     }
 
     pub fn read_immediate<T: Integer>(&mut self) -> Result<T, DecodingError> {
-        debug_assert!(self.storage.immediate_storage.len() >= std::mem::size_of::<T>());
-        let drained_bytes = self
-            .storage
-            .immediate_storage
-            .drain(..std::mem::size_of::<T>());
-        Ok(T::from_bytes(drained_bytes.collect::<Vec<u8>>().as_slice()))
+        let size = std::mem::size_of::<T>();
+        debug_assert!(self.storage.immediate_storage.len() >= size);
+        // we can do this because the VecDeque is made contiguous upon completion of the block,
+        // so the first slice is the entire buffer. This seems to be faster than simply using
+        // the drain return value, likely because the compiler knows we're operating only on the first slice.
+        let bytes = &self.storage.immediate_storage.as_slices().0[..size];
+        let ret = Ok(T::from_bytes(bytes));
+        self.storage.immediate_storage.drain(0..size);
+        ret
     }
 
     pub fn read_value_type(&mut self) -> Result<ValType, DecodingError> {
         self.storage
             .type_storage
             .pop_front()
-            .ok_or(DecodingError::DecodingError(
-                "value type storage exhausted".to_string(),
-            ))
+            .ok_or(DecodingError::ValueTypeStorageExhausted)
     }
 
     pub fn read_variable(&mut self) -> Result<VariableID, DecodingError> {
         self.storage
             .variable_storage
             .pop_front()
-            .ok_or(DecodingError::DecodingError(
-                "variable storage exhausted".to_string(),
-            ))
+            .ok_or(DecodingError::VariableStorageExhausted)
     }
 }

@@ -1,3 +1,4 @@
+use log::trace;
 use module::{
     instructions::LoadInstruction, objects::value::ValueRaw, utils::numeric_transmutes::Bit64,
 };
@@ -14,15 +15,12 @@ enum LoadSize {
 
 impl Executable for LoadInstruction {
     fn execute(&mut self, ctx: &mut InterpreterContext) -> Result<(), InterpreterError> {
-        // println!("Executing LoadInstruction {:?}", self);
-
         let stack_frame = ctx.stack.last_mut().unwrap();
-        let dyn_addr = stack_frame.vars.get(self.addr).as_u32() as usize;
+        let dyn_addr = stack_frame.vars.get(self.addr).as_i32() as usize;
         let effective_address = dyn_addr as usize + self.memarg.offset as usize;
-        // let effective_address = self.memarg.offset as usize;
 
-        // println!("effective_address: {:?}", effective_address);
-        // TODO access memory
+        log::trace!("Memory Load: {:#?}", self);
+
         let res = match self.operation {
             LoadOp::INNLoad | LoadOp::FNNLoad => {
                 handle_load(ctx, effective_address, self.out1_type, LoadSize::Full, None)
@@ -99,7 +97,8 @@ fn handle_load(
         (LoadSize::Full, NumType::F64) => 8,
     };
 
-    // println!("Loading {} bytes from memory", num_bytes_to_load,);
+    trace!("Loading {} bytes from address {}", num_bytes_to_load, addr);
+
     let bytes;
     unsafe {
         bytes = core::slice::from_raw_parts(src_val_ptr, num_bytes_to_load);
@@ -120,6 +119,7 @@ fn handle_load(
         u64::from_le_bytes(padded)
     };
 
-    // println!("Loaded value: {}", res);
+    trace!("Loaded value: {}", res.trans_f32());
+
     ValueRaw::u64(res)
 }

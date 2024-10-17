@@ -28,7 +28,6 @@ fn clz(
     let num = stack_frame.vars.get(instruction.in1);
 
     let leading_zeros = match instruction.types {
-        // be careful here, this works for u64 -> u32, but might not work for other types.
         NumType::I32 => u32::leading_zeros(num.as_u32()),
         NumType::I64 => num.as_u64().leading_zeros(),
         _ => return Err(TypeMismatch),

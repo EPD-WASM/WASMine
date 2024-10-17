@@ -1,5 +1,5 @@
 use super::value::ConstantValue;
-use rkyv::{Deserialize, Serialize, Archive};
+use rkyv::{Archive, Deserialize, Serialize};
 use wasm_types::{GlobalType, ValType};
 
 #[derive(Debug, Clone, Archive, Deserialize, Serialize)]

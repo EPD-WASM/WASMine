@@ -7,7 +7,6 @@ use crate::{Executable, InterpreterContext, InterpreterError};
 
 impl Executable for ExtendBitsInstruction {
     fn execute(&mut self, ctx: &mut InterpreterContext) -> Result<(), InterpreterError> {
-        // println!("Executing ExtendBitsInstruction: {:?}", self);
         let stack_frame = ctx.stack.last_mut().unwrap();
         let in1_u64 = stack_frame.vars.get(self.in1).as_u64();
         let mask = (1_u64 << self.input_size) - 1;

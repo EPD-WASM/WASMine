@@ -2,7 +2,7 @@ mod functypes;
 mod instruction;
 mod module;
 
-use rkyv::{Deserialize, Serialize, Archive};
+use rkyv::{Archive, Deserialize, Serialize};
 use std::fmt::{self, Display, Formatter};
 
 pub use functypes::{FuncType, FuncTypeBuilder};

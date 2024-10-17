@@ -58,6 +58,7 @@ impl SignalHandler {
         info: *mut libc::siginfo_t,
         ucontext: *mut libc::c_void,
     ) {
+        // hic sunt dracones
         if THREAD_CURRENTLY_EXECUTES_WASM.with(|b| b.load(std::sync::atomic::Ordering::Relaxed)) {
             if is_stack_overflow(sig, unsafe { (*info).si_addr() }) {
                 ExecutionContextWrapper::trap(RuntimeError::Exhaustion);

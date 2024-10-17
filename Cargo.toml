@@ -27,6 +27,7 @@ clap = { workspace = true }
 log = { workspace = true }
 wasi = { workspace = true }
 rkyv = { workspace = true }
+test-log = "0.2.16"
 
 [dev-dependencies]
 gen_util = { workspace = true }
@@ -78,7 +79,7 @@ members = [
 
 [workspace.package]
 version = "0.1.0"
-authors = ["Lukas Doellerer", "Enrico Fazzi" ]
+authors = ["Lukas Doellerer", "Enrico Fazzi"]
 edition = "2021"
 rust-version = "1.81.0"
 

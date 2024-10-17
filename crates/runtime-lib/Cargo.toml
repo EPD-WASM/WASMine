@@ -15,10 +15,10 @@ module = { workspace = true }
 parser = { workspace = true }
 wasi = { workspace = true }
 resource-buffer = { workspace = true }
-interpreter = { workspace = true, optional=true }
+interpreter = { workspace = true, optional = true }
 libc = { workspace = true }
 log = { workspace = true }
-llvm-gen = { workspace = true, optional=true }
+llvm-gen = { workspace = true, optional = true }
 runtime-interface = { workspace = true }
 cee-scape = { workspace = true }
 uuid = { workspace = true }

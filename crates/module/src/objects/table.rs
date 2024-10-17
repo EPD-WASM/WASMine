@@ -1,4 +1,4 @@
-use rkyv::{Deserialize, Serialize, Archive};
+use rkyv::{Archive, Deserialize, Serialize};
 use wasm_types::TableType;
 
 #[derive(Debug, Clone, Archive, Deserialize, Serialize)]

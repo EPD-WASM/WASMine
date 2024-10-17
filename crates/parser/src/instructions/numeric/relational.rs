@@ -1,12 +1,7 @@
 use super::*;
 use wasm_types::*;
 
-fn i_arith(
-    ctxt: &mut C,
-    o: &mut dyn InstructionConsumer,
-    op: IRelationalOp,
-    type_: NumType,
-) -> PR {
+fn i_arith(ctxt: &mut C, o: &mut dyn InstructionConsumer, op: IRelationalOp, type_: NumType) -> PR {
     let in2 = ctxt.pop_var_with_type(ValType::Number(type_));
     let in1 = ctxt.pop_var_with_type(ValType::Number(type_));
     let out = ctxt.create_var(ValType::i32());
@@ -21,12 +16,7 @@ fn i_arith(
     Ok(())
 }
 
-fn f_arith(
-    ctxt: &mut C,
-    o: &mut dyn InstructionConsumer,
-    op: FRelationalOp,
-    type_: NumType,
-) -> PR {
+fn f_arith(ctxt: &mut C, o: &mut dyn InstructionConsumer, op: FRelationalOp, type_: NumType) -> PR {
     let in2 = ctxt.pop_var_with_type(ValType::Number(type_));
     let in1 = ctxt.pop_var_with_type(ValType::Number(type_));
     let out = ctxt.create_var(ValType::i32());

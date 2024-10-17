@@ -5,3 +5,10 @@ target/
 debug_output
 *.parsed
 *.pdf
+*.wasm
+output.txt
+perf.data
+perf.data.old
+flamegraph*.svg
+fuzz/slow-unit-*
+fuzz/crash-*

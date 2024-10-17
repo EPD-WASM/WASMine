@@ -8,7 +8,6 @@ use wasm_types::NumType;
 
 impl Executable for TruncSaturationInstruction {
     fn execute(&mut self, ctx: &mut InterpreterContext) -> Result<(), InterpreterError> {
-        // println!("Executing TruncSaturationInstruction: {:?}", self);
         let stack_frame = ctx.stack.last_mut().unwrap();
         let in1 = stack_frame.vars.get_number(self.in1, self.in1_type);
         let in1_trunc = match in1 {

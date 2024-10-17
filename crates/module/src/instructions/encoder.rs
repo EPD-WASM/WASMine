@@ -483,6 +483,7 @@ impl InstructionConsumer for InstructionEncoder {
 
     fn finish(&mut self, terminator: ControlInstruction) {
         self.storage.terminator = terminator;
+        self.storage.immediate_storage.make_contiguous();
         self.finished = true;
     }
 

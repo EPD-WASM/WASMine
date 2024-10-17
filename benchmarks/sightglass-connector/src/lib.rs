@@ -304,7 +304,7 @@ impl<'a> BenchState<'a> {
 
         (self.instantiation_start)(self.instantiation_timer);
         let wasi_ctxt = (self.make_wasi_cx)()?;
-        let engine = Engine::llvm()?;
+        let engine = Engine::interpreter()?;
         // TODO: this is broken
         // let module = engine.init(module)?;
 

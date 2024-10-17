@@ -4,8 +4,7 @@ use crate::{Executable, InterpreterContext, InterpreterError};
 
 impl Executable for GlobalGetInstruction {
     fn execute(&mut self, ctx: &mut InterpreterContext) -> Result<(), InterpreterError> {
-        // println!("Executing GlobalGetInstruction {:?}", self);
-
+        log::trace!("{:?}", self);
         let stack_frame = ctx.stack.last_mut().unwrap();
         let global_storage = unsafe { &*ctx.exec_ctx.globals_ptr };
 

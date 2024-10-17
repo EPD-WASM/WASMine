@@ -1,8 +1,7 @@
 use core::panic;
-use std::{fs, path::PathBuf};
-
 use proc_macro::TokenStream;
 use quote::{format_ident, quote, ToTokens};
+use std::{fs, path::PathBuf};
 use syn::{parse::Parse, Expr, Token};
 
 struct GenMacroInput {
@@ -56,7 +55,7 @@ pub fn generate_spec_test_cases(input: TokenStream) -> TokenStream {
                         test_cases = quote! {
                             #test_cases
 
-                            #[test]
+                            #[test_log::test]
                             fn #test_name() {
                                 #test_function_name(#file_path);
                             }

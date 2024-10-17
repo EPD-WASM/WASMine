@@ -28,6 +28,32 @@ fn canonicalise_nan_f64(n: f64) -> f64 {
 }
 
 impl Number {
+    pub fn as_i64(&self) -> i64 {
+        match *self {
+            Number::U32(n) => n as i64,
+            Number::U64(n) => n as i64,
+            Number::S32(n) => n as i64,
+            Number::S64(n) => n,
+            Number::F32(n) => n as i64,
+            Number::F64(n) => n as i64,
+            Number::I32(n) => n as i64,
+            Number::I64(n) => n as i64,
+        }
+    }
+
+    pub fn as_i32(&self) -> i32 {
+        match *self {
+            Number::U32(n) => n as i32,
+            Number::U64(n) => n as i32,
+            Number::S32(n) => n,
+            Number::S64(n) => n as i32,
+            Number::F32(n) => n as i32,
+            Number::F64(n) => n as i32,
+            Number::I32(n) => n as i32,
+            Number::I64(n) => n as i32,
+        }
+    }
+
     pub fn trans_to_u64(&self) -> u64 {
         match *self {
             Number::U32(n) => n as u64,
@@ -236,6 +262,19 @@ impl Number {
             Number::F32(n) => n.is_nan(),
             Number::F64(n) => n.is_nan(),
             a => panic!("Invalid type for is_nan: {a}"),
+        }
+    }
+
+    pub fn is_zero(&self) -> bool {
+        match self {
+            Number::I32(n) => *n == 0,
+            Number::I64(n) => *n == 0,
+            Number::U32(n) => *n == 0,
+            Number::U64(n) => *n == 0,
+            Number::S32(n) => *n == 0,
+            Number::S64(n) => *n == 0,
+            Number::F32(n) => *n == 0.0,
+            Number::F64(n) => *n == 0.0,
         }
     }
 

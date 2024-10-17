@@ -35,7 +35,7 @@ pub const BENCHMARKS: &[&str] = &[
 ];
 
 pub fn get_bm_path(bm: &str) -> PathBuf {
-    PathBuf::from(env::var("OUT_DIR").unwrap())
+    PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR environment variable not set"))
         .join("polybench")
         .join(bm)
         .with_extension("wasm")

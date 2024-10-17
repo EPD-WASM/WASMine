@@ -11,6 +11,7 @@ use cee_scape::call_with_sigsetjmp;
 use core::ffi;
 use module::objects::value::{Value, ValueRaw};
 use runtime_interface::ExecutionContext;
+use std::fmt::{Debug, Write};
 use std::{any::Any, mem::MaybeUninit, ptr::NonNull};
 use wasi::WasiContext;
 use wasm_types::FuncType;
@@ -39,8 +40,9 @@ macro_rules! impl_into_func_trait {
 }
 macro_invoke_for_each_function_signature!(impl_into_func_trait);
 
+#[derive(Debug)]
 #[repr(transparent)]
-pub struct HostFuncRawContainer(Box<dyn Any>);
+pub struct HostFuncRawContainer(pub(super) Box<dyn Any>);
 
 impl HostFuncRawContainer {
     fn from_closure<Closure, ParamTypes, RetType>(closure: Closure) -> Function
@@ -95,6 +97,12 @@ pub union CalleeCtxt {
     pub wasi_context: *mut WasiContext,
 }
 
+impl Debug for CalleeCtxt {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("CalleeCtxt { .. }")
+    }
+}
+
 /// The "boundary calling convention" extends the C calling convention with a few additional rules:
 /// - The first argument is the callee context (some context required for function execution)
 /// - The second argument is a pointer to the array of arguments
@@ -105,13 +113,13 @@ pub union CalleeCtxt {
 pub(crate) type BoundaryCCFuncTy =
     unsafe extern "C" fn(CalleeCtxt, *const ValueRaw, *mut ValueRaw) -> ();
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Function(pub(crate) FunctionKind);
 
 unsafe impl Sync for Function {}
 unsafe impl Send for Function {}
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum FunctionKind {
     /// A rust function made available to wasm code
     /// Calling Convention:

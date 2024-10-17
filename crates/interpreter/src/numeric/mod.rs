@@ -63,5 +63,3 @@ pub(super) fn execute_numeric_instruction(
         },
     }
 }
-
-// impl Executable for ...

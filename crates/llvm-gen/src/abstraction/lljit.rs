@@ -2,7 +2,6 @@ use super::module::Module;
 use crate::abstraction::target_machine::TargetMachine;
 use crate::util::c_str;
 use crate::ExecutionError;
-use module::objects::value::ValueRaw;
 use llvm_sys::core::{
     LLVMCreateMemoryBufferWithMemoryRangeCopy, LLVMGetBufferSize, LLVMGetBufferStart,
 };
@@ -31,6 +30,7 @@ use llvm_sys::target_machine::{
     LLVMCodeGenFileType, LLVMGetDefaultTargetTriple, LLVMGetTargetFromTriple, LLVMTargetHasJIT,
     LLVMTargetMachineEmitToMemoryBuffer, LLVMTargetRef,
 };
+use module::objects::value::ValueRaw;
 use runtime_interface::RawPointer;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -91,7 +91,7 @@ impl JITExecutionEngine {
         let error: *mut llvm_sys::error::LLVMOpaqueError =
             unsafe { LLVMOrcLLJITAddObjectFileWithRT(self.jit, resource_tracker, object_file_buf) };
         if !error.is_null() {
-            return dbg!(Err(error.into()));
+            return Err(error.into());
         }
         Ok(())
     }

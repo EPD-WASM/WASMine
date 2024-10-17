@@ -61,9 +61,11 @@ pub(crate) enum TableItem {
 }
 
 #[repr(transparent)]
+#[derive(Debug)]
 pub struct TableObject(pub Vec<TableItem>);
 
 // All other information like the table type, etc. are stored in the config
+#[derive(Debug)]
 pub struct TableInstance<'a> {
     // final, evaluated references
     pub(crate) values: &'a mut TableObject,

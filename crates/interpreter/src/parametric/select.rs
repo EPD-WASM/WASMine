@@ -4,7 +4,7 @@ use crate::{Executable, InterpreterContext, InterpreterError};
 
 impl Executable for SelectInstruction {
     fn execute(&mut self, ctx: &mut InterpreterContext) -> Result<(), InterpreterError> {
-        // println!("Executing select instruction {:?}", self);
+        log::trace!("{:?}", self);
 
         let stack_frame = ctx.stack.last_mut().unwrap();
 

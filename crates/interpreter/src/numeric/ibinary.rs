@@ -13,6 +13,15 @@ impl Executable for IBinaryInstruction {
         let in1 = stack_frame.vars.get_number(self.lhs, self.types);
         let in2 = stack_frame.vars.get_number(self.rhs, self.types);
 
+        match self.op {
+            IBinaryOp::DivS | IBinaryOp::DivU => {
+                if in2.is_zero() {
+                    return Err(InterpreterError::DivZero);
+                }
+            }
+            _ => {}
+        };
+
         let res: Number = match self.op {
             IBinaryOp::Add => in1 + in2,
             IBinaryOp::Sub => in1 - in2,
