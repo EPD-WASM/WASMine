@@ -1,9 +1,5 @@
 # WASM RT
 
-[![CI Status](https://gitlab.db.in.tum.de/epd24s/wasm-rt/badges/master/pipeline.svg)](https://gitlab.db.in.tum.de/epd24s/wasm-rt/-/commits/master)
-[![Coverage](https://gitlab.db.in.tum.de/epd24s/wasm-rt/badges/master/coverage.svg)](https://gitlab.db.in.tum.de/epd24s/wasm-rt/-/commits/master)
-[![Latest Release](https://gitlab.db.in.tum.de/epd24s/wasm-rt/-/badges/release.svg)](https://gitlab.db.in.tum.de/epd24s/wasm-rt/-/releases)
-
 ## Building
 
 Build Requirements:
@@ -71,48 +67,6 @@ cargo install cargo-criterion
 cargo criterion
 ```
 
-## Structure
-
-(if this not rendered automatically for you, consider installing a plantuml diagram renderer extension)
-```plantuml
-@startuml
-package shared-definitions {
-    component "wasm-types"
-    component ir
-}
-
-package code-handling {
-    component parser
-    parser -up-> ir : use
-    parser -up-> "wasm-types" : use
-
-    component interpreter
-    interpreter -up-> ir : use
-    interpreter -up-> "wasm-types" : use
-
-    component loader
-
-    component "llvm-gen"
-    "llvm-gen" -up-> ir : use
-    "llvm-gen" -up-> "wasm-types" : use
-}
-
-package runtime-system {
-    component "WASI-runtime"
-
-    component runtime
-    runtime -up-> parser : use
-    runtime -up-> interpreter : use
-    runtime -up-> "llvm-gen" : use
-    runtime -up-> loader : use
-    runtime -left-> "WASI-runtime"
-}
-
-"CLI-entry" -up-> runtime
-"ELF-Interp-entry" -up-> runtime
-@enduml
-```
-
 ## Documentation
 
 ### Runtime Data Structures
@@ -150,20 +104,3 @@ fn exported_function(context_ptr: *mut CalleeCtxt, parameters_arr_ptr: *const Va
 All internal function calls, e.g. functions that are only called by LLVM generated code and not from the outside, may use different calling conventions and function signatures.
 
 The llvm backend automatically generates wrapper functions to convert between the different calling conventions and call signatures for all exported and imported functions.
-
-# TODO
-
- * add option to compile via llvm to elf binary where runtime-lib is loaded as interpreter
- * llvm: generate call_indirect in code (-> generate function in LLVM IR and
-   call) (prevent RT call) and bench
- * c api for llvm-interpreter project
- * add tracing for better performance monitoring
- * parser direct llvm emit
- * make all load / load_all_functions passes idempotent to ease API
- * allow llvm compilation both from raw sources and ir (currently, only raw sources are available) AND test both!
- * rewrite llvm_integration_tests to
-    * spec_llvm_jit_ir (parser -> ir -> llvm jit)
-    * spec_llvm_jit (raw wasm -> llvm jit)
-    * spec_llvm_aot_ir (parser -> ir -> llvm aot)
-    * spec_llvm_aot (raw wasm -> llvm aot)
-    * spec_interp (parser -> ir -> interp)
