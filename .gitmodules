@@ -1,7 +1,3 @@
 [submodule "thirdparty/spec"]
     path = thirdparty/spec
     url = git@github.com:WebAssembly/spec.git
-
-[submodule "tests/wasi-tests"]
-    path = tests/wasi-tests
-    url = git@gitlab.db.in.tum.de:Lukasdoe/wasi-testsuite-fork.git
